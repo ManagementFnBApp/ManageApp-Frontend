@@ -2,6 +2,13 @@
 
 import Link from 'next/link'
 
+const colorMap: { [key: string]: string } = {
+    blue: "bg-blue-600 hover:bg-blue-700",
+    green: "bg-emerald-600 hover:bg-emerald-700",
+    red: "bg-red-600 hover:bg-red-700",
+    purple: "bg-purple-600 hover:bg-purple-700"
+};
+
 export default function SupportPage() {
     const supportChannels = [
         {
@@ -118,7 +125,7 @@ export default function SupportPage() {
     return (
         <div className="pt-20">
             {/* Hero */}
-            <section className="bg-gradient-to-br from-blue-50 to-white py-20 px-4">
+            <section className="bg-linear-to-br from-blue-50 to-white py-20 px-4">
                 <div className="container mx-auto text-center">
                     <h1 className="text-5xl font-bold text-gray-900 mb-6">Trung tâm hỗ trợ</h1>
                     <p className="text-xl text-gray-600 max-w-3xl mx-auto mb-8">
@@ -151,9 +158,8 @@ export default function SupportPage() {
                                 <div className="text-5xl mb-4">{channel.icon}</div>
                                 <h3 className="text-xl font-bold mb-2 text-gray-900">{channel.title}</h3>
                                 <p className="text-gray-600 mb-4 text-sm">{channel.description}</p>
-                                <button 
-                                    className={`px-6 py-2 bg-${channel.color}-600 text-white rounded-lg font-semibold hover:bg-${channel.color}-700 transition-colors`}
-                                    style={{ backgroundColor: '#3b82f6' }}
+                                <button
+                                    className={`px-6 py-2 ${colorMap[channel.color]} text-white rounded-lg font-semibold transition-colors`}
                                 >
                                     {channel.action}
                                 </button>
@@ -171,8 +177,8 @@ export default function SupportPage() {
                     </h2>
                     <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
                         {guides.map((guide, index) => (
-                            <Link 
-                                key={index} 
+                            <Link
+                                key={index}
                                 href={guide.link}
                                 className="bg-white rounded-xl shadow-lg p-6 hover:shadow-2xl transition-all group"
                             >
@@ -205,8 +211,8 @@ export default function SupportPage() {
                                 </h3>
                                 <div className="space-y-4">
                                     {section.questions.map((item, qIndex) => (
-                                        <details 
-                                            key={qIndex} 
+                                        <details
+                                            key={qIndex}
                                             className="bg-white rounded-xl shadow-lg p-6 group"
                                         >
                                             <summary className="font-bold text-gray-900 cursor-pointer list-none flex items-center justify-between">
@@ -224,20 +230,20 @@ export default function SupportPage() {
             </section>
 
             {/* Still Need Help */}
-            <section className="bg-gradient-to-br from-blue-600 to-blue-700 text-white py-20 px-4">
+            <section className="bg-linear-to-br from-blue-600 to-blue-700 text-white py-20 px-4">
                 <div className="container mx-auto text-center">
                     <h2 className="text-4xl font-bold mb-6">Vẫn cần hỗ trợ thêm?</h2>
                     <p className="text-xl mb-8 opacity-90 max-w-2xl mx-auto">
                         Đội ngũ chuyên gia của chúng tôi luôn sẵn sàng giúp đỡ bạn
                     </p>
                     <div className="flex gap-4 justify-center flex-wrap">
-                        <Link 
+                        <Link
                             href="/contact"
                             className="px-8 py-4 bg-white text-blue-600 rounded-lg font-semibold hover:bg-gray-100 transition-colors"
                         >
                             Gửi yêu cầu hỗ trợ
                         </Link>
-                        <a 
+                        <a
                             href="tel:1900xxxx"
                             className="px-8 py-4 bg-transparent border-2 border-white text-white rounded-lg font-semibold hover:bg-white hover:text-blue-600 transition-colors"
                         >
