@@ -6,8 +6,6 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -47,8 +45,12 @@
 }
 
 :root {
-  --main-color1: #8487BF;
-  --main-color2: #F0F1F2;
+  --main-color1: #3b82f6;
+  --main-color2: #93c5fd;
+  --blue-primary: #3b82f6;
+  --blue-light: #60a5fa;
+  --blue-lighter: #93c5fd;
+  --blue-dark: #2563eb;
   --radius: 0.625rem;
   --background: oklch(1 0 0);
   --foreground: oklch(0.145 0 0);
@@ -56,7 +58,7 @@
   --card-foreground: oklch(0.145 0 0);
   --popover: oklch(1 0 0);
   --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
+  --primary: oklch(0.588 0.207 257.54);
   --primary-foreground: oklch(0.985 0 0);
   --secondary: oklch(0.97 0 0);
   --secondary-foreground: oklch(0.205 0 0);
@@ -67,7 +69,7 @@
   --destructive: oklch(0.577 0.245 27.325);
   --border: oklch(0.922 0 0);
   --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
+  --ring: oklch(0.588 0.207 257.54);
   --chart-1: oklch(0.646 0.222 41.116);
   --chart-2: oklch(0.6 0.118 184.704);
   --chart-3: oklch(0.398 0.07 227.392);
@@ -75,7 +77,7 @@
   --chart-5: oklch(0.769 0.188 70.08);
   --sidebar: oklch(0.985 0 0);
   --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
+  --sidebar-primary: oklch(0.588 0.207 257.54);
   --sidebar-primary-foreground: oklch(0.985 0 0);
   --sidebar-accent: oklch(0.97 0 0);
   --sidebar-accent-foreground: oklch(0.205 0 0);
@@ -123,5 +125,33 @@
   }
   body {
     @apply bg-background text-foreground;
+  }
+}
+
+@layer utilities {
+  .bg-blue-primary {
+    background-color: #3b82f6;
+  }
+  .bg-blue-light {
+    background-color: #60a5fa;
+  }
+  .bg-blue-lighter {
+    background-color: #93c5fd;
+  }
+  .text-blue-primary {
+    color: #3b82f6;
+  }
+  .text-blue-light {
+    color: #60a5fa;
+  }
+  .hover\:bg-blue-600:hover {
+    background-color: #2563eb;
+  }
+  .hover\:text-blue-600:hover {
+    color: #2563eb;
+  }
+  .backdrop-blur-md {
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
   }
 }
