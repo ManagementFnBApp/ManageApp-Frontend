@@ -7,12 +7,12 @@ export const handleLogout = () => {
     const currentPath = window.location.pathname;
     
     // 3. Chặn vòng lặp: Nếu đang ở trang login rồi thì không redirect nữa
-    if (currentPath === '/authentication') {
+    if (currentPath === '/auth') {
       return; 
     }
 
     // 4. Chuyển hướng kèm theo param ?next=...
     // encodeURIComponent để đảm bảo URL không bị lỗi ký tự đặc biệt
-    window.location.href = `/authentication?next=${encodeURIComponent(currentPath)}`;
+    window.location.href = `/auth?next=${encodeURIComponent(currentPath)}`;
   }
 };
