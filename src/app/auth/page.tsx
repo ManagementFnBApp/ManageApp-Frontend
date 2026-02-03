@@ -519,7 +519,7 @@ export default function AuthPage() {
         </div>
       </div>
 
-      <style jsx>{`
+      <style jsx global>{`
         @keyframes fadeIn {
           from {
             opacity: 0;

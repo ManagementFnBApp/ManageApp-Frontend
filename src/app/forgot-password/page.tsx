@@ -42,7 +42,7 @@ export default function ForgotPasswordPage() {
             boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.15)",
           }}
         >
-          <div className="grid lg:grid-cols-2 min-h-[600px]">
+          <div className="grid lg:grid-cols-2 min-h-150">
             {/* Image Section */}
             <div className="relative hidden lg:flex flex-col justify-center items-center p-12 overflow-hidden">
               <div className="absolute inset-0 z-0">
