@@ -39,6 +39,21 @@ export class ApiClientService {
   }
 
   private setupInterceptors(): void {
+    // Request interceptor to attach token
+    this.instance.interceptors.request.use(
+      (config) => {
+        if (typeof window !== 'undefined') {
+          const token = localStorage.getItem('accessToken');
+          if (token) {
+            config.headers.Authorization = `Bearer ${token}`;
+          }
+        }
+        return config;
+      },
+      (error) => Promise.reject(error)
+    );
+
+    // Response interceptor for error handling
     this.instance.interceptors.response.use(
       (response) => response,
       (error: AxiosError) => this.handleError(error)
