@@ -25,15 +25,15 @@ export const login = async (data: LoginDto): Promise<LoginResponse> => {
 
 // Register
 export interface RegisterDto {
-  fullName: string;
   email: string;
+  username: string;
   password: string;
 }
 
 export interface RegisterResponse {
   id: string;
   email: string;
-  fullName: string;
+  username: string;
 }
 
 export const register = async (data: RegisterDto): Promise<RegisterResponse> => {
@@ -74,14 +74,14 @@ export const resetPassword = async (data: ResetPasswordDto): Promise<ResetPasswo
 export const handleLogout = () => {
   if (typeof window !== 'undefined') {
     // 1. Xóa token cũ (nếu bạn lưu ở localStorage/sessionStorage)
-    localStorage.removeItem('accessToken'); 
-    
+    localStorage.removeItem('accessToken');
+
     // 2. Lấy đường dẫn hiện tại để sau khi login xong thì quay lại
     const currentPath = window.location.pathname;
-    
+
     // 3. Chặn vòng lặp: Nếu đang ở trang login rồi thì không redirect nữa
     if (currentPath === '/auth') {
-      return; 
+      return;
     }
 
     // 4. Chuyển hướng kèm theo param ?next=...

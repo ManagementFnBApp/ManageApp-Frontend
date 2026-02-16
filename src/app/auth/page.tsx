@@ -21,12 +21,12 @@ export default function AuthPage() {
   }, [mode]);
 
   const [loginData, setLoginData] = useState({
-    email: "",
+    username: "",
     password: "",
   });
 
   const [registerData, setRegisterData] = useState({
-    fullName: "",
+    username: "",
     email: "",
     password: "",
     confirmPassword: "",
@@ -54,7 +54,7 @@ export default function AuthPage() {
 
     try {
       const response = await login({
-        username: loginData.email,
+        username: loginData.username,
         password: loginData.password,
       });
       console.log("Login successful:", response);
@@ -80,7 +80,7 @@ export default function AuthPage() {
 
     try {
       const response = await register({
-        fullName: registerData.fullName,
+        username: registerData.username,
         email: registerData.email,
         password: registerData.password,
       });
@@ -220,16 +220,16 @@ export default function AuthPage() {
                       )}
                       <div className="relative animate-[slideUp_0.7s_ease-out_0.1s_both]">
                         <input
-                          id="email"
-                          type="email"
+                          id="username"
+                          type="text"
                           required
                           className="w-full px-4 py-3 pr-10 bg-gray-50 border-0 rounded-xl outline-none transition-all focus:bg-white focus:ring-2 focus:ring-blue-500"
                           placeholder="Username"
-                          value={loginData.email}
+                          value={loginData.username}
                           onChange={(e) =>
                             setLoginData({
                               ...loginData,
-                              email: e.target.value,
+                              username: e.target.value,
                             })
                           }
                         />
@@ -339,16 +339,16 @@ export default function AuthPage() {
                       )}
                       <div className="relative animate-[slideUp_0.7s_ease-out_0.1s_both]">
                         <input
-                          id="fullName"
+                          id="username"
                           type="text"
                           required
                           className="w-full px-4 py-3 pr-10 bg-gray-50 border-0 rounded-xl outline-none transition-all focus:bg-white focus:ring-2 focus:ring-purple-500"
-                          placeholder="Full Name"
-                          value={registerData.fullName}
+                          placeholder="Username"
+                          value={registerData.username}
                           onChange={(e) =>
                             setRegisterData({
                               ...registerData,
-                              fullName: e.target.value,
+                              username: e.target.value,
                             })
                           }
                         />
