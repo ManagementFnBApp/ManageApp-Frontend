@@ -39,6 +39,18 @@ export class ApiClientService {
   }
 
   private setupInterceptors(): void {
+    // Request interceptor - Add token to headers
+    this.instance.interceptors.request.use((config) => {
+      if (typeof window !== 'undefined') {
+        const token = localStorage.getItem('accessToken');
+        if (token) {
+          config.headers.Authorization = `Bearer ${token}`;
+        }
+      }
+      return config;
+    });
+
+    // Response interceptor - Handle errors
     this.instance.interceptors.response.use(
       (response) => response,
       (error: AxiosError) => this.handleError(error)
@@ -89,6 +101,6 @@ export const createDefaultApiClient = (): AxiosInstance => {
 export const apiClient = createDefaultApiClient();
 
 export const endpoint: any = {
-  category: `${BASE_URL}/category`,
-  product: `${BASE_URL}/product`
+  product: '/products',
+  products: '/products'
 };

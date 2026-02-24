@@ -7,20 +7,24 @@ export interface LoginDto {
 }
 
 export interface LoginResponse {
-  access_token: string;
-  user: {
-    id: string;
-    email: string;
-    fullName: string;
-  };
+  user_id: number;
+  username?: string;
+  token: string;
+  expiredTime: number;
 }
 
 export const login = async (data: LoginDto): Promise<LoginResponse> => {
-  const response = await apiClient.post<LoginResponse>('/auth/login', data);
-  if (response.data.access_token) {
-    localStorage.setItem('accessToken', response.data.access_token);
+  const response = await apiClient.post<{ data?: LoginResponse } & LoginResponse>('/auth/login', data);
+  // Backend wraps in ResponseData: { data, statusCode, message }
+  const authData = response.data?.data ?? response.data;
+  if (authData?.token) {
+    localStorage.setItem('accessToken', authData.token);
+    localStorage.setItem('userId', authData.user_id.toString());
+    if (authData.username) {
+      localStorage.setItem('username', authData.username);
+    }
   }
-  return response.data;
+  return authData as LoginResponse;
 };
 
 // Register
@@ -28,17 +32,27 @@ export interface RegisterDto {
   fullName: string;
   email: string;
   password: string;
+  username?: string;
 }
 
 export interface RegisterResponse {
-  id: string;
+  user_id: number;
   email: string;
-  fullName: string;
+  username: string;
+  isActive: boolean;
+  createdAt: Date;
 }
 
 export const register = async (data: RegisterDto): Promise<RegisterResponse> => {
-  const response = await apiClient.post<RegisterResponse>('/auth/register', data);
-  return response.data;
+  const registerPayload = {
+    email: data.email,
+    password: data.password,
+    fullName: data.fullName,
+    username: data.username || data.email.split('@')[0],
+  };
+  const response = await apiClient.post<{ data?: RegisterResponse } & RegisterResponse>('/auth/register', registerPayload);
+  const result = response.data?.data ?? response.data;
+  return result as RegisterResponse;
 };
 
 // Forgot Password
@@ -73,19 +87,11 @@ export const resetPassword = async (data: ResetPasswordDto): Promise<ResetPasswo
 // Logout
 export const handleLogout = () => {
   if (typeof window !== 'undefined') {
-    // 1. Xóa token cũ (nếu bạn lưu ở localStorage/sessionStorage)
-    localStorage.removeItem('accessToken'); 
-    
-    // 2. Lấy đường dẫn hiện tại để sau khi login xong thì quay lại
-    const currentPath = window.location.pathname;
-    
-    // 3. Chặn vòng lặp: Nếu đang ở trang login rồi thì không redirect nữa
-    if (currentPath === '/auth') {
-      return; 
-    }
+    localStorage.removeItem('accessToken');
+    localStorage.removeItem('userId');
+    localStorage.removeItem('username');
 
-    // 4. Chuyển hướng kèm theo param ?next=...
-    // encodeURIComponent để đảm bảo URL không bị lỗi ký tự đặc biệt
-    window.location.href = `/auth?next=${encodeURIComponent(currentPath)}`;
+    // Sau khi đăng xuất, luôn quay về trang chủ
+    window.location.href = '/';
   }
 };

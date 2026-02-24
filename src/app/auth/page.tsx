@@ -21,7 +21,7 @@ export default function AuthPage() {
   }, [mode]);
 
   const [loginData, setLoginData] = useState({
-    email: "",
+    usernameOrEmail: "",
     password: "",
   });
 
@@ -34,32 +34,34 @@ export default function AuthPage() {
 
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
+  const [successMessage, setSuccessMessage] = useState("");
 
   const handleToggle = () => {
     setIsAnimating(true);
-    setTimeout(() => {
-      const newMode = isLogin ? "register" : "login";
-      setIsLogin(!isLogin);
-      router.push(`/auth?mode=${newMode}`, { scroll: false });
-    }, 400);
+    // Update state immediately for smooth transition
+    const newMode = isLogin ? "register" : "login";
+    setIsLogin(!isLogin);
+    router.replace(`/auth?mode=${newMode}`, { scroll: false });
+
+    // Reset animation state after transition completes
     setTimeout(() => {
       setIsAnimating(false);
-    }, 1000);
+    }, 100);
   };
 
   const handleLoginSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
     setError("");
+    setSuccessMessage("");
 
     try {
       const response = await login({
-        username: loginData.email,
+        username: loginData.usernameOrEmail.trim(),
         password: loginData.password,
       });
-      console.log("Login successful:", response);
-      // Redirect to home or dashboard
-      router.push("/");
+      setSuccessMessage("Bạn đã đăng nhập thành công");
+      setTimeout(() => router.push("/pos"), 1200);
     } catch (err: any) {
       setError(err.message || "Login failed. Please check your credentials.");
     } finally {
@@ -71,6 +73,7 @@ export default function AuthPage() {
     e.preventDefault();
     setIsLoading(true);
     setError("");
+    setSuccessMessage("");
 
     if (registerData.password !== registerData.confirmPassword) {
       setError("Passwords do not match!");
@@ -79,16 +82,14 @@ export default function AuthPage() {
     }
 
     try {
-      const response = await register({
+      await register({
         fullName: registerData.fullName,
         email: registerData.email,
         password: registerData.password,
       });
-      console.log("Registration successful:", response);
-      // Switch to login after successful registration
+      setSuccessMessage("Bạn đã đăng ký thành công");
       setIsLogin(true);
-      router.push("/auth?mode=login");
-      alert("Registration successful! Please login.");
+      router.replace("/auth?mode=login");
     } catch (err: any) {
       setError(err.message || "Registration failed. Please try again.");
     } finally {
@@ -98,6 +99,23 @@ export default function AuthPage() {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-linear-to-br from-slate-100 via-blue-50 to-slate-100 py-12 px-4">
+      {/* Success popup - góc phải trên màn hình */}
+      {successMessage && (
+        <div
+          className="fixed top-24 right-6 z-[100] animate-[slideInRight_0.4s_ease-out]"
+          role="alert"
+        >
+          <div className="flex items-center gap-3 px-5 py-4 rounded-xl shadow-lg bg-green-500 text-white max-w-sm">
+            <div className="flex-shrink-0 w-10 h-10 rounded-full bg-white/20 flex items-center justify-center">
+              <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+              </svg>
+            </div>
+            <p className="font-medium">{successMessage}</p>
+          </div>
+        </div>
+      )}
+
       <div className="w-full max-w-5xl">
         <div
           className="bg-white rounded-[3rem] shadow-2xl overflow-hidden relative"
@@ -105,18 +123,21 @@ export default function AuthPage() {
             boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.15)",
           }}
         >
-          <div className="grid lg:grid-cols-2 min-h-[600px]">
-            {/* Welcome Section with Background - Animated */}
+          <div
+            className="relative grid lg:grid-cols-2 min-h-[600px] overflow-hidden"
+          >
+            {/* Welcome Section with Background - Sliding Panel */}
             <div
-              className={`relative hidden lg:flex flex-col justify-center items-center p-12 overflow-hidden ${
-                isLogin ? "lg:order-1" : "lg:order-2"
-              }`}
+              className="relative hidden lg:flex flex-col justify-center items-center p-12 overflow-hidden image-panel"
               style={{
-                transition: "all 1s cubic-bezier(0.68, -0.55, 0.265, 1.55)",
-                opacity: isAnimating ? 0.7 : 1,
-                transform: isAnimating
-                  ? "scale(0.95) translateX(20px)"
-                  : "scale(1) translateX(0)",
+                position: 'absolute',
+                top: 0,
+                left: isLogin ? '0%' : '50%',
+                width: '50%',
+                height: '100%',
+                transition: "left 0.8s cubic-bezier(0.4, 0, 0.2, 1)",
+                willChange: "left",
+                zIndex: isLogin ? 1 : 2,
               }}
             >
               {/* Background Image - No Overlay */}
@@ -134,13 +155,12 @@ export default function AuthPage() {
               <div
                 className="relative z-10 text-center space-y-6 max-w-md mx-auto"
                 style={{
-                  transition: "all 0.6s ease-out",
+                  transition: "opacity 0.4s ease-out 0.2s, transform 0.4s ease-out 0.2s",
                   opacity: isAnimating ? 0 : 1,
                   transform: isAnimating
-                    ? isLogin
-                      ? "translateX(-30px)"
-                      : "translateX(30px)"
+                    ? `translateX(${isLogin ? "-30px" : "30px"})`
                     : "translateX(0)",
+                  willChange: "transform, opacity",
                 }}
               >
                 <h2
@@ -178,32 +198,26 @@ export default function AuthPage() {
               </div>
             </div>
 
-            {/* Form Section - Animated */}
+            {/* Form Section - Sliding Panel */}
             <div
-              className={`flex items-center justify-center p-8 lg:p-12 bg-white ${
-                isLogin ? "lg:order-2" : "lg:order-1"
-              }`}
+              className="flex items-center justify-center p-8 lg:p-12 bg-white form-panel"
               style={{
-                transition: "all 1s cubic-bezier(0.68, -0.55, 0.265, 1.55)",
-                opacity: isAnimating ? 0.7 : 1,
-                transform: isAnimating
-                  ? "scale(0.95) translateX(-20px)"
-                  : "scale(1) translateX(0)",
+                position: 'relative',
               }}
+              data-is-login={isLogin}
             >
               <div className="w-full max-w-md">
                 {/* Login Form */}
                 {isLogin ? (
                   <div
-                    className="animate-[slideInFromRight_0.8s_ease-out]"
                     key="login-form"
                     style={{
                       opacity: isAnimating ? 0 : 1,
                       transform: isAnimating
-                        ? "translateX(30px)"
+                        ? "translateX(-30px)"
                         : "translateX(0)",
-                      transition:
-                        "all 0.6s cubic-bezier(0.68, -0.55, 0.265, 1.55)",
+                      transition: "opacity 0.4s ease-out 0.2s, transform 0.4s ease-out 0.2s",
+                      willChange: "transform, opacity",
                     }}
                   >
                     <div className="mb-10 text-center animate-[fadeInDown_0.6s_ease-out]">
@@ -220,16 +234,17 @@ export default function AuthPage() {
                       )}
                       <div className="relative animate-[slideUp_0.7s_ease-out_0.1s_both]">
                         <input
-                          id="email"
-                          type="email"
+                          id="usernameOrEmail"
+                          type="text"
                           required
+                          autoComplete="username"
                           className="w-full px-4 py-3 pr-10 bg-gray-50 border-0 rounded-xl outline-none transition-all focus:bg-white focus:ring-2 focus:ring-blue-500"
-                          placeholder="Username"
-                          value={loginData.email}
+                          placeholder="Username hoặc Email"
+                          value={loginData.usernameOrEmail}
                           onChange={(e) =>
                             setLoginData({
                               ...loginData,
-                              email: e.target.value,
+                              usernameOrEmail: e.target.value,
                             })
                           }
                         />
@@ -314,15 +329,14 @@ export default function AuthPage() {
                 ) : (
                   /* Register Form */
                   <div
-                    className="animate-[slideInFromLeft_0.8s_ease-out]"
                     key="register-form"
                     style={{
                       opacity: isAnimating ? 0 : 1,
                       transform: isAnimating
-                        ? "translateX(-30px)"
+                        ? "translateX(30px)"
                         : "translateX(0)",
-                      transition:
-                        "all 0.6s cubic-bezier(0.68, -0.55, 0.265, 1.55)",
+                      transition: "opacity 0.4s ease-out 0.2s, transform 0.4s ease-out 0.2s",
+                      willChange: "transform, opacity",
                     }}
                   >
                     <div className="mb-10 text-center animate-[fadeInDown_0.6s_ease-out]">
@@ -572,6 +586,39 @@ export default function AuthPage() {
           to {
             opacity: 1;
             transform: translateY(0);
+          }
+        }
+
+        @keyframes slideInRight {
+          from {
+            opacity: 0;
+            transform: translateX(100%);
+          }
+          to {
+            opacity: 1;
+            transform: translateX(0);
+          }
+        }
+
+        /* Sliding Panels Animation - Desktop only */
+        @media (min-width: 1024px) {
+          .form-panel {
+            position: absolute !important;
+            top: 0;
+            width: 50% !important;
+            height: 100% !important;
+            transition: left 0.8s cubic-bezier(0.4, 0, 0.2, 1) !important;
+            will-change: left;
+          }
+
+          .form-panel[data-is-login="true"] {
+            left: 50% !important;
+            z-index: 2;
+          }
+
+          .form-panel[data-is-login="false"] {
+            left: 0% !important;
+            z-index: 1;
           }
         }
       `}</style>
