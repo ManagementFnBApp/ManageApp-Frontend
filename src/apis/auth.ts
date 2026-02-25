@@ -1,4 +1,6 @@
 import { apiClient } from '../configs/axios';
+import { BASE_URL } from '../global-configs';
+import { decodeJwt, UserJwtPayload } from '../lib/jwt';
 
 // Login
 export interface LoginDto {
@@ -7,38 +9,97 @@ export interface LoginDto {
 }
 
 export interface LoginResponse {
-  access_token: string;
-  user: {
-    id: string;
-    email: string;
-    fullName: string;
-  };
+  user_id: number;
+  username?: string;
+  token: string;
+  expiredTime: number;
+  role?: string | null; // 'admin', 'SHOPOWNER', null (user chưa mua gói), etc.
 }
 
 export const login = async (data: LoginDto): Promise<LoginResponse> => {
-  const response = await apiClient.post<LoginResponse>('/auth/login', data);
-  if (response.data.access_token) {
-    localStorage.setItem('accessToken', response.data.access_token);
+  const isEmail = data.username.includes('@');
+
+  // Admin login: dùng fetch thuần để tránh axios interceptor gọi handleLogout khi 401
+  if (isEmail) {
+    try {
+      const res = await fetch(`${BASE_URL}/admins/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: data.username, password: data.password }),
+      });
+      if (res.ok) {
+        const json = await res.json();
+        const adminData = json.data ?? json;
+        if (adminData?.token) {
+          localStorage.setItem('accessToken', adminData.token);
+          localStorage.setItem('userId', String(adminData.adminId));
+          localStorage.setItem('username', data.username);
+          localStorage.setItem('role', 'admin');
+        }
+        return {
+          user_id: adminData.adminId,
+          username: data.username,
+          token: adminData.token,
+          expiredTime: adminData.expiredTime,
+          role: 'admin',
+        };
+      }
+      // Admin login thất bại → tiếp tục staff login
+    } catch {
+      // Network error → tiếp tục staff login
+    }
   }
-  return response.data;
+
+  // User login: POST /auth/login
+  const response = await apiClient.post<{ data?: { user_id: number; token: string; expiredTime: number } } & { user_id: number; token: string; expiredTime: number }>(
+    '/auth/login',
+    { username: data.username, password: data.password }
+  );
+  const authData = response.data?.data ?? response.data;
+  if (authData?.token) {
+    // Decode JWT để lấy role thực sự (SHOPOWNER, null, ...)
+    const payload = decodeJwt<UserJwtPayload>(authData.token);
+    const userRole = payload?.role ?? null; // null = chưa mua gói
+    localStorage.setItem('accessToken', authData.token);
+    localStorage.setItem('userId', String(authData.user_id));
+    localStorage.setItem('username', data.username);
+    localStorage.setItem('role', userRole ?? '');
+  }
+  const payload = decodeJwt<UserJwtPayload>(authData.token);
+  return {
+    user_id: authData.user_id,
+    username: data.username,
+    token: authData.token,
+    expiredTime: authData.expiredTime,
+    role: payload?.role ?? null,
+  };
 };
 
 // Register
 export interface RegisterDto {
+  username: string;
   email: string;
   username: string;
   password: string;
 }
 
 export interface RegisterResponse {
-  id: string;
+  user_id: number;
   email: string;
   username: string;
+  isActive: boolean;
+  createdAt: Date;
 }
 
 export const register = async (data: RegisterDto): Promise<RegisterResponse> => {
-  const response = await apiClient.post<RegisterResponse>('/auth/register', data);
-  return response.data;
+  const registerPayload = {
+    username: data.username.trim(),
+    email: data.email.trim(),
+    password: data.password,
+  };
+  const response = await apiClient.post<{ data?: RegisterResponse } & RegisterResponse>('/auth/register', registerPayload);
+  const result = response.data?.data ?? response.data;
+  return result as RegisterResponse;
 };
 
 // Forgot Password
@@ -73,19 +134,18 @@ export const resetPassword = async (data: ResetPasswordDto): Promise<ResetPasswo
 // Logout
 export const handleLogout = () => {
   if (typeof window !== 'undefined') {
-    // 1. Xóa token cũ (nếu bạn lưu ở localStorage/sessionStorage)
     localStorage.removeItem('accessToken');
+    localStorage.removeItem('userId');
+    localStorage.removeItem('username');
+    localStorage.removeItem('role');
 
-    // 2. Lấy đường dẫn hiện tại để sau khi login xong thì quay lại
-    const currentPath = window.location.pathname;
+    window.location.href = '/';
+  }
+};
 
-    // 3. Chặn vòng lặp: Nếu đang ở trang login rồi thì không redirect nữa
-    if (currentPath === '/auth') {
-      return;
-    }
-
-    // 4. Chuyển hướng kèm theo param ?next=...
-    // encodeURIComponent để đảm bảo URL không bị lỗi ký tự đặc biệt
-    window.location.href = `/auth?next=${encodeURIComponent(currentPath)}`;
+/** Cập nhật role trong localStorage sau khi payment thành công (không cần re-login) */
+export const updateLocalRole = (role: string) => {
+  if (typeof window !== 'undefined') {
+    localStorage.setItem('role', role);
   }
 };
