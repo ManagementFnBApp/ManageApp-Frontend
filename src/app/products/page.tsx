@@ -16,10 +16,18 @@ interface Product {
 export default function ProductPage() {
   const [activeFeature, setActiveFeature] = useState(0)
   const [products, setProducts] = useState<Product[]>([])
-  const [productsLoading, setProductsLoading] = useState(true)
+  const [productsLoading, setProductsLoading] = useState(false)
   const [productsError, setProductsError] = useState<string | null>(null)
+  const [isLoggedIn, setIsLoggedIn] = useState(false)
 
   useEffect(() => {
+    if (typeof window === 'undefined') return
+    const token = localStorage.getItem('accessToken')
+    if (!token) {
+      setIsLoggedIn(false)
+      return
+    }
+    setIsLoggedIn(true)
     const fetchProducts = async () => {
       try {
         setProductsLoading(true)
@@ -214,7 +222,19 @@ export default function ProductPage() {
           <h2 className="text-3xl font-bold text-gray-900 mb-2">Danh sách sản phẩm</h2>
           <p className="text-gray-600 mb-8">Dữ liệu được lấy từ backend API</p>
 
-          {productsLoading ? (
+          {!isLoggedIn ? (
+            <div className="p-10 bg-blue-50 border border-blue-100 rounded-2xl text-center">
+              <div className="text-5xl mb-4">🔐</div>
+              <p className="text-gray-700 font-medium text-lg mb-1">Vui lòng đăng nhập để xem danh sách sản phẩm</p>
+              <p className="text-gray-500 text-sm mb-6">Tính năng này dành cho tài khoản đã đăng nhập</p>
+              <a
+                href="/auth?mode=login"
+                className="inline-block px-8 py-3 bg-blue-600 text-white rounded-xl font-semibold hover:bg-blue-700 transition"
+              >
+                Đăng nhập ngay
+              </a>
+            </div>
+          ) : productsLoading ? (
             <div className="flex items-center justify-center py-16">
               <div className="animate-spin rounded-full h-12 w-12 border-4 border-blue-500 border-t-transparent" />
               <span className="ml-3 text-gray-600">Đang tải...</span>

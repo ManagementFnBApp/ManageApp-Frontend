@@ -26,7 +26,7 @@ export default function AuthPage() {
   });
 
   const [registerData, setRegisterData] = useState({
-    fullName: "",
+    username: "",
     email: "",
     password: "",
     confirmPassword: "",
@@ -60,10 +60,19 @@ export default function AuthPage() {
         username: loginData.usernameOrEmail.trim(),
         password: loginData.password,
       });
-      setSuccessMessage("Bạn đã đăng nhập thành công");
-      setTimeout(() => router.push("/pos"), 1200);
+      setSuccessMessage("Bạn đã đăng nhập thành công!");
+
+      let destination = '/';
+      if (response.role === 'admin') {
+        destination = '/admin';
+      } else if (response.role === 'SHOPOWNER') {
+        destination = '/manager';
+      }
+      // role === null hoặc chưa có → về trang chủ
+
+      setTimeout(() => router.push(destination), 1200);
     } catch (err: any) {
-      setError(err.message || "Login failed. Please check your credentials.");
+      setError(err.message || "Đăng nhập thất bại. Vui lòng kiểm tra lại thông tin.");
     } finally {
       setIsLoading(false);
     }
@@ -83,15 +92,15 @@ export default function AuthPage() {
 
     try {
       await register({
-        fullName: registerData.fullName,
+        username: registerData.username,
         email: registerData.email,
         password: registerData.password,
       });
-      setSuccessMessage("Bạn đã đăng ký thành công");
+      setSuccessMessage(`Đăng ký thành công! Hãy đăng nhập và chọn gói dịch vụ để bắt đầu.`);
       setIsLogin(true);
       router.replace("/auth?mode=login");
     } catch (err: any) {
-      setError(err.message || "Registration failed. Please try again.");
+      setError(err.message || "Đăng ký thất bại. Vui lòng thử lại.");
     } finally {
       setIsLoading(false);
     }
@@ -353,16 +362,18 @@ export default function AuthPage() {
                       )}
                       <div className="relative animate-[slideUp_0.7s_ease-out_0.1s_both]">
                         <input
-                          id="fullName"
+                          id="username"
                           type="text"
                           required
+                          minLength={3}
+                          autoComplete="username"
                           className="w-full px-4 py-3 pr-10 bg-gray-50 border-0 rounded-xl outline-none transition-all focus:bg-white focus:ring-2 focus:ring-purple-500"
-                          placeholder="Full Name"
-                          value={registerData.fullName}
+                          placeholder="Username (dùng để đăng nhập)"
+                          value={registerData.username}
                           onChange={(e) =>
                             setRegisterData({
                               ...registerData,
-                              fullName: e.target.value,
+                              username: e.target.value,
                             })
                           }
                         />

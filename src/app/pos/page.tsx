@@ -2,27 +2,12 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { handleLogout } from '@/apis/auth';
+import { MENU_CATEGORIES } from '@/data/mockMenu';
+import { getActivePosProducts } from '@/data/useMenuStore';
 
 const CATEGORIES = [
   { id: 'all', label: 'Tất Cả' },
-  { id: 'juice', label: 'Nước Ép' },
-  { id: 'soft', label: 'Nước Ngọt' },
-  { id: 'yogurt', label: 'Sữa Chua' },
-  { id: 'coffee', label: 'Cà Phê' },
-  { id: 'topping', label: 'Topping' },
-];
-
-const MOCK_PRODUCTS = [
-  { id: 1, name: 'Milk Coffee', price: 29000, categoryId: 'coffee' },
-  { id: 2, name: 'Orange Juice', price: 25000, categoryId: 'juice' },
-  { id: 3, name: 'Coca Cola', price: 15000, categoryId: 'soft' },
-  { id: 4, name: 'Yogurt Matcha', price: 32000, categoryId: 'yogurt' },
-  { id: 5, name: 'Black Coffee', price: 22000, categoryId: 'coffee' },
-  { id: 6, name: 'Peach Tea', price: 28000, categoryId: 'juice' },
-  { id: 7, name: 'Bubble Topping', price: 5000, categoryId: 'topping' },
-  { id: 8, name: 'Iced Milk', price: 26000, categoryId: 'coffee' },
-  { id: 9, name: 'Lemonade', price: 20000, categoryId: 'juice' },
+  ...MENU_CATEGORIES.map((c) => ({ id: c.slug, label: c.label })),
 ];
 
 type OrderType = 'eat-in' | 'takeaway';
@@ -40,6 +25,8 @@ function getShift(hour: number): { label: string; range: string } {
   return { label: 'Closed', range: '--' };
 }
 
+type PosProduct = ReturnType<typeof getActivePosProducts>[number];
+
 export default function PosPage() {
   const router = useRouter();
   const [username, setUsername] = useState<string>('Nguyen Van A');
@@ -48,11 +35,16 @@ export default function PosPage() {
   const [orderType, setOrderType] = useState<OrderType>('eat-in');
   const [cart, setCart] = useState<CartItem[]>([]);
   const [currentTime, setCurrentTime] = useState<Date | null>(null);
+  const [posProducts, setPosProducts] = useState<PosProduct[]>([]);
 
   useEffect(() => {
     setCurrentTime(new Date());
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
     return () => clearInterval(timer);
+  }, []);
+
+  useEffect(() => {
+    setPosProducts(getActivePosProducts());
   }, []);
 
   useEffect(() => {
@@ -62,18 +54,23 @@ export default function PosPage() {
         router.replace('/auth?mode=login');
         return;
       }
+      const role = localStorage.getItem('role');
+      if (role === 'admin') {
+        router.replace('/admin');
+        return;
+      }
       const name = localStorage.getItem('username');
       if (name) setUsername(name);
     }
   }, [router]);
 
-  const filteredProducts = MOCK_PRODUCTS.filter((p) => {
+  const filteredProducts = posProducts.filter((p) => {
     const matchCategory = activeCategory === 'all' || p.categoryId === activeCategory;
     const matchSearch = !searchQuery.trim() || p.name.toLowerCase().includes(searchQuery.toLowerCase());
     return matchCategory && matchSearch;
   });
 
-  const addToCart = (product: (typeof MOCK_PRODUCTS)[0]) => {
+  const addToCart = (product: PosProduct) => {
     setCart((prev) => {
       const existing = prev.find((i) => i.productId === product.id);
       if (existing) {
@@ -135,13 +132,6 @@ export default function PosPage() {
             <span className="text-sm font-medium text-gray-700 truncate max-w-[120px]">{username}</span>
             <span className="text-xs text-gray-500">Staff</span>
           </div>
-          <button
-            type="button"
-            onClick={handleLogout}
-            className="text-xs font-medium text-red-500 hover:text-red-600 hover:underline"
-          >
-            Đăng xuất
-          </button>
         </div>
       </header>
 

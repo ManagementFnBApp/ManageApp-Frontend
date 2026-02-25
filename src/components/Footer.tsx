@@ -1,7 +1,18 @@
+'use client'
 import Link from 'next/link'
+import { usePathname } from 'next/navigation'
+import { useEffect, useState } from 'react'
 
 export default function Footer() {
+  const pathname = usePathname()
   const currentYear = new Date().getFullYear()
+  const [isAdminDashboard, setIsAdminDashboard] = useState(false)
+
+  useEffect(() => {
+    setIsAdminDashboard(pathname.startsWith('/admin'))
+  }, [pathname])
+
+  if (isAdminDashboard) return null
 
   return (
     <footer className="bg-blue-100 text-white" style={{ backgroundColor: '#93c5fd' }}>
