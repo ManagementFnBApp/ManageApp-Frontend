@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { MENU_CATEGORIES } from '@/data/mockMenu';
 import { getActivePosProducts } from '@/data/useMenuStore';
+import { savePosCart } from '@/lib/posCart';
 
 const CATEGORIES = [
   { id: 'all', label: 'Tất Cả' },
@@ -91,6 +92,12 @@ export default function PosPage() {
   const total = cart.reduce((sum, i) => sum + i.price * i.quantity, 0);
 
   const formatPrice = (n: number) => new Intl.NumberFormat('vi-VN').format(n) + ' VND';
+
+  const handleCheckout = () => {
+    if (cart.length === 0) return;
+    savePosCart({ items: cart, total, orderType });
+    router.push('/checkout-order');
+  };
 
   return (
     <div className="h-screen flex flex-col bg-gray-50">
@@ -270,6 +277,7 @@ export default function PosPage() {
             <button
               type="button"
               disabled={cart.length === 0}
+              onClick={handleCheckout}
               className="w-full py-3 rounded-lg bg-blue-500 text-white font-semibold hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed transition"
             >
               Thanh toán
