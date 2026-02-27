@@ -4,7 +4,7 @@ import { usePathname } from 'next/navigation';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
 
-const DASHBOARD_ROUTES = ['/manager', '/pos', '/admin'];
+const DASHBOARD_ROUTES = ['/admin', '/manager', '/pos'];
 
 export default function ClientLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
