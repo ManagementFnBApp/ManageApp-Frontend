@@ -10,10 +10,8 @@ export interface Product {
   barcode?: string | null;
   description?: string | null;
   measureUnit?: string | null;
-  /** Giá nhập (import price) - khớp với BE field importPrice */
-  importPrice: number;
-  /** Giá bán (list price) - khớp với BE field listPrice */
-  listPrice: number;
+  basicPrice: number;
+  unitPrice: number;
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
@@ -26,10 +24,8 @@ export interface CreateProductPayload {
   barcode?: string;
   description?: string;
   measureUnit?: string;
-  /** Giá nhập kho */
-  importPrice: number;
-  /** Giá bán lẻ */
-  listPrice: number;
+  basicPrice: number;
+  unitPrice: number;
   isActive?: boolean;
 }
 

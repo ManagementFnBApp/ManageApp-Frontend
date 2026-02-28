@@ -11,7 +11,7 @@ export default function AdminGuardLayout({ children }: { children: React.ReactNo
     const token = localStorage.getItem('accessToken');
     const role  = localStorage.getItem('role');
 
-    if (!token || role !== 'ADMIN') {
+    if (!token || role !== 'admin') {
       router.replace('/auth?mode=login');
     } else {
       setAuthorized(true);

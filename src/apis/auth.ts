@@ -34,14 +34,14 @@ export const login = async (data: LoginDto): Promise<LoginResponse> => {
           localStorage.setItem('accessToken', adminData.token);
           localStorage.setItem('userId', String(adminData.adminId));
           localStorage.setItem('username', data.username);
-          localStorage.setItem('role', 'ADMIN');
+          localStorage.setItem('role', 'admin');
         }
         return {
           user_id: adminData.adminId,
           username: data.username,
           token: adminData.token,
           expiredTime: adminData.expiredTime,
-          role: 'ADMIN',
+          role: 'admin',
         };
       }
       // Admin login thất bại → tiếp tục staff login
@@ -50,25 +50,16 @@ export const login = async (data: LoginDto): Promise<LoginResponse> => {
     }
   }
 
-  // User login: dùng fetch thuần để tránh axios interceptor redirect về '/' khi BE trả 401
-  const res = await fetch(`${BASE_URL}/auth/login`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ username: data.username, password: data.password }),
-  });
-
-  const json = await res.json();
-
-  if (!res.ok) {
-    // Lấy message lỗi từ BE (thường là "Username or password is incorrect")
-    const message = json?.message || json?.data?.message || 'Đăng nhập thất bại. Vui lòng kiểm tra lại thông tin.';
-    throw new Error(Array.isArray(message) ? message[0] : message);
-  }
-
-  const authData = json?.data ?? json;
+  // User login: POST /auth/login
+  const response = await apiClient.post<{ data?: { user_id: number; token: string; expiredTime: number } } & { user_id: number; token: string; expiredTime: number }>(
+    '/auth/login',
+    { username: data.username, password: data.password }
+  );
+  const authData = response.data?.data ?? response.data;
   if (authData?.token) {
+    // Decode JWT để lấy role thực sự (SHOPOWNER, null, ...)
     const payload = decodeJwt<UserJwtPayload>(authData.token);
-    const userRole = payload?.role ?? null;
+    const userRole = payload?.role ?? null; // null = chưa mua gói
     localStorage.setItem('accessToken', authData.token);
     localStorage.setItem('userId', String(authData.user_id));
     localStorage.setItem('username', data.username);
@@ -88,6 +79,7 @@ export const login = async (data: LoginDto): Promise<LoginResponse> => {
 export interface RegisterDto {
   username: string;
   email: string;
+  username: string;
   password: string;
 }
 
