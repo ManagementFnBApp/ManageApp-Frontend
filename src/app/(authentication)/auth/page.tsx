@@ -62,17 +62,19 @@ export default function AuthPage() {
       });
       setSuccessMessage("Bạn đã đăng nhập thành công!");
 
-      let destination = '/';
-      if (response.role === 'admin') {
-        destination = '/admin';
-      } else if (response.role === 'SHOPOWNER') {
-        destination = '/manager';
+      let destination = "/";
+      if (response.role === "admin") {
+        destination = "/admin";
+      } else if (response.role === "SHOPOWNER") {
+        destination = "/manager";
       }
       // role === null hoặc chưa có → về trang chủ
 
       setTimeout(() => router.push(destination), 1200);
     } catch (err: any) {
-      setError(err.message || "Đăng nhập thất bại. Vui lòng kiểm tra lại thông tin.");
+      setError(
+        err.message || "Đăng nhập thất bại. Vui lòng kiểm tra lại thông tin.",
+      );
     } finally {
       setIsLoading(false);
     }
@@ -96,7 +98,9 @@ export default function AuthPage() {
         email: registerData.email,
         password: registerData.password,
       });
-      setSuccessMessage(`Đăng ký thành công! Hãy đăng nhập và chọn gói dịch vụ để bắt đầu.`);
+      setSuccessMessage(
+        `Đăng ký thành công! Hãy đăng nhập và chọn gói dịch vụ để bắt đầu.`,
+      );
       setIsLogin(true);
       router.replace("/auth?mode=login");
     } catch (err: any) {
@@ -111,13 +115,17 @@ export default function AuthPage() {
       {/* Success popup - góc phải trên màn hình */}
       {successMessage && (
         <div
-          className="fixed top-24 right-6 z-[100] animate-[slideInRight_0.4s_ease-out]"
+          className="fixed top-24 right-6 z-100 animate-[slideInRight_0.4s_ease-out]"
           role="alert"
         >
           <div className="flex items-center gap-3 px-5 py-4 rounded-xl shadow-lg bg-green-500 text-white max-w-sm">
-            <div className="flex-shrink-0 w-10 h-10 rounded-full bg-white/20 flex items-center justify-center">
+            <div className="shrink-0 w-10 h-10 rounded-full bg-white/20 flex items-center justify-center">
               <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                <path
+                  fillRule="evenodd"
+                  d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+                  clipRule="evenodd"
+                />
               </svg>
             </div>
             <p className="font-medium">{successMessage}</p>
@@ -132,18 +140,16 @@ export default function AuthPage() {
             boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.15)",
           }}
         >
-          <div
-            className="relative grid lg:grid-cols-2 min-h-[600px] overflow-hidden"
-          >
+          <div className="relative grid lg:grid-cols-2 min-h-150 overflow-hidden">
             {/* Welcome Section with Background - Sliding Panel */}
             <div
               className="relative hidden lg:flex flex-col justify-center items-center p-12 overflow-hidden image-panel"
               style={{
-                position: 'absolute',
+                position: "absolute",
                 top: 0,
-                left: isLogin ? '0%' : '50%',
-                width: '50%',
-                height: '100%',
+                left: isLogin ? "0%" : "50%",
+                width: "50%",
+                height: "100%",
                 transition: "left 0.8s cubic-bezier(0.4, 0, 0.2, 1)",
                 willChange: "left",
                 zIndex: isLogin ? 1 : 2,
@@ -164,7 +170,8 @@ export default function AuthPage() {
               <div
                 className="relative z-10 text-center space-y-6 max-w-md mx-auto"
                 style={{
-                  transition: "opacity 0.4s ease-out 0.2s, transform 0.4s ease-out 0.2s",
+                  transition:
+                    "opacity 0.4s ease-out 0.2s, transform 0.4s ease-out 0.2s",
                   opacity: isAnimating ? 0 : 1,
                   transform: isAnimating
                     ? `translateX(${isLogin ? "-30px" : "30px"})`
@@ -211,7 +218,7 @@ export default function AuthPage() {
             <div
               className="flex items-center justify-center p-8 lg:p-12 bg-white form-panel"
               style={{
-                position: 'relative',
+                position: "relative",
               }}
               data-is-login={isLogin}
             >
@@ -225,7 +232,8 @@ export default function AuthPage() {
                       transform: isAnimating
                         ? "translateX(-30px)"
                         : "translateX(0)",
-                      transition: "opacity 0.4s ease-out 0.2s, transform 0.4s ease-out 0.2s",
+                      transition:
+                        "opacity 0.4s ease-out 0.2s, transform 0.4s ease-out 0.2s",
                       willChange: "transform, opacity",
                     }}
                   >
@@ -344,7 +352,8 @@ export default function AuthPage() {
                       transform: isAnimating
                         ? "translateX(30px)"
                         : "translateX(0)",
-                      transition: "opacity 0.4s ease-out 0.2s, transform 0.4s ease-out 0.2s",
+                      transition:
+                        "opacity 0.4s ease-out 0.2s, transform 0.4s ease-out 0.2s",
                       willChange: "transform, opacity",
                     }}
                   >
