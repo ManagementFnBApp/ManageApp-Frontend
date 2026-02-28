@@ -12,7 +12,8 @@ export interface Order {
   total: number;
   orderType: 'eat-in' | 'takeaway';
   cashier: string;
-  status: 'paid';
+  /** Khớp với BE OrderStatus enum */
+  status: 'PENDING' | 'COMPLETED' | 'CANCELLED';
 }
 
 const STORAGE_KEY = 'pos_orders';
