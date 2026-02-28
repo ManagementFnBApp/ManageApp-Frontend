@@ -1,49 +1,37 @@
-﻿"use client";
+﻿'use client';
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
-import type { Product, CreateProductPayload } from "@/apis/productApi";
-import { MENU_CATEGORIES } from "@/data/mockMenu";
-import { useMenuStore } from "@/data/useMenuStore";
+import { useState } from 'react';
+import { useRouter } from 'next/navigation';
+import type { Product, CreateProductPayload } from '@/apis/productApi';
+import { MENU_CATEGORIES } from '@/data/mockMenu';
+import { useMenuStore } from '@/data/useMenuStore';
 
 const CATEGORIES = MENU_CATEGORIES.map((c) => ({ id: c.id, name: c.label }));
 
 const EMPTY_FORM: CreateProductPayload = {
   categoryId: CATEGORIES[0].id,
-  productName: "",
-  sku: "",
-  barcode: "",
-  description: "",
-  measureUnit: "ly",
-  importPrice: 0, // giá nhập kho
-  listPrice: 0, // giá bán lẻ
+  productName: '',
+  sku: '',
+  barcode: '',
+  description: '',
+  measureUnit: 'ly',
+  basicPrice: 0,
+  unitPrice: 0,
   isActive: true,
 };
 
-type ModalMode = "add" | "edit" | null;
-type ToastType = "create" | "edit" | "soft-delete" | "hard-delete";
+type ModalMode = 'add' | 'edit' | null;
+type ToastType = 'create' | 'edit' | 'soft-delete' | 'hard-delete';
 
 const formatPrice = (n: number) =>
-  new Intl.NumberFormat("vi-VN").format(n) + " ₫";
+  new Intl.NumberFormat('vi-VN').format(n) + ' ₫';
 
 export default function MenuManagePage() {
   const router = useRouter();
-  const {
-    products,
-    loading,
-    error: apiError,
-    refresh,
-    addProduct,
-    editProduct,
-    deactivateProduct,
-    removeProduct,
-    toggleActive,
-  } = useMenuStore();
+  const { products, loading, addProduct, editProduct, deactivateProduct, removeProduct, toggleActive } = useMenuStore();
 
-  const [search, setSearch] = useState("");
-  const [filterActive, setFilterActive] = useState<
-    "all" | "active" | "inactive"
-  >("all");
+  const [search, setSearch] = useState('');
+  const [filterActive, setFilterActive] = useState<'all' | 'active' | 'inactive'>('all');
 
   const [modalMode, setModalMode] = useState<ModalMode>(null);
   const [editTarget, setEditTarget] = useState<Product | null>(null);
@@ -52,9 +40,7 @@ export default function MenuManagePage() {
   const [submitting, setSubmitting] = useState(false);
 
   const [deleteTarget, setDeleteTarget] = useState<Product | null>(null);
-  const [hardDeleteTarget, setHardDeleteTarget] = useState<Product | null>(
-    null,
-  );
+  const [hardDeleteTarget, setHardDeleteTarget] = useState<Product | null>(null);
 
   const [toast, setToast] = useState<{ type: ToastType } | null>(null);
 
@@ -70,9 +56,9 @@ export default function MenuManagePage() {
       p.productName.toLowerCase().includes(search.toLowerCase()) ||
       p.sku.toLowerCase().includes(search.toLowerCase());
     const matchActive =
-      filterActive === "all" ||
-      (filterActive === "active" && p.isActive) ||
-      (filterActive === "inactive" && !p.isActive);
+      filterActive === 'all' ||
+      (filterActive === 'active' && p.isActive) ||
+      (filterActive === 'inactive' && !p.isActive);
     return matchSearch && matchActive;
   });
 
@@ -81,7 +67,7 @@ export default function MenuManagePage() {
     setForm(EMPTY_FORM);
     setFormError(null);
     setEditTarget(null);
-    setModalMode("add");
+    setModalMode('add');
   };
 
   const openEdit = (product: Product) => {
@@ -89,94 +75,80 @@ export default function MenuManagePage() {
       categoryId: product.categoryId,
       productName: product.productName,
       sku: product.sku,
-      barcode: product.barcode ?? "",
-      description: product.description ?? "",
-      measureUnit: product.measureUnit ?? "ly",
-      importPrice: product.importPrice,
-      listPrice: product.listPrice,
+      barcode: product.barcode ?? '',
+      description: product.description ?? '',
+      measureUnit: product.measureUnit ?? 'ly',
+      basicPrice: product.basicPrice,
+      unitPrice: product.unitPrice,
       isActive: product.isActive,
     });
     setFormError(null);
     setEditTarget(product);
-    setModalMode("edit");
+    setModalMode('edit');
   };
 
-  const closeModal = () => {
-    setModalMode(null);
-    setEditTarget(null);
-  };
+  const closeModal = () => { setModalMode(null); setEditTarget(null); };
 
   // ── Submit form ──
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!form.productName.trim()) {
-      setFormError("Tên sản phẩm không được trống.");
-      return;
-    }
-    if (!form.sku.trim()) {
-      setFormError("SKU không được trống.");
-      return;
-    }
-    if (form.listPrice <= 0) {
-      setFormError("Giá bán phải lớn hơn 0.");
-      return;
-    }
+    if (!form.productName.trim()) { setFormError('Tên sản phẩm không được trống.'); return; }
+    if (!form.sku.trim()) { setFormError('SKU không được trống.'); return; }
+    if (form.unitPrice <= 0) { setFormError('Giá bán phải lớn hơn 0.'); return; }
 
     setSubmitting(true);
     setFormError(null);
     try {
-      if (modalMode === "add") {
-        await addProduct({
+      if (modalMode === 'add') {
+        addProduct({
           categoryId: form.categoryId,
           productName: form.productName,
           sku: form.sku,
           barcode: form.barcode || null,
           description: form.description || null,
           measureUnit: form.measureUnit || null,
-          importPrice: form.importPrice,
-          listPrice: form.listPrice,
+          basicPrice: form.basicPrice,
+          unitPrice: form.unitPrice,
           isActive: form.isActive ?? true,
         });
         closeModal();
-        showToast("create");
+        showToast('create');
       } else if (editTarget) {
-        await editProduct(editTarget.productId, {
+        editProduct(editTarget.productId, {
           categoryId: form.categoryId,
           productName: form.productName,
           sku: form.sku,
           barcode: form.barcode || null,
           description: form.description || null,
           measureUnit: form.measureUnit || null,
-          importPrice: form.importPrice,
-          listPrice: form.listPrice,
+          basicPrice: form.basicPrice,
+          unitPrice: form.unitPrice,
           isActive: form.isActive,
         });
         closeModal();
-        showToast("edit");
+        showToast('edit');
       }
     } catch (err: unknown) {
-      setFormError(
-        (err as { message?: string })?.message ?? "Có lỗi xảy ra, thử lại.",
-      );
+      setFormError((err as { message?: string })?.message ?? 'Có lỗi xảy ra, thử lại.');
     } finally {
       setSubmitting(false);
     }
   };
 
   // ── Soft delete ──
-  const confirmSoftDelete = async () => {
+  const confirmSoftDelete = () => {
     if (!deleteTarget) return;
-    await deactivateProduct(deleteTarget.productId);
+    deactivateProduct(deleteTarget.productId);
     setDeleteTarget(null);
-    showToast("soft-delete");
+    showToast('soft-delete');
   };
 
   // ── Hard delete ──
-  const confirmHardDelete = async () => {
+  const confirmHardDelete = () => {
     if (!hardDeleteTarget) return;
-    await removeProduct(hardDeleteTarget.productId);
+    removeProduct(hardDeleteTarget.productId);
     setHardDeleteTarget(null);
-    showToast("hard-delete");
+    showToast('hard-delete');
   };
 
   const getCategoryName = (id: number) =>
@@ -188,44 +160,18 @@ export default function MenuManagePage() {
       {toast && (
         <div className="fixed top-5 right-5 z-[60] flex items-center gap-3 bg-emerald-500 rounded-2xl shadow-xl px-5 py-4 min-w-[300px] max-w-sm">
           <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center shrink-0">
-            <svg
-              className="w-5 h-5 text-white"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2.5}
-                d="M5 13l4 4L19 7"
-              />
+            <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
             </svg>
           </div>
           <p className="flex-1 text-sm font-medium text-white">
-            {toast.type === "create"
-              ? "Bạn đã thêm sản phẩm mới thành công!"
-              : toast.type === "hard-delete"
-                ? "Bạn đã xóa thành công!"
-                : "Bạn đã chỉnh sửa thành công!"}
+            {toast.type === 'create'      ? 'Bạn đã thêm sản phẩm mới thành công!' :
+             toast.type === 'hard-delete' ? 'Bạn đã xóa thành công!'               :
+                                            'Bạn đã chỉnh sửa thành công!'}
           </p>
-          <button
-            type="button"
-            onClick={() => setToast(null)}
-            className="text-white/70 hover:text-white transition shrink-0"
-          >
-            <svg
-              className="w-4 h-4"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M6 18L18 6M6 6l12 12"
-              />
+          <button type="button" onClick={() => setToast(null)} className="text-white/70 hover:text-white transition shrink-0">
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
             </svg>
           </button>
         </div>
@@ -234,21 +180,11 @@ export default function MenuManagePage() {
       <header className="flex items-center justify-between px-8 py-4 bg-white border-b border-gray-200 shadow-sm">
         <button
           type="button"
-          onClick={() => router.push("/manager")}
+          onClick={() => router.push('/manager')}
           className="flex items-center gap-2 text-gray-500 hover:text-gray-800 transition text-sm font-medium"
         >
-          <svg
-            className="w-4 h-4"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M15 19l-7-7 7-7"
-            />
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
           </svg>
           Dashboard
         </button>
@@ -258,36 +194,12 @@ export default function MenuManagePage() {
           onClick={openAdd}
           className="flex items-center gap-2 px-4 py-2 bg-lime-400 hover:bg-lime-500 text-white font-semibold rounded-xl shadow transition"
         >
-          <svg
-            className="w-4 h-4"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M12 4v16m8-8H4"
-            />
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
           </svg>
           Thêm sản phẩm
         </button>
       </header>
-
-      {/* ── API error banner ── */}
-      {apiError && (
-        <div className="px-8 py-2.5 bg-amber-50 border-b border-amber-200 flex items-center gap-3">
-          <span className="text-amber-700 text-sm font-medium">{apiError}</span>
-          <button
-            type="button"
-            onClick={refresh}
-            className="ml-auto text-xs underline text-amber-600 hover:text-amber-800 transition"
-          >
-            Thử lại
-          </button>
-        </div>
-      )}
 
       {/* ── Filters ── */}
       <div className="px-8 py-4 flex flex-wrap gap-3 items-center bg-white border-b border-gray-100">
@@ -299,28 +211,22 @@ export default function MenuManagePage() {
           className="px-4 py-2 border border-gray-300 rounded-xl text-sm focus:ring-2 focus:ring-lime-400 focus:border-lime-400 outline-none w-64"
         />
         <div className="flex rounded-xl overflow-hidden border border-gray-200 text-sm">
-          {(["all", "active", "inactive"] as const).map((v) => (
+          {(['all', 'active', 'inactive'] as const).map((v) => (
             <button
               key={v}
               type="button"
               onClick={() => setFilterActive(v)}
               className={`px-4 py-2 font-medium transition ${
                 filterActive === v
-                  ? "bg-lime-400 text-white"
-                  : "bg-white text-gray-600 hover:bg-gray-50"
+                  ? 'bg-lime-400 text-white'
+                  : 'bg-white text-gray-600 hover:bg-gray-50'
               }`}
             >
-              {v === "all"
-                ? "Tất cả"
-                : v === "active"
-                  ? "Đang bán"
-                  : "Ngừng bán"}
+              {v === 'all' ? 'Tất cả' : v === 'active' ? 'Đang bán' : 'Ngừng bán'}
             </button>
           ))}
         </div>
-        <span className="text-sm text-gray-400 ml-auto">
-          {filtered.length} sản phẩm
-        </span>
+        <span className="text-sm text-gray-400 ml-auto">{filtered.length} sản phẩm</span>
       </div>
 
       {/* ── Table ── */}
@@ -331,18 +237,8 @@ export default function MenuManagePage() {
           </div>
         ) : filtered.length === 0 ? (
           <div className="flex flex-col items-center py-20 gap-2 text-gray-400">
-            <svg
-              className="w-12 h-12"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={1.5}
-                d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"
-              />
+            <svg className="w-12 h-12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
             </svg>
             <p className="text-sm">Không có sản phẩm nào</p>
           </div>
@@ -366,44 +262,27 @@ export default function MenuManagePage() {
                   <tr key={p.productId} className="hover:bg-gray-50 transition">
                     <td className="px-5 py-3 text-gray-400">{idx + 1}</td>
                     <td className="px-5 py-3">
-                      <p className="font-semibold text-gray-800">
-                        {p.productName}
-                      </p>
+                      <p className="font-semibold text-gray-800">{p.productName}</p>
                       {p.description && (
-                        <p className="text-xs text-gray-400 truncate max-w-[200px]">
-                          {p.description}
-                        </p>
+                        <p className="text-xs text-gray-400 truncate max-w-[200px]">{p.description}</p>
                       )}
                     </td>
-                    <td className="px-5 py-3 text-gray-600">
-                      {getCategoryName(p.categoryId)}
-                    </td>
-                    <td className="px-5 py-3 font-mono text-gray-500">
-                      {p.sku}
-                    </td>
-                    <td className="px-5 py-3 text-right text-gray-600">
-                      {formatPrice(p.importPrice)}
-                    </td>
-                    <td className="px-5 py-3 text-right font-semibold text-gray-800">
-                      {formatPrice(p.listPrice)}
-                    </td>
+                    <td className="px-5 py-3 text-gray-600">{getCategoryName(p.categoryId)}</td>
+                    <td className="px-5 py-3 font-mono text-gray-500">{p.sku}</td>
+                    <td className="px-5 py-3 text-right text-gray-600">{formatPrice(p.basicPrice)}</td>
+                    <td className="px-5 py-3 text-right font-semibold text-gray-800">{formatPrice(p.unitPrice)}</td>
                     <td className="px-5 py-3 text-center">
                       <button
                         type="button"
-                        onClick={async () => {
-                          await toggleActive(p.productId);
-                          showToast("soft-delete");
-                        }}
+                        onClick={() => { toggleActive(p.productId); showToast('soft-delete'); }}
                         className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-semibold transition ${
                           p.isActive
-                            ? "bg-green-100 text-green-700 hover:bg-green-200"
-                            : "bg-gray-100 text-gray-500 hover:bg-gray-200"
+                            ? 'bg-green-100 text-green-700 hover:bg-green-200'
+                            : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
                         }`}
                       >
-                        <span
-                          className={`w-1.5 h-1.5 rounded-full ${p.isActive ? "bg-green-500" : "bg-gray-400"}`}
-                        />
-                        {p.isActive ? "Đang bán" : "Ngừng bán"}
+                        <span className={`w-1.5 h-1.5 rounded-full ${p.isActive ? 'bg-green-500' : 'bg-gray-400'}`} />
+                        {p.isActive ? 'Đang bán' : 'Ngừng bán'}
                       </button>
                     </td>
                     <td className="px-5 py-3">
@@ -414,18 +293,8 @@ export default function MenuManagePage() {
                           title="Chỉnh sửa"
                           className="p-1.5 rounded-lg text-blue-500 hover:bg-blue-50 transition"
                         >
-                          <svg
-                            className="w-4 h-4"
-                            fill="none"
-                            stroke="currentColor"
-                            viewBox="0 0 24 24"
-                          >
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              strokeWidth={2}
-                              d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
-                            />
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                           </svg>
                         </button>
                         <button
@@ -434,18 +303,8 @@ export default function MenuManagePage() {
                           title="Ngừng bán"
                           className="p-1.5 rounded-lg text-orange-400 hover:bg-orange-50 transition"
                         >
-                          <svg
-                            className="w-4 h-4"
-                            fill="none"
-                            stroke="currentColor"
-                            viewBox="0 0 24 24"
-                          >
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              strokeWidth={2}
-                              d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"
-                            />
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
                           </svg>
                         </button>
                         <button
@@ -454,18 +313,8 @@ export default function MenuManagePage() {
                           title="Xóa vĩnh viễn"
                           className="p-1.5 rounded-lg text-red-400 hover:bg-red-50 transition"
                         >
-                          <svg
-                            className="w-4 h-4"
-                            fill="none"
-                            stroke="currentColor"
-                            viewBox="0 0 24 24"
-                          >
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              strokeWidth={2}
-                              d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-                            />
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                           </svg>
                         </button>
                       </div>
@@ -484,78 +333,45 @@ export default function MenuManagePage() {
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg mx-4 overflow-hidden">
             <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
               <h2 className="text-lg font-bold text-gray-800">
-                {modalMode === "add"
-                  ? "Thêm sản phẩm mới"
-                  : `Chỉnh sửa: ${editTarget?.productName}`}
+                {modalMode === 'add' ? 'Thêm sản phẩm mới' : `Chỉnh sửa: ${editTarget?.productName}`}
               </h2>
-              <button
-                type="button"
-                onClick={closeModal}
-                className="text-gray-400 hover:text-gray-700 transition"
-              >
-                <svg
-                  className="w-5 h-5"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M6 18L18 6M6 6l12 12"
-                  />
+              <button type="button" onClick={closeModal} className="text-gray-400 hover:text-gray-700 transition">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                 </svg>
               </button>
             </div>
 
-            <form
-              onSubmit={handleSubmit}
-              className="px-6 py-5 space-y-4 max-h-[75vh] overflow-y-auto"
-            >
+            <form onSubmit={handleSubmit} className="px-6 py-5 space-y-4 max-h-[75vh] overflow-y-auto">
               <div className="grid grid-cols-2 gap-4">
                 <div className="col-span-2">
-                  <label className="block text-xs font-semibold text-gray-600 mb-1">
-                    Tên sản phẩm *
-                  </label>
+                  <label className="block text-xs font-semibold text-gray-600 mb-1">Tên sản phẩm *</label>
                   <input
                     type="text"
                     value={form.productName}
-                    onChange={(e) =>
-                      setForm({ ...form, productName: e.target.value })
-                    }
+                    onChange={(e) => setForm({ ...form, productName: e.target.value })}
                     placeholder="VD: Cà phê sữa đá"
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-lime-400 focus:border-lime-400 outline-none"
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-gray-600 mb-1">
-                    Danh mục *
-                  </label>
+                  <label className="block text-xs font-semibold text-gray-600 mb-1">Danh mục *</label>
                   <select
                     value={form.categoryId}
-                    onChange={(e) =>
-                      setForm({ ...form, categoryId: Number(e.target.value) })
-                    }
+                    onChange={(e) => setForm({ ...form, categoryId: Number(e.target.value) })}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-lime-400 focus:border-lime-400 outline-none bg-white"
                   >
                     {CATEGORIES.map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.name}
-                      </option>
+                      <option key={c.id} value={c.id}>{c.name}</option>
                     ))}
                   </select>
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-gray-600 mb-1">
-                    Đơn vị
-                  </label>
+                  <label className="block text-xs font-semibold text-gray-600 mb-1">Đơn vị</label>
                   <input
                     type="text"
                     value={form.measureUnit}
-                    onChange={(e) =>
-                      setForm({ ...form, measureUnit: e.target.value })
-                    }
+                    onChange={(e) => setForm({ ...form, measureUnit: e.target.value })}
                     placeholder="ly, hộp, kg..."
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-lime-400 focus:border-lime-400 outline-none"
                   />
@@ -564,9 +380,7 @@ export default function MenuManagePage() {
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs font-semibold text-gray-600 mb-1">
-                    SKU *
-                  </label>
+                  <label className="block text-xs font-semibold text-gray-600 mb-1">SKU *</label>
                   <input
                     type="text"
                     value={form.sku}
@@ -576,15 +390,11 @@ export default function MenuManagePage() {
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-gray-600 mb-1">
-                    Barcode
-                  </label>
+                  <label className="block text-xs font-semibold text-gray-600 mb-1">Barcode</label>
                   <input
                     type="text"
                     value={form.barcode}
-                    onChange={(e) =>
-                      setForm({ ...form, barcode: e.target.value })
-                    }
+                    onChange={(e) => setForm({ ...form, barcode: e.target.value })}
                     placeholder="Tùy chọn"
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-lime-400 focus:border-lime-400 outline-none"
                   />
@@ -593,44 +403,32 @@ export default function MenuManagePage() {
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs font-semibold text-gray-600 mb-1">
-                    Giá nhập (VND) *
-                  </label>
+                  <label className="block text-xs font-semibold text-gray-600 mb-1">Giá vốn (VND) *</label>
                   <input
                     type="number"
                     min={0}
-                    value={form.importPrice}
-                    onChange={(e) =>
-                      setForm({ ...form, importPrice: Number(e.target.value) })
-                    }
+                    value={form.basicPrice}
+                    onChange={(e) => setForm({ ...form, basicPrice: Number(e.target.value) })}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-lime-400 focus:border-lime-400 outline-none"
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-gray-600 mb-1">
-                    Giá bán (VND) *
-                  </label>
+                  <label className="block text-xs font-semibold text-gray-600 mb-1">Giá bán (VND) *</label>
                   <input
                     type="number"
                     min={0}
-                    value={form.listPrice}
-                    onChange={(e) =>
-                      setForm({ ...form, listPrice: Number(e.target.value) })
-                    }
+                    value={form.unitPrice}
+                    onChange={(e) => setForm({ ...form, unitPrice: Number(e.target.value) })}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-lime-400 focus:border-lime-400 outline-none"
                   />
                 </div>
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-gray-600 mb-1">
-                  Mô tả
-                </label>
+                <label className="block text-xs font-semibold text-gray-600 mb-1">Mô tả</label>
                 <textarea
                   value={form.description}
-                  onChange={(e) =>
-                    setForm({ ...form, description: e.target.value })
-                  }
+                  onChange={(e) => setForm({ ...form, description: e.target.value })}
                   rows={2}
                   placeholder="Mô tả ngắn về sản phẩm..."
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-lime-400 focus:border-lime-400 outline-none resize-none"
@@ -641,41 +439,23 @@ export default function MenuManagePage() {
                 <button
                   type="button"
                   onClick={() => setForm({ ...form, isActive: !form.isActive })}
-                  className={`relative w-11 h-6 rounded-full transition-colors ${form.isActive ? "bg-lime-400" : "bg-gray-300"}`}
+                  className={`relative w-11 h-6 rounded-full transition-colors ${form.isActive ? 'bg-lime-400' : 'bg-gray-300'}`}
                 >
-                  <span
-                    className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${form.isActive ? "translate-x-5" : "translate-x-0"}`}
-                  />
+                  <span className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${form.isActive ? 'translate-x-5' : 'translate-x-0'}`} />
                 </button>
-                <span className="text-sm text-gray-700">
-                  {form.isActive ? "Đang bán" : "Ngừng bán"}
-                </span>
+                <span className="text-sm text-gray-700">{form.isActive ? 'Đang bán' : 'Ngừng bán'}</span>
               </div>
 
               {formError && (
-                <p className="text-sm text-red-500 bg-red-50 px-3 py-2 rounded-lg">
-                  {formError}
-                </p>
+                <p className="text-sm text-red-500 bg-red-50 px-3 py-2 rounded-lg">{formError}</p>
               )}
 
               <div className="flex gap-3 pt-2">
-                <button
-                  type="button"
-                  onClick={closeModal}
-                  className="flex-1 py-2.5 rounded-xl border border-gray-300 text-sm font-medium text-gray-700 hover:bg-gray-50 transition"
-                >
+                <button type="button" onClick={closeModal} className="flex-1 py-2.5 rounded-xl border border-gray-300 text-sm font-medium text-gray-700 hover:bg-gray-50 transition">
                   Hủy
                 </button>
-                <button
-                  type="submit"
-                  disabled={submitting}
-                  className="flex-1 py-2.5 rounded-xl bg-lime-400 hover:bg-lime-500 text-white font-semibold text-sm transition disabled:opacity-60"
-                >
-                  {submitting
-                    ? "Đang lưu..."
-                    : modalMode === "add"
-                      ? "Thêm mới"
-                      : "Lưu thay đổi"}
+                <button type="submit" disabled={submitting} className="flex-1 py-2.5 rounded-xl bg-lime-400 hover:bg-lime-500 text-white font-semibold text-sm transition disabled:opacity-60">
+                  {submitting ? 'Đang lưu...' : modalMode === 'add' ? 'Thêm mới' : 'Lưu thay đổi'}
                 </button>
               </div>
             </form>
@@ -689,44 +469,21 @@ export default function MenuManagePage() {
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm mx-4 p-6">
             <div className="flex items-center gap-3 mb-4">
               <div className="w-10 h-10 rounded-full bg-orange-100 flex items-center justify-center">
-                <svg
-                  className="w-5 h-5 text-orange-500"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M12 9v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-                  />
+                <svg className="w-5 h-5 text-orange-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
               </div>
               <div>
                 <h3 className="font-bold text-gray-800">Ngừng bán sản phẩm?</h3>
-                <p className="text-sm text-gray-500">
-                  Sản phẩm sẽ bị ẩn khỏi menu, không bị xóa.
-                </p>
+                <p className="text-sm text-gray-500">Sản phẩm sẽ bị ẩn khỏi menu, không bị xóa.</p>
               </div>
             </div>
             <p className="text-sm text-gray-700 bg-gray-50 rounded-lg px-3 py-2 mb-5">
-              <span className="font-semibold">{deleteTarget.productName}</span>{" "}
-              — SKU: {deleteTarget.sku}
+              <span className="font-semibold">{deleteTarget.productName}</span> — SKU: {deleteTarget.sku}
             </p>
             <div className="flex gap-3">
-              <button
-                onClick={() => setDeleteTarget(null)}
-                className="flex-1 py-2.5 rounded-xl border border-gray-300 text-sm font-medium hover:bg-gray-50 transition"
-              >
-                Hủy
-              </button>
-              <button
-                onClick={confirmSoftDelete}
-                className="flex-1 py-2.5 rounded-xl bg-orange-400 hover:bg-orange-500 text-white font-semibold text-sm transition"
-              >
-                Ngừng bán
-              </button>
+              <button onClick={() => setDeleteTarget(null)} className="flex-1 py-2.5 rounded-xl border border-gray-300 text-sm font-medium hover:bg-gray-50 transition">Hủy</button>
+              <button onClick={confirmSoftDelete} className="flex-1 py-2.5 rounded-xl bg-orange-400 hover:bg-orange-500 text-white font-semibold text-sm transition">Ngừng bán</button>
             </div>
           </div>
         </div>
@@ -738,46 +495,21 @@ export default function MenuManagePage() {
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm mx-4 p-6">
             <div className="flex items-center gap-3 mb-4">
               <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center">
-                <svg
-                  className="w-5 h-5 text-red-500"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-                  />
+                <svg className="w-5 h-5 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                 </svg>
               </div>
               <div>
                 <h3 className="font-bold text-gray-800">Xóa vĩnh viễn?</h3>
-                <p className="text-sm text-red-500">
-                  Hành động này không thể hoàn tác!
-                </p>
+                <p className="text-sm text-red-500">Hành động này không thể hoàn tác!</p>
               </div>
             </div>
             <p className="text-sm text-gray-700 bg-red-50 rounded-lg px-3 py-2 mb-5">
-              <span className="font-semibold">
-                {hardDeleteTarget.productName}
-              </span>{" "}
-              — SKU: {hardDeleteTarget.sku}
+              <span className="font-semibold">{hardDeleteTarget.productName}</span> — SKU: {hardDeleteTarget.sku}
             </p>
             <div className="flex gap-3">
-              <button
-                onClick={() => setHardDeleteTarget(null)}
-                className="flex-1 py-2.5 rounded-xl border border-gray-300 text-sm font-medium hover:bg-gray-50 transition"
-              >
-                Hủy
-              </button>
-              <button
-                onClick={confirmHardDelete}
-                className="flex-1 py-2.5 rounded-xl bg-red-500 hover:bg-red-600 text-white font-semibold text-sm transition"
-              >
-                Xóa vĩnh viễn
-              </button>
+              <button onClick={() => setHardDeleteTarget(null)} className="flex-1 py-2.5 rounded-xl border border-gray-300 text-sm font-medium hover:bg-gray-50 transition">Hủy</button>
+              <button onClick={confirmHardDelete} className="flex-1 py-2.5 rounded-xl bg-red-500 hover:bg-red-600 text-white font-semibold text-sm transition">Xóa vĩnh viễn</button>
             </div>
           </div>
         </div>
