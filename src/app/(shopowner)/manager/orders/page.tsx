@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
@@ -113,6 +113,14 @@ export default function OrdersPage() {
                       </p>
                     </div>
 
+                    {/* Bàn (chỉ đơn tại chỗ có bàn) */}
+                    {order.tableId ? (
+                      <div className="w-16 shrink-0 text-center">
+                        
+                        <p className="text-sm font-bold text-slate-700">Bàn {order.tableId}</p>
+                      </div>
+                    ) : null}
+
                     {/* Loại đơn */}
                     <div className="w-20 text-center shrink-0">
                       <span className={`inline-block text-xs font-semibold px-2 py-0.5 rounded-full ${
@@ -150,11 +158,16 @@ export default function OrdersPage() {
                   </div>
 
                   {/* Meta info */}
-                  <div className="px-5 py-3 bg-slate-50 flex items-center gap-6 border-b border-slate-100">
+                  <div className="px-5 py-3 bg-slate-50 flex items-center gap-6 border-b border-slate-100 flex-wrap">
                     <div className="flex items-center gap-1.5 text-slate-500">
                       <Clock size={13} />
                       <span className="text-xs">{formatTime(selectedOrder.createdAt)} · {formatDate(selectedOrder.createdAt)}</span>
                     </div>
+                    {selectedOrder.tableId ? (
+                      <div className="flex items-center gap-1.5 text-slate-500">
+                        <span className="text-xs font-medium text-slate-600">Bàn {selectedOrder.tableId}</span>
+                      </div>
+                    ) : null}
                     <div className="flex items-center gap-1.5 text-slate-500">
                       <User size={13} />
                       <span className="text-xs">{selectedOrder.cashier}</span>

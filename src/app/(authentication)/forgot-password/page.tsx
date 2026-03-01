@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import Image from "next/image";
 import { useState } from "react";
@@ -20,9 +20,13 @@ export default function ForgotPasswordPage() {
 
     try {
       const response = await forgotPassword({ email });
-      setMessage(
-        response.message || "Password reset link has been sent to your email!"
-      );
+      setMessage(response.message || "Đã xử lý. Kiểm tra thông báo bên dưới.");
+      // Backend trả token trong response (không gửi email) → chuyển sang trang đặt lại mật khẩu với token
+      if (response.token) {
+        setMessage("Đang chuyển đến trang đặt lại mật khẩu...");
+        router.push(`/reset-password?token=${encodeURIComponent(response.token)}`);
+        return;
+      }
       setTimeout(() => {
         router.push("/auth?mode=login");
       }, 3000);

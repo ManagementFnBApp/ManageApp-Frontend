@@ -1,16 +1,17 @@
-﻿'use client';
+'use client';
 
 import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
-import { ArrowLeft } from 'lucide-react';
-import { MENU_CATEGORIES } from '@/data/mockMenu';
-import { getActivePosProducts } from '@/data/useMenuStore';
-import { saveOrder } from '@/data/useOrderStore';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { ArrowLeft, CheckCircle2 } from 'lucide-react';
+import { getActivePosProducts, getCategories } from '@/data/useMenuStore';
+import { saveOrder, getDraft, saveDraft, clearDraft } from '@/data/useOrderStore';
 
-const CATEGORIES = [
-  { id: 'all', label: 'Tất Cả' },
-  ...MENU_CATEGORIES.map((c) => ({ id: c.slug, label: c.label })),
-];
+function getCategoryList() {
+  return [
+    { id: 'all', label: 'Tất Cả' },
+    ...getCategories().map((c) => ({ id: c.slug, label: c.label })),
+  ];
+}
 
 type OrderType = 'eat-in' | 'takeaway';
 
@@ -31,13 +32,24 @@ type PosProduct = ReturnType<typeof getActivePosProducts>[number];
 
 export default function PosPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const tableParam = searchParams.get('table') ?? '';
+  const tableLabel = tableParam === 'mang-di' ? 'Mang đi' : tableParam ? `Bàn ${tableParam}` : null;
+
   const [username, setUsername] = useState<string>('Nguyen Van A');
   const [activeCategory, setActiveCategory] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
-  const [orderType, setOrderType] = useState<OrderType>('eat-in');
+  const [orderType, setOrderType] = useState<OrderType>(tableParam === 'mang-di' ? 'takeaway' : 'eat-in');
   const [cart, setCart] = useState<CartItem[]>([]);
   const [currentTime, setCurrentTime] = useState<Date | null>(null);
   const [posProducts, setPosProducts] = useState<PosProduct[]>([]);
+  const [showSaveSuccess, setShowSaveSuccess] = useState(false);
+  const [showPaySuccess, setShowPaySuccess] = useState(false);
+  const [categoryList, setCategoryList] = useState(() => getCategoryList());
+
+  useEffect(() => {
+    setCategoryList(getCategoryList());
+  }, []);
 
   useEffect(() => {
     setCurrentTime(new Date());
@@ -55,6 +67,22 @@ export default function PosPage() {
       if (name) setUsername(name);
     }
   }, []);
+
+  useEffect(() => {
+    if (tableParam && typeof window !== 'undefined') {
+      const draft = getDraft(tableParam);
+      if (draft && draft.items.length > 0) {
+        setCart(draft.items.map((i) => ({ productId: i.productId, name: i.name, price: i.price, quantity: i.quantity })));
+      }
+    }
+  }, [tableParam]);
+
+  // Khi xóa hết món trong giỏ thì tự xóa draft của bàn đó (đơn không còn món)
+  useEffect(() => {
+    if (tableParam && cart.length === 0 && typeof window !== 'undefined') {
+      clearDraft(tableParam);
+    }
+  }, [tableParam, cart.length]);
 
   const filteredProducts = posProducts.filter((p) => {
     const matchCategory = activeCategory === 'all' || p.categoryId === activeCategory;
@@ -84,9 +112,24 @@ export default function PosPage() {
 
   const formatPrice = (n: number) => new Intl.NumberFormat('vi-VN').format(n) + ' VND';
 
+  const handleSaveDraft = () => {
+    if (cart.length === 0) return;
+    if (!tableParam) {
+      alert('Vui lòng chọn bàn từ trang quản lý.');
+      return;
+    }
+    saveDraft(tableParam, {
+      items: cart.map((i) => ({ productId: i.productId, name: i.name, price: i.price, quantity: i.quantity })),
+      total,
+      cashier: username,
+    });
+    setShowSaveSuccess(true);
+  };
+
   const handleCheckout = () => {
     if (cart.length === 0) return;
     const orderId = 'ORD-' + Date.now().toString(36).toUpperCase();
+    const tableId = orderType === 'eat-in' && tableParam && tableParam !== 'mang-di' ? tableParam : undefined;
     saveOrder({
       orderId,
       createdAt: new Date().toISOString(),
@@ -95,9 +138,11 @@ export default function PosPage() {
       orderType,
       cashier: username,
       status: 'paid',
+      tableId,
     });
+    if (tableParam) clearDraft(tableParam);
     setCart([]);
-    alert('Thanh toán thành công!');
+    setShowPaySuccess(true);
   };
 
   return (
@@ -113,6 +158,11 @@ export default function PosPage() {
           <span className="text-sm font-medium">Quay lại</span>
         </button>
         <div className="h-6 w-px bg-gray-200 shrink-0" />
+        {tableLabel && (
+          <span className="px-3 py-1.5 rounded-lg bg-amber-100 text-amber-800 font-semibold text-sm shrink-0">
+            {tableLabel}
+          </span>
+        )}
         <span className="text-base font-bold text-gray-900 shrink-0">POS System</span>
 
         {/* Shift + time */}
@@ -160,7 +210,7 @@ export default function PosPage() {
         <div className="flex-1 flex flex-col p-6 lg:max-w-[66.666%] min-h-0">
           {/* Category filters */}
           <div className="flex flex-wrap gap-2 mb-4 flex-shrink-0">
-            {CATEGORIES.map((cat) => (
+            {categoryList.map((cat) => (
               <button
                 key={cat.id}
                 type="button"
@@ -281,23 +331,74 @@ export default function PosPage() {
             )}
           </div>
 
-          {/* Bottom - total & checkout */}
+          {/* Bottom - total, lưu đơn & thanh toán */}
           <div className="p-4 bg-gray-100 border-t border-gray-200">
             <div className="flex justify-between items-center mb-3">
               <span className="text-gray-700 font-medium">Tổng cộng:</span>
               <span className="text-lg font-bold text-gray-900">{formatPrice(total)}</span>
             </div>
-            <button
-              type="button"
-              onClick={handleCheckout}
-              disabled={cart.length === 0}
-              className="w-full py-3 rounded-lg bg-blue-500 text-white font-semibold hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed transition"
-            >
-              Thanh toán
-            </button>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={handleSaveDraft}
+                disabled={cart.length === 0 || !tableParam}
+                title={!tableParam ? 'Chọn bàn từ trang quản lý' : 'Lưu đơn để khách thanh toán sau'}
+                className="flex-1 py-3 rounded-lg bg-emerald-500 text-white font-semibold hover:bg-emerald-600 disabled:opacity-50 disabled:cursor-not-allowed transition"
+              >
+                Lưu đơn hàng
+              </button>
+              <button
+                type="button"
+                onClick={handleCheckout}
+                disabled={cart.length === 0}
+                className="flex-1 py-3 rounded-lg bg-blue-500 text-white font-semibold hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed transition"
+              >
+                Thanh toán
+              </button>
+            </div>
           </div>
         </div>
       </div>
+
+      {/* Popup Lưu đơn hàng thành công */}
+      {showSaveSuccess && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50" onClick={() => { setShowSaveSuccess(false); router.push('/manager'); }}>
+          <div className="bg-white rounded-2xl shadow-xl max-w-sm w-full p-6 text-center" onClick={(e) => e.stopPropagation()}>
+            <div className="mx-auto w-14 h-14 rounded-full bg-emerald-100 flex items-center justify-center mb-4">
+              <CheckCircle2 className="w-8 h-8 text-emerald-600" />
+            </div>
+            <h3 className="text-lg font-semibold text-gray-900 mb-1">Lưu đơn hàng thành công</h3>
+            <p className="text-sm text-gray-500 mb-5">Đơn hàng đã được lưu. Khách thanh toán sau.</p>
+            <button
+              type="button"
+              onClick={() => { setShowSaveSuccess(false); router.push('/manager'); }}
+              className="w-full py-2.5 rounded-lg bg-emerald-500 text-white font-medium hover:bg-emerald-600 transition"
+            >
+              Đóng
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Popup Thanh toán thành công */}
+      {showPaySuccess && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50" onClick={() => { setShowPaySuccess(false); router.push('/manager'); }}>
+          <div className="bg-white rounded-2xl shadow-xl max-w-sm w-full p-6 text-center" onClick={(e) => e.stopPropagation()}>
+            <div className="mx-auto w-14 h-14 rounded-full bg-blue-100 flex items-center justify-center mb-4">
+              <CheckCircle2 className="w-8 h-8 text-blue-600" />
+            </div>
+            <h3 className="text-lg font-semibold text-gray-900 mb-1">Thanh toán thành công</h3>
+            <p className="text-sm text-gray-500 mb-5">Đơn hàng đã được thanh toán.</p>
+            <button
+              type="button"
+              onClick={() => { setShowPaySuccess(false); router.push('/manager'); }}
+              className="w-full py-2.5 rounded-lg bg-blue-500 text-white font-medium hover:bg-blue-600 transition"
+            >
+              Đóng
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

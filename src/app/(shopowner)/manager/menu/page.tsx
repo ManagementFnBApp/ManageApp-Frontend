@@ -1,27 +1,17 @@
-﻿'use client';
+'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import type { Product, CreateProductPayload } from '@/apis/productApi';
-import { MENU_CATEGORIES } from '@/data/mockMenu';
-import { useMenuStore } from '@/data/useMenuStore';
+import { useMenuStore, getCategories, addCategory as addCategoryStore, type MenuCategory } from '@/data/useMenuStore';
 
-const CATEGORIES = MENU_CATEGORIES.map((c) => ({ id: c.id, name: c.label }));
+function categoriesToOptions(cats: MenuCategory[]) {
+  return cats.map((c) => ({ id: c.id, name: c.label }));
+}
 
-const EMPTY_FORM: CreateProductPayload = {
-  categoryId: CATEGORIES[0].id,
-  productName: '',
-  sku: '',
-  barcode: '',
-  description: '',
-  measureUnit: 'ly',
-  basicPrice: 0,
-  unitPrice: 0,
-  isActive: true,
-};
 
 type ModalMode = 'add' | 'edit' | null;
-type ToastType = 'create' | 'edit' | 'soft-delete' | 'hard-delete';
+type ToastType = 'create' | 'edit' | 'soft-delete' | 'hard-delete' | 'category';
 
 const formatPrice = (n: number) =>
   new Intl.NumberFormat('vi-VN').format(n) + ' ₫';
@@ -30,12 +20,28 @@ export default function MenuManagePage() {
   const router = useRouter();
   const { products, loading, addProduct, editProduct, deactivateProduct, removeProduct, toggleActive } = useMenuStore();
 
+  const [categories, setCategories] = useState<MenuCategory[]>(() => getCategories());
+  useEffect(() => setCategories(getCategories()), []);
+
+  const CATEGORIES = categoriesToOptions(categories);
+  const EMPTY_FORM_BASE: CreateProductPayload = {
+    categoryId: CATEGORIES[0]?.id ?? 1,
+    productName: '',
+    sku: '',
+    barcode: '',
+    description: '',
+    measureUnit: 'ly',
+    basicPrice: 0,
+    unitPrice: 0,
+    isActive: true,
+  };
+
   const [search, setSearch] = useState('');
   const [filterActive, setFilterActive] = useState<'all' | 'active' | 'inactive'>('all');
 
   const [modalMode, setModalMode] = useState<ModalMode>(null);
   const [editTarget, setEditTarget] = useState<Product | null>(null);
-  const [form, setForm] = useState<CreateProductPayload>(EMPTY_FORM);
+  const [form, setForm] = useState<CreateProductPayload>(EMPTY_FORM_BASE);
   const [formError, setFormError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
@@ -43,6 +49,9 @@ export default function MenuManagePage() {
   const [hardDeleteTarget, setHardDeleteTarget] = useState<Product | null>(null);
 
   const [toast, setToast] = useState<{ type: ToastType } | null>(null);
+  const [showAddCategoryModal, setShowAddCategoryModal] = useState(false);
+  const [newCategoryName, setNewCategoryName] = useState('');
+  const [categoryError, setCategoryError] = useState<string | null>(null);
 
   const showToast = (type: ToastType) => {
     setToast({ type });
@@ -64,7 +73,11 @@ export default function MenuManagePage() {
 
   // ── Open modals ──
   const openAdd = () => {
-    setForm(EMPTY_FORM);
+    const opts = categoriesToOptions(getCategories());
+    setForm({
+      ...EMPTY_FORM_BASE,
+      categoryId: opts[0]?.id ?? 1,
+    });
     setFormError(null);
     setEditTarget(null);
     setModalMode('add');
@@ -166,6 +179,7 @@ export default function MenuManagePage() {
           </div>
           <p className="flex-1 text-sm font-medium text-white">
             {toast.type === 'create'      ? 'Bạn đã thêm sản phẩm mới thành công!' :
+             toast.type === 'category'   ? 'Đã thêm loại sản phẩm mới!'          :
              toast.type === 'hard-delete' ? 'Bạn đã xóa thành công!'               :
                                             'Bạn đã chỉnh sửa thành công!'}
           </p>
@@ -189,16 +203,28 @@ export default function MenuManagePage() {
           Dashboard
         </button>
         <h1 className="text-xl font-bold text-gray-800">Quản lý Menu</h1>
-        <button
-          type="button"
-          onClick={openAdd}
-          className="flex items-center gap-2 px-4 py-2 bg-lime-400 hover:bg-lime-500 text-white font-semibold rounded-xl shadow transition"
-        >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-          </svg>
-          Thêm sản phẩm
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => { setShowAddCategoryModal(true); setNewCategoryName(''); setCategoryError(null); }}
+            className="flex items-center gap-2 px-4 py-2 bg-slate-100 hover:bg-slate-200 text-gray-700 font-semibold rounded-xl shadow transition border border-gray-200"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+            </svg>
+             Loại sản phẩm
+          </button>
+          <button
+            type="button"
+            onClick={openAdd}
+            className="flex items-center gap-2 px-4 py-2 bg-lime-400 hover:bg-lime-500 text-white font-semibold rounded-xl shadow transition"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+            </svg>
+          Sản phẩm mới
+          </button>
+        </div>
       </header>
 
       {/* ── Filters ── */}
@@ -459,6 +485,62 @@ export default function MenuManagePage() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* ══ THÊM LOẠI SẢN PHẨM ══ */}
+      {showAddCategoryModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm mx-4 overflow-hidden">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+              <h2 className="text-lg font-bold text-gray-800">Thêm loại sản phẩm</h2>
+              <button type="button" onClick={() => { setShowAddCategoryModal(false); setCategoryError(null); }} className="text-gray-400 hover:text-gray-700 transition">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <div className="px-6 py-5">
+              <label className="block text-xs font-semibold text-gray-600 mb-1">Tên loại sản phẩm</label>
+              <input
+                type="text"
+                value={newCategoryName}
+                onChange={(e) => { setNewCategoryName(e.target.value); setCategoryError(null); }}
+                placeholder="VD: Cà phê, Nước ép, Nước ngọt..."
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-lime-400 focus:border-lime-400 outline-none"
+              />
+              {categoryError && <p className="mt-1 text-sm text-red-500">{categoryError}</p>}
+              <div className="flex gap-3 mt-5">
+                <button
+                  type="button"
+                  onClick={() => { setShowAddCategoryModal(false); setCategoryError(null); }}
+                  className="flex-1 py-2.5 rounded-xl border border-gray-300 text-sm font-medium text-gray-700 hover:bg-gray-50 transition"
+                >
+                  Hủy
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const name = newCategoryName.trim();
+                    if (!name) { setCategoryError('Vui lòng nhập tên loại sản phẩm.'); return; }
+                    try {
+                      addCategoryStore(name);
+                      setCategories(getCategories());
+                      setShowAddCategoryModal(false);
+                      setNewCategoryName('');
+                      setCategoryError(null);
+                      showToast('category');
+                    } catch (e) {
+                      setCategoryError((e as Error)?.message ?? 'Không thể thêm loại sản phẩm.');
+                    }
+                  }}
+                  className="flex-1 py-2.5 rounded-xl bg-lime-400 hover:bg-lime-500 text-white font-semibold text-sm transition"
+                >
+                  Thêm
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}

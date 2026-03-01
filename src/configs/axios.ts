@@ -59,10 +59,12 @@ export class ApiClientService {
 
   private handleError(error: AxiosError): Promise<never> {
     const status = error.response?.status;
+    const isLoginRequest = error.config?.url?.includes('/auth/login') && error.config?.method === 'post';
 
-    if (status === 401) {
+    if (status === 401 && !isLoginRequest) {
       this.errorHandler?.onUnauthorized?.();
-    } else if (status === 403) {
+    } else if (status === 403 && !isLoginRequest) {
+      // 403 từ login → không redirect, để trang login hiển thị message (vd: tài khoản bị chặn)
       this.errorHandler?.onForbidden?.();
     }
 

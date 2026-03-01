@@ -6,6 +6,7 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { getAllProducts } from '@/apis/test'
 import { getSubscriptions, SubscriptionPlan } from '@/apis/subscription'
+import { ROLE_CODE_SHOP_OWNER, getStoredRoleNormalized } from '@/apis/auth'
 
 // ─────────────────────────────────────────────
 // Shared types / helpers (Services)
@@ -316,7 +317,7 @@ export function ServicesPage() {
   useEffect(() => {
     if (typeof window !== 'undefined') {
       setIsLoggedIn(!!localStorage.getItem('accessToken'))
-      setUserRole(localStorage.getItem('role'))
+      setUserRole(getStoredRoleNormalized() || null) // Khớp role từ API backend
     }
   }, [])
   useEffect(() => {
@@ -340,7 +341,7 @@ export function ServicesPage() {
       <section className="bg-gradient-to-br from-blue-50 to-white py-20 px-4 text-center">
         <h1 className="text-5xl font-bold text-gray-900 mb-6">Bảng giá dịch vụ</h1>
         <p className="text-xl text-gray-600 max-w-3xl mx-auto mb-8">Lựa chọn gói dịch vụ phù hợp với quy mô doanh nghiệp của bạn</p>
-        {isLoggedIn && userRole === 'SHOPOWNER' && <div className="inline-flex items-center gap-2 bg-green-100 text-green-800 px-6 py-3 rounded-full font-semibold">✅ Bạn đã là Shop Owner — truy cập hệ thống <Link href="/pos" className="underline hover:text-green-900">tại đây</Link></div>}
+        {isLoggedIn && userRole === ROLE_CODE_SHOP_OWNER && <div className="inline-flex items-center gap-2 bg-green-100 text-green-800 px-6 py-3 rounded-full font-semibold">✅ Bạn đã là Shop Owner — truy cập hệ thống <Link href="/pos" className="underline hover:text-green-900">tại đây</Link></div>}
       </section>
       <section className="py-20 px-4">
         <div className="container mx-auto">
@@ -360,7 +361,7 @@ export function ServicesPage() {
                       {plan.description && <p className="text-gray-600 mb-6 text-sm">{plan.description}</p>}
                       {featureList.length > 0 && <ul className="space-y-2 mb-8 flex-grow">{featureList.map((f, fi) => <li key={fi} className="flex items-start text-sm"><span className="text-green-500 mr-2 mt-0.5 flex-shrink-0">✓</span><span className="text-gray-700">{f}</span></li>)}</ul>}
                       <div className="mt-auto">
-                        {userRole === 'SHOPOWNER' ? <div className="text-center px-6 py-3 rounded-lg bg-green-50 text-green-700 font-medium text-sm">✅ Bạn đã có gói dịch vụ</div>
+                        {userRole === ROLE_CODE_SHOP_OWNER ? <div className="text-center px-6 py-3 rounded-lg bg-green-50 text-green-700 font-medium text-sm">✅ Bạn đã có gói dịch vụ</div>
                           : <button onClick={() => handleSelectPlan(plan)} className={`w-full px-6 py-3 rounded-lg font-semibold transition-all ${isPopular ? 'bg-blue-600 text-white hover:bg-blue-700' : 'bg-gray-100 text-gray-900 hover:bg-gray-200'}`}>{isLoggedIn ? 'Mua ngay' : 'Đăng nhập để mua'}</button>}
                       </div>
                     </div>

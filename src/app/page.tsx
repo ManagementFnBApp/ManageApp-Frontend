@@ -1,8 +1,36 @@
-﻿'use client'
+'use client'
+import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
+import { useRouter } from 'next/navigation'
+import { getStoredRoleNormalized } from '@/apis/auth'
 
 export default function Homepage() {
+  const router = useRouter()
+  const [shouldRedirect, setShouldRedirect] = useState<boolean | null>(null)
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const token = localStorage.getItem('accessToken')
+    const role = getStoredRoleNormalized()
+    // Chỉ redirect STAFF về /manager (STAFF không có nút "Trang chủ"). SHOPOWNER vào / được xem trang chủ.
+    if (token && role === 'STAFF') {
+      setShouldRedirect(true)
+      router.replace('/manager')
+    } else {
+      setShouldRedirect(false)
+    }
+  }, [router])
+
+  // Đang kiểm tra auth hoặc đang redirect → chỉ hiện loading, tránh nháy trang
+  if (shouldRedirect !== false) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-50">
+        <div className="w-10 h-10 border-4 border-blue-500 border-t-transparent rounded-full animate-spin" />
+      </div>
+    )
+  }
+
   return (
     <div>
       {/* Hero Section with Background Image */}
@@ -39,7 +67,7 @@ export default function Homepage() {
               </p>
               <div className="flex gap-4 flex-wrap">
                 <Link
-                  href="/register"
+                  href="/auth?mode=register"
                   className="px-10 py-4 text-white rounded-xl transition-all font-bold text-lg"
                   style={{ backgroundColor: '#3b82f6', boxShadow: '0 10px 30px rgba(59,130,246,0.5)' }}
                   onMouseEnter={(e) => {
@@ -120,51 +148,21 @@ export default function Homepage() {
           <p className="text-center text-gray-600 mb-16 text-lg md:text-xl max-w-3xl mx-auto">
             Giải pháp toàn diện cho doanh nghiệp của bạn
           </p>
-
           <div className="grid md:grid-cols-3 gap-8">
             <div className="group text-center p-8 rounded-2xl bg-white border-2 border-gray-100 hover:border-blue-200 hover:shadow-2xl transition-all transform hover:-translate-y-2">
-              <div
-                className="w-20 h-20 mx-auto mb-6 rounded-2xl flex items-center justify-center text-4xl transform group-hover:scale-110 transition-transform"
-                style={{ backgroundColor: '#dbeafe' }}
-              >
-                ☕
-              </div>
-              <h3 className="text-xl font-bold mb-3 text-gray-900 group-hover:text-blue-600 transition-colors">
-                Đơn giản & Dễ sử dụng
-              </h3>
-              <p className="text-gray-600 leading-relaxed">
-                Giao diện đơn giản, thân thiện và thông minh. Chỉ mất 15 phút làm quen.
-              </p>
+              <div className="w-20 h-20 mx-auto mb-6 rounded-2xl flex items-center justify-center text-4xl transform group-hover:scale-110 transition-transform" style={{ backgroundColor: '#dbeafe' }}>☕</div>
+              <h3 className="text-xl font-bold mb-3 text-gray-900 group-hover:text-blue-600 transition-colors">Đơn giản & Dễ sử dụng</h3>
+              <p className="text-gray-600 leading-relaxed">Giao diện đơn giản, thân thiện và thông minh. Chỉ mất 15 phút làm quen.</p>
             </div>
-
             <div className="group text-center p-8 rounded-2xl bg-white border-2 border-gray-100 hover:border-orange-200 hover:shadow-2xl transition-all transform hover:-translate-y-2">
-              <div
-                className="w-20 h-20 mx-auto mb-6 rounded-2xl flex items-center justify-center text-4xl transform group-hover:scale-110 transition-transform"
-                style={{ backgroundColor: '#fed7aa' }}
-              >
-                🎯
-              </div>
-              <h3 className="text-xl font-bold mb-3 text-gray-900 group-hover:text-orange-600 transition-colors">
-                Tiết kiệm chi phí
-              </h3>
-              <p className="text-gray-600 leading-relaxed">
-                Miễn phí cài đặt, triển khai, nâng cấp và hỗ trợ. Rẻ hơn mọi lý trả dễ.
-              </p>
+              <div className="w-20 h-20 mx-auto mb-6 rounded-2xl flex items-center justify-center text-4xl transform group-hover:scale-110 transition-transform" style={{ backgroundColor: '#fed7aa' }}>🎯</div>
+              <h3 className="text-xl font-bold mb-3 text-gray-900 group-hover:text-orange-600 transition-colors">Tiết kiệm chi phí</h3>
+              <p className="text-gray-600 leading-relaxed">Miễn phí cài đặt, triển khai, nâng cấp và hỗ trợ. Rẻ hơn mọi lý trả dễ.</p>
             </div>
-
             <div className="group text-center p-8 rounded-2xl bg-white border-2 border-gray-100 hover:border-green-200 hover:shadow-2xl transition-all transform hover:-translate-y-2">
-              <div
-                className="w-20 h-20 mx-auto mb-6 rounded-2xl flex items-center justify-center text-4xl transform group-hover:scale-110 transition-transform"
-                style={{ backgroundColor: '#bbf7d0' }}
-              >
-                ✓
-              </div>
-              <h3 className="text-xl font-bold mb-3 text-gray-900 group-hover:text-green-600 transition-colors">
-                Phù hợp cho từng ngành hàng
-              </h3>
-              <p className="text-gray-600 leading-relaxed">
-                Phần mềm quản lý bán hàng phù hợp cho hơn 20 ngành nghề kinh doanh khác nhau.
-              </p>
+              <div className="w-20 h-20 mx-auto mb-6 rounded-2xl flex items-center justify-center text-4xl transform group-hover:scale-110 transition-transform" style={{ backgroundColor: '#bbf7d0' }}>✓</div>
+              <h3 className="text-xl font-bold mb-3 text-gray-900 group-hover:text-green-600 transition-colors">Phù hợp cho từng ngành hàng</h3>
+              <p className="text-gray-600 leading-relaxed">Phần mềm quản lý bán hàng phù hợp cho hơn 20 ngành nghề kinh doanh khác nhau.</p>
             </div>
           </div>
         </div>

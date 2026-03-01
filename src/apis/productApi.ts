@@ -40,27 +40,71 @@ function unwrap<T>(raw: unknown): T {
   return raw as T;
 }
 
+/** Backend ProductResponseDto dùng listPrice (giá bán), importPrice (giá vốn) → map sang frontend unitPrice, basicPrice */
+function mapBackendProductToFrontend(raw: Record<string, unknown>): Product {
+  return {
+    productId: Number(raw.productId ?? raw.id),
+    categoryId: Number(raw.categoryId ?? raw.category_id),
+    productName: String(raw.productName ?? raw.product_name ?? ''),
+    sku: String(raw.sku ?? ''),
+    barcode: raw.barcode != null ? String(raw.barcode) : null,
+    description: raw.description != null ? String(raw.description) : null,
+    measureUnit: raw.measureUnit != null ? String(raw.measureUnit) : raw.measure_unit != null ? String(raw.measure_unit) : null,
+    basicPrice: Number(raw.importPrice ?? raw.import_price ?? 0),
+    unitPrice: Number(raw.listPrice ?? raw.list_price ?? 0),
+    isActive: Boolean(raw.isActive ?? raw.is_active ?? true),
+    createdAt: String(raw.createdAt ?? raw.created_at ?? ''),
+    updatedAt: String(raw.updatedAt ?? raw.updated_at ?? ''),
+  };
+}
+
 // ===== PRODUCT APIs =====
 
 export const getProducts = async (isActive?: boolean): Promise<Product[]> => {
   const params = isActive !== undefined ? { isActive } : {};
   const res = await apiClient.get('/products', { params });
-  return unwrap<Product[]>(res.data);
+  const list = unwrap<Record<string, unknown>[]>(res.data);
+  const arr = Array.isArray(list) ? list : [];
+  return arr.map(mapBackendProductToFrontend);
 };
 
 export const getProductById = async (id: number): Promise<Product> => {
   const res = await apiClient.get(`/products/${id}`);
-  return unwrap<Product>(res.data);
+  const raw = unwrap<Record<string, unknown>>(res.data);
+  return mapBackendProductToFrontend(raw ?? {});
 };
 
+/** Backend CreateProductDto: listPrice (giá bán), importPrice (giá vốn) - camelCase */
 export const createProduct = async (payload: CreateProductPayload): Promise<Product> => {
-  const res = await apiClient.post('/products', payload);
-  return unwrap<Product>(res.data);
+  const res = await apiClient.post('/products', {
+    categoryId: payload.categoryId,
+    productName: payload.productName,
+    sku: payload.sku,
+    barcode: payload.barcode,
+    description: payload.description,
+    measureUnit: payload.measureUnit,
+    listPrice: payload.unitPrice,
+    importPrice: payload.basicPrice,
+    isActive: payload.isActive ?? true,
+  });
+  const raw = unwrap<Record<string, unknown>>(res.data);
+  return mapBackendProductToFrontend(raw ?? {});
 };
 
 export const updateProduct = async (id: number, payload: UpdateProductPayload): Promise<Product> => {
-  const res = await apiClient.patch(`/products/${id}`, payload);
-  return unwrap<Product>(res.data);
+  const body: Record<string, unknown> = {};
+  if (payload.categoryId !== undefined) body.categoryId = payload.categoryId;
+  if (payload.productName !== undefined) body.productName = payload.productName;
+  if (payload.sku !== undefined) body.sku = payload.sku;
+  if (payload.barcode !== undefined) body.barcode = payload.barcode;
+  if (payload.description !== undefined) body.description = payload.description;
+  if (payload.measureUnit !== undefined) body.measureUnit = payload.measureUnit;
+  if (payload.unitPrice !== undefined) body.listPrice = payload.unitPrice;
+  if (payload.basicPrice !== undefined) body.importPrice = payload.basicPrice;
+  if (payload.isActive !== undefined) body.isActive = payload.isActive;
+  const res = await apiClient.patch(`/products/${id}`, body);
+  const raw = unwrap<Record<string, unknown>>(res.data);
+  return mapBackendProductToFrontend(raw ?? {});
 };
 
 export const softDeleteProduct = async (id: number): Promise<{ message: string }> => {

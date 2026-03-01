@@ -1,9 +1,9 @@
-﻿'use client'
+'use client'
 
 import { useEffect, useState, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { createSubscriptionTenant, createSubscriptionPayment } from '@/apis/subscription'
-import { updateLocalRole } from '@/apis/auth'
+import { createSubscriptionTenant, createSubscriptionPayment, confirmPayment } from '@/apis/subscription'
+import { updateLocalRole, ROLE_CODE_SHOP_OWNER } from '@/apis/auth'
 import Link from 'next/link'
 
 const PAYMENT_METHODS = [
@@ -27,7 +27,8 @@ function CheckoutContent() {
   const [selectedMethod, setSelectedMethod] = useState('BANK_TRANSFER')
   const [step, setStep] = useState<'form' | 'processing' | 'success' | 'error'>('form')
   const [errorMsg, setErrorMsg] = useState('')
-  const [tenantName, setTenantName] = useState('')
+  const [shopName, setShopName] = useState('')
+  const [shopNameTouched, setShopNameTouched] = useState(false)
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -59,23 +60,30 @@ function CheckoutContent() {
   const billingLabel = billing === 'YEARLY' ? '/năm' : billing === 'MONTHLY' ? '/tháng' : ''
 
   const handleSubmit = async () => {
+    const name = shopName.trim()
+    if (!name) {
+      setShopNameTouched(true)
+      setErrorMsg('Vui lòng nhập tên cửa hàng.')
+      return
+    }
     setStep('processing')
     setErrorMsg('')
     try {
-      // Bước 1: Tạo subscription tenant
-      const tenant = await createSubscriptionTenant(subscriptionId)
+      // Bước 1: Tạo shop + shop subscription (POST /subscriptions/shops) — đã nhập tên cửa hàng
+      const shopSub = await createSubscriptionTenant(subscriptionId, name)
 
-      // Bước 2: Tạo payment với status = success (thanh toán giả lập)
+      // Bước 2: Tạo payment pending (POST /subscriptions/payments)
       const payment = await createSubscriptionPayment(
-        tenant.sub_tenant_id,
+        shopSub.sub_shop_id,
         selectedMethod,
-        price,
-        'success'
+        price
       )
 
-      // Cập nhật role trong localStorage
-      updateLocalRole('SHOPOWNER')
-      setTenantName(payment.tenant?.tenant_name || `${username}'s Shop`)
+      // Bước 3: Confirm thanh toán (PUT /subscriptions/payments/:id/status) → kích hoạt shop + role SHOPOWNER
+      await confirmPayment(payment.sub_payment_id)
+
+      updateLocalRole(ROLE_CODE_SHOP_OWNER)
+      setShopName(payment.shop?.shop_name || name || shopSub.subscription?.package_code || `${username}'s Shop`)
       setStep('success')
     } catch (err: any) {
       setErrorMsg(err.message || 'Có lỗi xảy ra khi xử lý thanh toán. Vui lòng thử lại.')
@@ -105,7 +113,7 @@ function CheckoutContent() {
             </div>
             <div className="flex justify-between text-sm">
               <span className="text-gray-500">Tên cửa hàng</span>
-              <span className="font-semibold text-gray-800">{tenantName}</span>
+              <span className="font-semibold text-gray-800">{shopName}</span>
             </div>
             <div className="flex justify-between text-sm">
               <span className="text-gray-500">Phương thức</span>
@@ -214,9 +222,24 @@ function CheckoutContent() {
                   <span className="text-gray-500 text-sm">Tài khoản</span>
                   <span className="font-medium text-blue-600">{username}</span>
                 </div>
-                <div className="flex justify-between items-start">
-                  <span className="text-gray-500 text-sm">Tên cửa hàng</span>
-                  <span className="font-medium text-gray-700 text-right text-sm">{username}&apos;s Shop</span>
+                <div>
+                  <label htmlFor="checkout-shop-name" className="text-gray-500 text-sm block mb-1">
+                    Tên cửa hàng <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    id="checkout-shop-name"
+                    type="text"
+                    value={shopName}
+                    onChange={(e) => { setShopName(e.target.value); setShopNameTouched(false); setErrorMsg('') }}
+                    onBlur={() => setShopNameTouched(true)}
+                    placeholder="VD: Cà phê Sài Gòn, Bánh mì 37..."
+                    className={`w-full px-3 py-2.5 rounded-xl border text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                      shopNameTouched && !shopName.trim() ? 'border-red-300 bg-red-50' : 'border-gray-200'
+                    }`}
+                  />
+                  {shopNameTouched && !shopName.trim() && (
+                    <p className="text-red-500 text-xs mt-1">Vui lòng nhập tên cửa hàng trước khi thanh toán.</p>
+                  )}
                 </div>
                 <div className="border-t border-gray-100 pt-4 flex justify-between items-center">
                   <span className="text-gray-700 font-semibold">Tổng cộng</span>
@@ -304,6 +327,12 @@ function CheckoutContent() {
                 <Link href="/support" className="text-blue-500 hover:underline">điều khoản dịch vụ</Link>{' '}
                 của ManageApp.
               </p>
+
+              {errorMsg && (
+                <div className="mb-4 p-3 rounded-xl bg-red-50 border border-red-200 text-red-700 text-sm">
+                  {errorMsg}
+                </div>
+              )}
 
               {/* Submit Button */}
               <button
