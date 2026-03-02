@@ -385,7 +385,7 @@ export function ProductsPage() {
       <section className="pb-24">
         <div className="container mx-auto px-4">
           <div className="flex gap-8">
-            <aside className="w-64 flex-shrink-0 sticky top-24 h-fit">
+            <aside className="w-64 shrink-0 sticky top-24 h-fit">
               <div className="bg-white border border-gray-200 rounded-xl p-2">
                 {features.map((f) => (
                   <button
@@ -1301,7 +1301,7 @@ export function NewsPage() {
       </section>
       <section className="py-12 px-4">
         <div className="container mx-auto">
-          <div className="bg-gradient-to-br from-blue-500 to-blue-600 rounded-2xl shadow-2xl overflow-hidden">
+          <div className="bg-linear-to-br from-blue-500 to-blue-600 rounded-2xl shadow-2xl overflow-hidden">
             <div className="grid md:grid-cols-2 gap-8">
               <div className="p-8 md:p-12 text-white flex flex-col justify-center">
                 <div className="inline-block px-4 py-1 bg-white bg-opacity-20 rounded-full text-sm font-semibold mb-4 w-fit">
