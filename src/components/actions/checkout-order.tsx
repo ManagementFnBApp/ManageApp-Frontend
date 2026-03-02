@@ -84,6 +84,11 @@ export default function CheckoutOrderPage() {
         shiftId: cart.shiftId, // HARDCODE: lấy từ POS header, lưu posCart
         totalAmount: cart.total,
         note: cart.orderType,
+        order_items: cart.items.map((item) => ({
+          product_id: item.productId,
+          quantity: item.quantity,
+          unit_price: item.price,
+        })),
       });
 
       // 2️⃣ Đánh dấu hoàn thành (COMPLETED)
@@ -96,8 +101,7 @@ export default function CheckoutOrderPage() {
       setOrderRef(String(orderResponse.id));
       setStep("success");
     } catch (err: unknown) {
-     const msg =
-  (err as any)?.message || "Có lỗi xảy ra. Vui lòng thử lại.";
+      const msg = (err as any)?.message || "Có lỗi xảy ra. Vui lòng thử lại.";
       setErrorMsg(msg);
       setStep("error");
     }

@@ -2,6 +2,12 @@ import { apiClient } from '../configs/axios';
 
 // ===== TYPES =====
 
+export interface OrderItemPayload {
+  product_id: number;
+  quantity: number;
+  unit_price: number;
+}
+
 export interface CreateOrderPayload {
   /** ID của nhân viên (lấy từ JWT sub). */
   userId: number;
@@ -19,6 +25,7 @@ export interface CreateOrderPayload {
   shiftId: number;
   note?: string;
   totalAmount: number;
+  order_items: OrderItemPayload[];
 }
 
 export interface UpdateOrderPayload {
@@ -27,6 +34,16 @@ export interface UpdateOrderPayload {
   shiftId?: number;
   note?: string;
   totalAmount?: number;
+}
+
+export interface OrderItemResponse {
+  id: number;
+  product_id: number;
+  quantity: number;
+  unit_price: number;
+  product: {
+    product_name: string;
+  };
 }
 
 export interface OrderResponse {
@@ -40,6 +57,7 @@ export interface OrderResponse {
   createdAt: string | null;
   completedAt: string | null;
   cancelledAt: string | null;
+  order_items?: OrderItemResponse[];
 }
 
 // ===== HELPERS =====
@@ -77,9 +95,10 @@ export const cancelOrder = async (id: number): Promise<OrderResponse> => {
   return unwrap<OrderResponse>(res.data);
 };
 
-/** Lấy danh sách đơn hàng. Truyền status để lọc: 'PENDING' | 'COMPLETED' | 'CANCELLED'. */
+/** Lấy danh sách đơn hàng. Truyền status để lọc: 'PENDING' | 'COMPLETED' | 'CANCELLED'. Không truyền để lấy tất cả. */
 export const getOrders = async (status?: string): Promise<OrderResponse[]> => {
-  // BE dùng @Post('list') → endpoint POST /orders/list
-  const res = await apiClient.post('/orders/list', undefined, { params: status ? { status } : undefined });
+  // BE dùng @Post('list') → endpoint POST /orders/list, đọc status từ body
+  // Khi tab "Tất cả": không gửi status để BE trả về toàn bộ đơn hàng
+  const res = await apiClient.post('/orders/list', status ? { status } : {});
   return unwrap<OrderResponse[]>(res.data);
 };
