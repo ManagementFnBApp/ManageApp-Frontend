@@ -82,7 +82,7 @@ export default function CheckoutOrderPage() {
         customerId: 1, // HARDCODE: khách vãng lai, dùng tạm ID=1 cho đến khi có customer management
         shiftId: cart.shiftId, // HARDCODE: lấy từ POS header, lưu posCart
         totalAmount: cart.total,
-        note: cart.orderType,
+        note: `[${cart.orderType}]`,
         order_items: cart.items.map((item) => ({
           product_id: item.productId,
           quantity: item.quantity,
