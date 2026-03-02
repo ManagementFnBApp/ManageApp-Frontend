@@ -234,7 +234,7 @@ export default function OrdersPage() {
       await updateOrder(Number(selectedOrder.orderId), {
         note: editForm.note || undefined,
         totalAmount: editForm.totalAmount,
-        shiftId: editForm.shiftId || undefined,
+        shiftId: editForm.shiftId > 0 ? editForm.shiftId : undefined,
       });
       setOrders((prev) =>
         prev.map((o) =>
