@@ -91,7 +91,7 @@ export default function CheckoutOrderPage() {
       setOrderRef(String(orderResponse.id));
       setStep("success");
     } catch (err: unknown) {
-      const msg = (err as any)?.message || "Có lỗi xảy ra. Vui lòng thử lại.";
+      const msg = (err as { message?: string })?.message || "Có lỗi xảy ra. Vui lòng thử lại.";
       setErrorMsg(msg);
       setStep("error");
     }
