@@ -1,1 +1,1 @@
-export { SolutionsPage as default } from '@/components/NavbarPages'
+export { default } from '@/sections/SolutionsPage'

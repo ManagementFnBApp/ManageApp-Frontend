@@ -1,1 +1,1 @@
-export { ProductsPage as default } from '@/components/NavbarPages'
+export { default } from '@/sections/ProductsPage'

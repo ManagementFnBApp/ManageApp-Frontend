@@ -1,1 +1,1 @@
-export { NewsPage as default } from '@/components/NavbarPages'
+export { default } from '@/sections/NewsPage'

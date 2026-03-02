@@ -1,1 +1,1 @@
-export { SupportPage as default } from '@/components/NavbarPages'
+export { default } from '@/sections/SupportPage'

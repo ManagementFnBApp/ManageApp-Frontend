@@ -1,1 +1,1 @@
-export { ServicesPage as default } from '@/components/NavbarPages'
+export { default } from '@/sections/ServicesPage'

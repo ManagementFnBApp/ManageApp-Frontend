@@ -90,7 +90,6 @@ export const login = async (data: LoginDto): Promise<LoginResponse> => {
 export interface RegisterDto {
   username: string;
   email: string;
-  username: string;
   password: string;
 }
 
