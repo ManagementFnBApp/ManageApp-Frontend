@@ -64,7 +64,8 @@ export default function CheckoutOrderPage() {
    *
    * Flow:
    *   1. POST /orders  → tạo đơn (status PENDING)
-   *   2. Lưu localStorage để trang Lịch sử đơn hàng hiển thị được
+   *   2. Xoá giỏ hàng POS trong localStorage (clearPosCart) sau khi tạo đơn thành công
+   *   3. Lưu mã đơn vào state (orderRef) và chuyển UI sang trạng thái "success"
    *
    * NOTE: paymentMethod được hiển thị cho nhân viên nhưng chưa lưu được vào DB
    *   vì BE chưa có endpoint POST /payments.
