@@ -129,7 +129,11 @@ export default function OrdersPage() {
 
   // ── Edit modal state ──
   const [editOpen, setEditOpen] = useState(false);
-  const [editForm, setEditForm] = useState({ note: "", totalAmount: 0, shiftId: 0 });
+  const [editForm, setEditForm] = useState({
+    note: "",
+    totalAmount: 0,
+    shiftId: 0,
+  });
   const [editError, setEditError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -235,13 +239,23 @@ export default function OrdersPage() {
       setOrders((prev) =>
         prev.map((o) =>
           o.orderId === selectedOrder.orderId
-            ? { ...o, note: editForm.note || null, total: editForm.totalAmount, shiftId: editForm.shiftId }
+            ? {
+                ...o,
+                note: editForm.note || null,
+                total: editForm.totalAmount,
+                shiftId: editForm.shiftId,
+              }
             : o,
         ),
       );
       setSelectedOrder((o) =>
         o
-          ? { ...o, note: editForm.note || null, total: editForm.totalAmount, shiftId: editForm.shiftId }
+          ? {
+              ...o,
+              note: editForm.note || null,
+              total: editForm.totalAmount,
+              shiftId: editForm.shiftId,
+            }
           : o,
       );
       setEditOpen(false);
