@@ -37,13 +37,6 @@ export default function CheckoutOrderPage() {
   useEffect(() => {
     if (typeof window === "undefined") return;
 
-    // Auth guard
-    const token = localStorage.getItem("accessToken");
-    if (!token) {
-      router.replace("/auth?mode=login&returnUrl=/checkout-order");
-      return;
-    }
-
     setUsername(localStorage.getItem("username") || "Staff");
 
     // Load cart written by POS page
