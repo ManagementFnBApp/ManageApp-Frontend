@@ -14,8 +14,8 @@ interface Product {
   productId: number;
   productName: string;
   sku: string;
-  basicPrice: number;
-  unitPrice: number;
+  importPrice: number; // giá nhập kho - khớp với BE field importPrice
+  listPrice: number; // giá bán lẻ - khớp với BE field listPrice
   isActive: boolean;
   categoryId: number;
 }
@@ -49,176 +49,223 @@ const supportColorMap: { [key: string]: string } = {
 // AboutPage
 // ─────────────────────────────────────────────
 export function AboutPage() {
-  const problems = [
-    "Sự kém hiệu quả trong quản lý tài chính và vận hành của các doanh nghiệp F&B vừa và nhỏ",
-    "Thiếu các hệ thống quản lý bán hàng thông minh, đa chức năng với chi phí hợp lý",
-    "Hạn chế trong việc theo dõi doanh thu và thiếu các công cụ phân tích chuyên sâu",
-    "Hoạt động chia sẻ kiến thức trong hệ sinh thái F&B còn rời rạc và thiếu cấu trúc",
-    "Rủi ro về tính toàn vẹn dữ liệu và bảo mật thông tin trong các giải pháp hiện có",
+  const stats = [
+    { number: "300K+", label: "Khách hàng" },
+    { number: "50+", label: "Tỉnh thành" },
+    { number: "20+", label: "Ngành hàng" },
+    { number: "99.9%", label: "Uptime" },
   ];
-  const solutions = [
-    "Quản lý bán hàng và tài chính tích hợp",
-    "Tổng hợp doanh thu và bảng điều khiển phân tích trực quan",
-    "Đồng bộ dữ liệu giữa thế giới số và thực tế",
-    "Lưu trữ an toàn dữ liệu tài chính và thông tin cá nhân",
-    "Hỗ trợ ra quyết định dựa trên dữ liệu thời gian thực",
-    "Báo cáo hiệu suất theo sản phẩm, chi nhánh và thời gian",
+  const timeline = [
+    {
+      year: "2020",
+      title: "Khởi đầu",
+      description:
+        "ManageApp được thành lập với sứ mệnh số hóa doanh nghiệp Việt",
+      icon: "🚀",
+    },
+    {
+      year: "2021",
+      title: "Tăng trưởng",
+      description: "Đạt 10.000 khách hàng đầu tiên và mở rộng ra 20 tỉnh thành",
+      icon: "📈",
+    },
+    {
+      year: "2022",
+      title: "Mở rộng",
+      description: "Ra mắt ứng dụng mobile và tích hợp với các nền tảng lớn",
+      icon: "📱",
+    },
+    {
+      year: "2023",
+      title: "Đổi mới",
+      description: "Ứng dụng AI và Machine Learning vào sản phẩm",
+      icon: "🤖",
+    },
+    {
+      year: "2024",
+      title: "Dẫn đầu",
+      description: "Trở thành nền tảng quản lý bán hàng số 1 Việt Nam",
+      icon: "🏆",
+    },
+    {
+      year: "2026",
+      title: "Tương lai",
+      description: "Hướng tới 1 triệu doanh nghiệp và mở rộng ra khu vực",
+      icon: "🌏",
+    },
+  ];
+  const team = [
+    {
+      name: "Nguyễn Văn A",
+      role: "CEO & Founder",
+      avatar: "👨‍💼",
+      description: "15 năm kinh nghiệm trong ngành công nghệ",
+    },
+    {
+      name: "Trần Thị B",
+      role: "CTO",
+      avatar: "👩‍💻",
+      description: "Chuyên gia về AI và Machine Learning",
+    },
+    {
+      name: "Lê Minh C",
+      role: "CPO",
+      avatar: "👨‍🎨",
+      description: "10 năm kinh nghiệm thiết kế sản phẩm",
+    },
+    {
+      name: "Phạm Thu D",
+      role: "Head of Customer Success",
+      avatar: "👩‍💼",
+      description: "Đam mê mang đến trải nghiệm tốt nhất",
+    },
   ];
   const values = [
     {
+      icon: "🎯",
       title: "Tập trung khách hàng",
       description: "Khách hàng là trung tâm của mọi quyết định",
     },
     {
+      icon: "🚀",
       title: "Đổi mới không ngừng",
       description: "Luôn tìm kiếm cách làm tốt hơn",
     },
     {
+      icon: "🤝",
       title: "Hợp tác cùng phát triển",
       description: "Thành công của khách hàng là thành công của chúng tôi",
     },
     {
+      icon: "💡",
       title: "Đơn giản hóa",
       description: "Làm cho mọi thứ trở nên dễ dàng hơn",
     },
   ];
   return (
     <div className="pt-20">
-      {/* HERO */}
-      <section className="relative py-28 px-6 overflow-hidden">
-        {/* Background Image */}
-        <div className="absolute inset-0 z-0">
-          <Image
-            src="/image/image2.jpg"
-            alt="Business Management Background"
-            fill
-            priority
-            className="object-cover"
-          />
-          {/* Overlay */}
-          <div className="absolute inset-0 bg-linear-to-r from-white/90 via-white/70 to-white/30"></div>
-        </div>
-        {/* Hero Content */}
-        <div className="relative z-10 max-w-5xl mx-auto text-center">
-          <h1 className="text-5xl md:text-6xl font-extrabold text-gray-900 mb-8 leading-tight">
+      <section className="bg-gradient-to-br from-blue-50 via-white to-blue-50 py-20 px-4">
+        <div className="container mx-auto text-center">
+          <h1 className="text-5xl md:text-6xl font-bold text-gray-900 mb-6">
             Về ManageApp
           </h1>
-          <p className="text-xl text-gray-700 leading-relaxed">
-            Sứ mệnh của chúng tôi là hỗ trợ các doanh nghiệp khởi nghiệp F&B tại
-            Việt Nam phát triển thông minh và dựa trên dữ liệu thông qua nền
-            tảng quản lý bán hàng tích hợp và phân tích thời gian thực.
+          <p className="text-xl md:text-2xl text-gray-600 max-w-3xl mx-auto mb-8">
+            Chúng tôi xây dựng công cụ giúp doanh nghiệp Việt Nam phát triển và
+            thành công
           </p>
         </div>
       </section>
-
-      {/* PROBLEMS */}
-      <section className="py-24 px-6 bg-white">
-        <div className="max-w-6xl mx-auto text-center">
-          <h2 className="text-4xl font-bold text-gray-900 mb-6">
-            Các vấn đề hiện nay
-          </h2>
-          <p className="text-gray-600 max-w-2xl mx-auto mb-10">
-            Những thách thức cốt lõi mà doanh nghiệp F&B vừa và nhỏ đang phải
-            đối mặt.
-          </p>
-
-          <div className="grid md:grid-cols-2 gap-10">
-            {problems.map((p, i) => (
-              <div
-                key={i}
-                className={`
-        p-8 border border-gray-100 rounded-2xl 
-        hover:shadow-xl transition-all duration-300 
-        text-left bg-blue-100
-        ${i === problems.length - 1 ? "md:col-span-2 md:max-w-xl md:mx-auto" : ""}
-      `}
-              >
-                <div className="text-blue-600 font-semibold mb-3">0{i + 1}</div>
-                <p className="text-gray-700 leading-relaxed">{p}</p>
+      <section className="py-16 px-4 bg-white">
+        <div className="container mx-auto">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
+            {stats.map((s, i) => (
+              <div key={i} className="text-center">
+                <div className="text-4xl md:text-5xl font-bold text-blue-600 mb-2">
+                  {s.number}
+                </div>
+                <div className="text-gray-600 font-medium">{s.label}</div>
               </div>
             ))}
           </div>
         </div>
       </section>
-
-      {/* SOLUTIONS */}
-      <section className="py-24 px-6 bg-gray-50">
-        <div className="max-w-6xl mx-auto text-center">
+      <section className="py-20 px-4">
+        <div className="container mx-auto max-w-4xl text-center">
           <h2 className="text-4xl font-bold text-gray-900 mb-6">
-            Giải pháp của chúng tôi
+            Sứ mệnh của chúng tôi
           </h2>
-          <p className="text-gray-600 max-w-2xl mx-auto mb-16">
-            Một nền tảng toàn diện giúp doanh nghiệp F&B vận hành hiệu quả và
-            phát triển bền vững.
+          <p className="text-xl text-gray-600 leading-relaxed">
+            Chúng tôi tin rằng mọi doanh nghiệp, dù lớn hay nhỏ, đều xứng đáng
+            có được công cụ quản lý hiện đại, dễ sử dụng và giá cả phải chăng.
           </p>
-
-          <div className="grid md:grid-cols-3 gap-8">
-            {solutions.map((item, i) => (
+        </div>
+      </section>
+      <section className="py-20 px-4 bg-gray-50">
+        <div className="container mx-auto">
+          <h2 className="text-4xl font-bold text-center mb-16 text-gray-900">
+            Hành trình phát triển
+          </h2>
+          <div className="max-w-5xl mx-auto grid md:grid-cols-3 gap-8">
+            {timeline.map((item, i) => (
               <div
                 key={i}
-                className="bg-white p-8 rounded-2xl shadow-md hover:shadow-2xl transition-all duration-300"
+                className="bg-white rounded-xl shadow-lg p-8 hover:shadow-2xl transition-all"
               >
-                <p className="text-gray-700 font-medium leading-relaxed">
-                  {item}
-                </p>
+                <div className="text-6xl mb-4">{item.icon}</div>
+                <div className="text-3xl font-bold text-blue-600 mb-2">
+                  {item.year}
+                </div>
+                <h3 className="text-xl font-bold mb-3 text-gray-900">
+                  {item.title}
+                </h3>
+                <p className="text-gray-600">{item.description}</p>
               </div>
             ))}
           </div>
         </div>
       </section>
-
-      {/* VISION */}
-      <section className="py-24 px-6 bg-white">
-        <div className="max-w-4xl mx-auto text-center">
-          <h2 className="text-4xl font-bold text-gray-900 mb-8">
-            Tầm nhìn của chúng tôi
-          </h2>
-          <p className="text-lg text-gray-600 leading-relaxed">
-            Trở thành nền tảng quản lý bán hàng thông minh hàng đầu cho doanh
-            nghiệp F&B tại Việt Nam, xây dựng một hệ sinh thái kinh doanh dựa
-            trên dữ liệu và đổi mới sáng tạo, nơi các doanh nhân có thể phát
-            triển bền vững và mở rộng quy mô một cách tự tin.
-          </p>
-        </div>
-      </section>
-
-      {/* VALUES */}
-      <section className="py-24 px-6 bg-gray-50">
-        <div className="max-w-6xl mx-auto text-center">
-          <h2 className="text-4xl font-bold text-gray-900 mb-16">
+      <section className="py-20 px-4">
+        <div className="container mx-auto">
+          <h2 className="text-4xl font-bold text-center mb-4 text-gray-900">
             Giá trị cốt lõi
           </h2>
-
-          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-10">
+          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-8 mt-12">
             {values.map((v, i) => (
               <div
                 key={i}
-                className="bg-white p-10 rounded-2xl shadow-md hover:shadow-xl transition-all"
+                className="text-center p-8 bg-gradient-to-br from-blue-50 to-white rounded-xl shadow-lg hover:shadow-2xl transition-all"
               >
-                <h3 className="text-lg font-semibold mb-3 text-gray-900">
+                <div className="text-5xl mb-4">{v.icon}</div>
+                <h3 className="text-xl font-bold mb-3 text-gray-900">
                   {v.title}
                 </h3>
-                <p className="text-gray-600 text-sm">{v.description}</p>
+                <p className="text-gray-600">{v.description}</p>
               </div>
             ))}
           </div>
         </div>
       </section>
-
-      {/* CTA */}
-      <section className="bg-linear-to-r from-blue-500 to-blue-700 text-white py-24 px-6">
-        <div className="max-w-4xl mx-auto text-center">
-          <h2 className="text-4xl font-bold mb-8">Cùng nhau phát triển</h2>
-          <div className="flex gap-6 justify-center flex-wrap">
+      <section className="py-20 px-4 bg-gray-50">
+        <div className="container mx-auto">
+          <h2 className="text-4xl font-bold text-center mb-12 text-gray-900">
+            Đội ngũ lãnh đạo
+          </h2>
+          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-8 max-w-6xl mx-auto">
+            {team.map((m, i) => (
+              <div
+                key={i}
+                className="bg-white rounded-xl shadow-lg overflow-hidden hover:shadow-2xl transition-all text-center"
+              >
+                <div className="h-48 bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center text-8xl">
+                  {m.avatar}
+                </div>
+                <div className="p-6">
+                  <h3 className="text-xl font-bold mb-1 text-gray-900">
+                    {m.name}
+                  </h3>
+                  <div className="text-blue-600 font-semibold mb-3">
+                    {m.role}
+                  </div>
+                  <p className="text-gray-600 text-sm">{m.description}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+      <section className="bg-gradient-to-r from-blue-600 to-blue-700 text-white py-20 px-4">
+        <div className="container mx-auto text-center">
+          <h2 className="text-4xl font-bold mb-6">Cùng nhau phát triển</h2>
+          <div className="flex gap-4 justify-center flex-wrap">
             <Link
               href="/register"
-              className="px-8 py-4 bg-white text-blue-600 rounded-xl font-semibold hover:bg-gray-100 transition"
+              className="px-8 py-4 bg-white text-blue-600 rounded-lg font-semibold hover:bg-gray-100 transition-colors"
             >
               Dùng thử miễn phí
             </Link>
             <Link
               href="/contact"
-              className="px-8 py-4 border-2 border-white rounded-xl font-semibold hover:bg-white hover:text-blue-600 transition"
+              className="px-8 py-4 bg-transparent border-2 border-white text-white rounded-lg font-semibold hover:bg-white hover:text-blue-600 transition-colors"
             >
               Liên hệ với chúng tôi
             </Link>
@@ -458,7 +505,7 @@ export function ProductsPage() {
                   <div className="text-sm text-gray-500 mt-1">SKU: {p.sku}</div>
                   <div className="mt-3 flex justify-between items-center">
                     <span className="text-lg font-bold text-blue-600">
-                      {new Intl.NumberFormat("vi-VN").format(p.unitPrice)} đ
+                      {new Intl.NumberFormat("vi-VN").format(p.listPrice)} đ
                     </span>
                     <span
                       className={`px-2 py-1 rounded text-xs font-medium ${p.isActive ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-600"}`}
@@ -519,7 +566,7 @@ export function SolutionsPage() {
   ];
   return (
     <div className="pt-20">
-      <section className="bg-linear-to-br from-blue-50 to-white py-20 px-4 text-center">
+      <section className="bg-gradient-to-br from-blue-50 to-white py-20 px-4 text-center">
         <h1 className="text-5xl font-bold text-gray-900 mb-6">
           Giải pháp toàn diện
         </h1>
@@ -561,7 +608,7 @@ export function SolutionsPage() {
                 </Link>
               </div>
             ))}
-            <div className="bg-linear-to-br from-blue-500 to-blue-600 rounded-xl shadow-lg p-8 text-white">
+            <div className="bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl shadow-lg p-8 text-white">
               <div className="w-16 h-16 bg-white bg-opacity-20 rounded-full flex items-center justify-center mb-6">
                 <span className="text-3xl">🎯</span>
               </div>
@@ -646,7 +693,7 @@ export function CustomersPage() {
   ];
   return (
     <div className="pt-20">
-      <section className="bg-linear-to-br from-blue-50 to-white py-20 px-4 text-center">
+      <section className="bg-gradient-to-br from-blue-50 to-white py-20 px-4 text-center">
         <h1 className="text-5xl font-bold text-gray-900 mb-6">
           Khách hàng tin tưởng
         </h1>
@@ -798,7 +845,7 @@ export function ServicesPage() {
 
   return (
     <div className="pt-20">
-      <section className="bg-linear-to-br from-blue-50 to-white py-20 px-4 text-center">
+      <section className="bg-gradient-to-br from-blue-50 to-white py-20 px-4 text-center">
         <h1 className="text-5xl font-bold text-gray-900 mb-6">
           Bảng giá dịch vụ
         </h1>
@@ -866,10 +913,10 @@ export function ServicesPage() {
                       </p>
                     )}
                     {featureList.length > 0 && (
-                      <ul className="space-y-2 mb-8 grow">
+                      <ul className="space-y-2 mb-8 flex-grow">
                         {featureList.map((f, fi) => (
                           <li key={fi} className="flex items-start text-sm">
-                            <span className="text-green-500 mr-2 mt-0.5 shrink-0">
+                            <span className="text-green-500 mr-2 mt-0.5 flex-shrink-0">
                               ✓
                             </span>
                             <span className="text-gray-700">{f}</span>
@@ -1054,7 +1101,7 @@ export function SupportPage() {
   ];
   return (
     <div className="pt-20">
-      <section className="bg-linear-to-br from-blue-50 to-white py-20 px-4 text-center">
+      <section className="bg-gradient-to-br from-blue-50 to-white py-20 px-4 text-center">
         <h1 className="text-5xl font-bold text-gray-900 mb-6">
           Trung tâm hỗ trợ
         </h1>
@@ -1230,7 +1277,7 @@ export function NewsPage() {
   ];
   return (
     <div className="pt-20">
-      <section className="bg-linear-to-br from-blue-50 to-white py-20 px-4 text-center">
+      <section className="bg-gradient-to-br from-blue-50 to-white py-20 px-4 text-center">
         <h1 className="text-5xl font-bold text-gray-900 mb-6">
           Tin tức & Cập nhật
         </h1>
@@ -1290,7 +1337,7 @@ export function NewsPage() {
                 key={i}
                 className="bg-white rounded-xl shadow-lg overflow-hidden hover:shadow-2xl transition-all transform hover:-translate-y-2 cursor-pointer"
               >
-                <div className="h-48 bg-linear-to-br from-blue-50 to-blue-100 flex items-center justify-center text-7xl">
+                <div className="h-48 bg-gradient-to-br from-blue-50 to-blue-100 flex items-center justify-center text-7xl">
                   {a.image}
                 </div>
                 <div className="p-6">

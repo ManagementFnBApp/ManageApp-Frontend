@@ -123,14 +123,14 @@ export default function Header() {
                   <DropdownMenuTrigger asChild>
                     <button className="flex items-center gap-2 py-1.5 pl-1 pr-2.5 rounded-full bg-gray-100/80 hover:bg-gray-200/80 transition focus:outline-none">
                       <div className={`w-8 h-8 rounded-full flex items-center justify-center text-white font-semibold text-sm flex-shrink-0 ${
-                        role === 'admin' ? 'bg-purple-500' : role === 'SHOPOWNER' ? 'bg-green-500' : 'bg-blue-400'
+                        role === 'ADMIN' ? 'bg-purple-500' : role === 'SHOPOWNER' ? 'bg-green-500' : 'bg-blue-400'
                       }`}>
                         {(username || 'U').charAt(0).toUpperCase()}
                       </div>
                       <span className="font-medium text-gray-700 text-sm max-w-[100px] truncate">
                         {username || 'Tài khoản'}
                       </span>
-                      {role === 'admin' && (
+                      {role === 'ADMIN' && (
                         <span className="text-xs bg-purple-100 text-purple-600 font-semibold px-1.5 py-0.5 rounded-full">Admin</span>
                       )}
                       {role === 'SHOPOWNER' && (
@@ -145,20 +145,20 @@ export default function Header() {
                     {/* User info header */}
                     <DropdownMenuItem disabled className="gap-2 opacity-70">
                       <div className={`w-6 h-6 rounded-full flex items-center justify-center text-white font-semibold text-xs flex-shrink-0 ${
-                        role === 'admin' ? 'bg-purple-500' : role === 'SHOPOWNER' ? 'bg-green-500' : 'bg-blue-400'
+                        role === 'ADMIN' ? 'bg-purple-500' : role === 'SHOPOWNER' ? 'bg-green-500' : 'bg-blue-400'
                       }`}>
                         {(username || 'U').charAt(0).toUpperCase()}
                       </div>
                       <div className="flex flex-col">
                         <span className="text-sm font-medium text-gray-900 truncate">{username || 'Tài khoản'}</span>
                         <span className="text-xs text-gray-500">
-                          {role === 'admin' ? 'Quản trị viên' : role === 'SHOPOWNER' ? 'Shop Owner' : 'Chưa kích hoạt gói'}
+                          {role === 'ADMIN' ? 'Quản trị viên' : role === 'SHOPOWNER' ? 'Shop Owner' : 'Chưa kích hoạt gói'}
                         </span>
                       </div>
                     </DropdownMenuItem>
                     <DropdownMenuSeparator />
 
-                    {role === 'admin' && (
+                    {role === 'ADMIN' && (
                       <DropdownMenuItem className="gap-2 cursor-pointer" onClick={() => router.push('/admin')}>
                         <Crown size={14} className="text-purple-500" />
                         Admin Dashboard

@@ -63,7 +63,7 @@ export default function AuthPage() {
       setSuccessMessage("Bạn đã đăng nhập thành công!");
 
       let destination = '/';
-      if (response.role === 'admin') {
+      if (response.role === 'ADMIN') {
         destination = '/admin';
       } else if (response.role === 'SHOPOWNER') {
         destination = '/manager';
