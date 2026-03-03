@@ -86,7 +86,14 @@ function CheckoutContent() {
       setShopName(payment.shop?.shop_name || name || shopSub.subscription?.package_code || `${username}'s Shop`)
       setStep('success')
     } catch (err: any) {
-      setErrorMsg(err.message || 'Có lỗi xảy ra khi xử lý thanh toán. Vui lòng thử lại.')
+      console.error('Checkout error:', err)
+
+      const apiMessage =
+        err?.response?.data?.message ||
+        err?.response?.data?.error ||
+        err?.message
+
+      setErrorMsg(apiMessage || 'Có lỗi xảy ra khi xử lý thanh toán. Vui lòng thử lại.')
       setStep('error')
     }
   }
