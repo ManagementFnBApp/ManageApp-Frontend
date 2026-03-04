@@ -1,11 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
-import { ArrowLeft } from "lucide-react";
-import { getProducts, type Product } from "@/apis/productApi";
-import { savePosCart } from "@/lib/posCart";
-import { decodeJwt, type UserJwtPayload } from "@/lib/jwt";
+import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+import { ArrowLeft } from 'lucide-react';
+import { getActivePosProducts } from '@/data/useMenuStore';
+import { saveOrder } from '@/data/useOrderStore';
 
 type OrderType = "eat-in" | "takeaway";
 
@@ -20,7 +19,7 @@ interface PosProduct {
   id: number;
   name: string;
   price: number;
-  categoryId: string;
+  categoryId: number;
 }
 
 interface CategoryFilter {
@@ -35,39 +34,18 @@ function getShift(hour: number): { label: string; range: string } {
   return { label: "Closed", range: "--" };
 }
 
-function buildCategories(products: Product[]): CategoryFilter[] {
-  const ids = Array.from(new Set(products.map((p) => p.categoryId))).sort(
-    (a, b) => a - b,
-  );
-  return [
-    { id: "all", label: "Tất Cả" },
-    ...ids.map((id) => ({
-      id: String(id),
-      label: `Danh mục #${id}`,
-    })),
-  ];
-}
-
 export default function PosPage() {
   const router = useRouter();
-
-  const [username, setUsername] = useState<string>("Nguyen Van A");
-  const [userId, setUserId] = useState<number>(0);
-  const [activeCategory, setActiveCategory] = useState<string>("all");
-  const [searchQuery, setSearchQuery] = useState("");
-  const [orderType, setOrderType] = useState<OrderType>("eat-in");
+  const [username, setUsername] = useState<string>('Nguyen Van A');
+  const [activeCategory, setActiveCategory] = useState<string>('all');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [orderType, setOrderType] = useState<OrderType>('eat-in');
   const [cart, setCart] = useState<CartItem[]>([]);
   const [currentTime, setCurrentTime] = useState<Date | null>(null);
   const [posProducts, setPosProducts] = useState<PosProduct[]>([]);
   const [categories, setCategories] = useState<CategoryFilter[]>([
     { id: "all", label: "Tất Cả" },
   ]);
-  const [productError, setProductError] = useState<string | null>(null);
-
-  const SHIFT_ID_STORAGE_KEY = "pos_current_shift_id";
-  const [shiftId, setShiftId] = useState<number>(1);
-  const [showShiftModal, setShowShiftModal] = useState(false);
-  const [shiftInput, setShiftInput] = useState<string>("1");
 
   useEffect(() => {
     setCurrentTime(new Date());
@@ -76,47 +54,39 @@ export default function PosPage() {
   }, []);
 
   useEffect(() => {
-    getProducts(true)
-      .then((apiProducts) => {
-        const mapped: PosProduct[] = apiProducts
-          .filter((p) => p.isActive)
-          .map((p) => ({
-            id: p.productId,
-            name: p.productName,
-            price: p.listPrice,
-            categoryId: String(p.categoryId),
-          }));
-        setPosProducts(mapped);
-        setCategories(buildCategories(apiProducts));
-        setProductError(null);
-      })
-      .catch(() => {
-        setProductError(
-          "❌ Không tải được sản phẩm. Kiểm tra kết nối và thử lại.",
-        );
-      });
+    (async () => {
+      try {
+        const products = await getActivePosProducts();
+        setPosProducts(products);
+
+        // Tạo categories từ products
+        const uniqueCategories = Array.from(
+          new Set(products.map((p) => p.categoryId)),
+        ).map((catId) => ({
+          id: String(catId),
+          label: `Category ${catId}`, // TODO: lấy tên danh mục từ API nếu cần
+        }));
+
+        setCategories([
+          { id: "all", label: "Tất Cả" },
+          ...uniqueCategories,
+        ]);
+      } catch (err) {
+        console.error("Không thể tải sản phẩm POS", err);
+      }
+    })();
   }, []);
 
   useEffect(() => {
     if (typeof window !== "undefined") {
       const name = localStorage.getItem("username");
       if (name) setUsername(name);
-
-      const savedShift = localStorage.getItem(SHIFT_ID_STORAGE_KEY);
-      const parsed = savedShift ? parseInt(savedShift, 10) : 1;
-      const validId = isNaN(parsed) || parsed < 1 ? 1 : parsed;
-      setShiftId(validId);
-      setShiftInput(String(validId));
-
-      const token = localStorage.getItem("accessToken");
-      const payload = token ? decodeJwt<UserJwtPayload>(token) : null;
-      if (payload?.sub) setUserId(payload.sub);
     }
   }, []);
 
   const filteredProducts = posProducts.filter((p) => {
     const matchCategory =
-      activeCategory === "all" || p.categoryId === activeCategory;
+      activeCategory === "all" || String(p.categoryId) === activeCategory;
     const matchSearch =
       !searchQuery.trim() ||
       p.name.toLowerCase().includes(searchQuery.toLowerCase());
@@ -162,8 +132,10 @@ export default function PosPage() {
 
   const handleCheckout = () => {
     if (cart.length === 0) return;
-
-    savePosCart({
+    const orderId = 'ORD-' + Date.now().toString(36).toUpperCase();
+    saveOrder({
+      orderId,
+      createdAt: new Date().toISOString(),
       items: cart.map((i) => ({
         productId: i.productId,
         name: i.name,
@@ -172,24 +144,11 @@ export default function PosPage() {
       })),
       total,
       orderType,
-      shiftId,
-      userId,
+      cashier: username,
+      status: "PENDING",
     });
-
-    router.push("/checkout-order");
-  };
-
-  const handleSaveShiftId = () => {
-    const parsed = parseInt(shiftInput, 10);
-    if (isNaN(parsed) || parsed < 1) {
-      alert("Shift ID phải là số nguyên dương.");
-      return;
-    }
-    setShiftId(parsed);
-    if (typeof window !== "undefined") {
-      localStorage.setItem(SHIFT_ID_STORAGE_KEY, String(parsed));
-    }
-    setShowShiftModal(false);
+    setCart([]);
+    alert('Thanh toán thành công!');
   };
 
   return (
@@ -208,43 +167,20 @@ export default function PosPage() {
           POS System
         </span>
 
+        {/* Shift + time */}
         <div className="flex items-center gap-2 ml-1">
-          {currentTime ? (
-            (() => {
-              const shift = getShift(currentTime.getHours());
-              return (
-                <span className="text-sm text-gray-500">
-                  Shift:{" "}
-                  <span
-                    className={`font-semibold ${
-                      shift.label === "Morning"
-                        ? "text-amber-500"
-                        : shift.label === "Afternoon"
-                          ? "text-blue-500"
-                          : "text-gray-400"
-                    }`}
-                  >
-                    {shift.label}
-                  </span>
-                  <span className="text-gray-400 ml-1">({shift.range})</span>
+          {currentTime ? (() => {
+            const shift = getShift(currentTime.getHours());
+            return (
+              <span className="text-sm text-gray-500">
+                Shift:{' '}
+                <span className={`font-semibold ${shift.label === 'Morning' ? 'text-amber-500' : shift.label === 'Afternoon' ? 'text-blue-500' : 'text-gray-400'}`}>
+                  {shift.label}
                 </span>
-              );
-            })()
-          ) : (
-            <span className="text-sm text-gray-400">Shift: --</span>
-          )}
-
-          <button
-            type="button"
-            onClick={() => {
-              setShiftInput(String(shiftId));
-              setShowShiftModal(true);
-            }}
-            title="Nhấn để đặt Shift ID (cần khớp với DB)"
-            className="ml-1 px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 text-xs font-semibold hover:bg-amber-200 transition border border-amber-200"
-          >
-            Ca #{shiftId}
-          </button>
+                <span className="text-gray-400 ml-1">({shift.range})</span>
+              </span>
+            );
+          })() : <span className="text-sm text-gray-400">Shift: --</span>}
         </div>
 
         <div className="flex-1" />
@@ -279,56 +215,17 @@ export default function PosPage() {
 
       <div className="flex-1 flex flex-col lg:flex-row min-h-0">
         <div className="flex-1 flex flex-col p-6 lg:max-w-[66.666%] min-h-0">
-          {productError && (
-            <div
-              className={`mb-3 px-4 py-2.5 rounded-lg text-sm font-medium flex items-center gap-2 flex-shrink-0 ${
-                productError.startsWith("⚠")
-                  ? "bg-amber-50 text-amber-700 border border-amber-200"
-                  : "bg-red-50 text-red-700 border border-red-200"
-              }`}
-            >
-              <span>{productError}</span>
-              <button
-                type="button"
-                onClick={() => {
-                  setProductError(null);
-                  getProducts(true)
-                    .then((apiProducts) => {
-                      const mapped: PosProduct[] = apiProducts
-                        .filter((p) => p.isActive)
-                        .map((p) => ({
-                          id: p.productId,
-                          name: p.productName,
-                          price: p.listPrice,
-                          categoryId: String(p.categoryId),
-                        }));
-                      setPosProducts(mapped);
-                      setCategories(buildCategories(apiProducts));
-                    })
-                    .catch(() =>
-                      setProductError(
-                        "❌ Không tải được sản phẩm. Kiểm tra kết nối và thử lại.",
-                      ),
-                    );
-                }}
-                className="ml-auto underline text-xs opacity-70 hover:opacity-100"
-              >
-                Thử lại
-              </button>
-            </div>
-          )}
-
+          {/* Category filters */}
           <div className="flex flex-wrap gap-2 mb-4 flex-shrink-0">
             {categories.map((cat) => (
               <button
                 key={cat.id}
                 type="button"
                 onClick={() => setActiveCategory(cat.id)}
-                className={`px-4 py-2 rounded-full text-sm font-medium transition ${
-                  activeCategory === cat.id
+                className={`px-4 py-2 rounded-full text-sm font-medium transition ${activeCategory === cat.id
                     ? "bg-blue-500 text-white"
                     : "bg-gray-200 text-gray-700 hover:bg-gray-300"
-                }`}
+                  }`}
               >
                 {cat.label}
               </button>
@@ -357,22 +254,20 @@ export default function PosPage() {
                 <button
                   type="button"
                   onClick={() => setOrderType("eat-in")}
-                  className={`flex-1 px-3 py-2 text-xs font-medium transition ${
-                    orderType === "eat-in"
+                  className={`flex-1 px-3 py-2 text-xs font-medium transition ${orderType === "eat-in"
                       ? "bg-blue-500 text-white"
                       : "bg-gray-50 text-gray-600 hover:bg-gray-100"
-                  }`}
+                    }`}
                 >
                   Eat-in
                 </button>
                 <button
                   type="button"
                   onClick={() => setOrderType("takeaway")}
-                  className={`flex-1 px-3 py-2 text-xs font-medium transition ${
-                    orderType === "takeaway"
+                  className={`flex-1 px-3 py-2 text-xs font-medium transition ${orderType === "takeaway"
                       ? "bg-amber-400 text-gray-900"
                       : "bg-gray-50 text-gray-600 hover:bg-gray-100"
-                  }`}
+                    }`}
                 >
                   Take away
                 </button>
@@ -457,59 +352,17 @@ export default function PosPage() {
                 {formatPrice(total)}
               </span>
             </div>
-            <div className="flex gap-2">
-              <button
-                type="button"
-                onClick={handleCheckout}
-                disabled={cart.length === 0}
-                className="flex-1 py-3 rounded-lg bg-blue-500 text-white font-semibold hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed transition"
-              >
-                Thanh toán
-              </button>
-            </div>
+            <button
+              type="button"
+              onClick={handleCheckout}
+              disabled={cart.length === 0}
+              className="w-full py-3 rounded-lg bg-blue-500 text-white font-semibold hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed transition"
+            >
+              Thanh toán
+            </button>
           </div>
         </div>
       </div>
-
-      {showShiftModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-xs mx-4 p-6">
-            <h3 className="font-bold text-gray-800 mb-1">Đặt Shift ID</h3>
-            <p className="text-xs text-gray-400 mb-4">
-              Nhập ID của ca làm việc trong DB (bảng{" "}
-              <code className="bg-gray-100 px-1 rounded">shifts</code>).
-              <br />
-              <span className="text-amber-500 font-medium">⚠ HARDCODE</span> —
-              cần khớp với DB.
-            </p>
-            <input
-              type="number"
-              min={1}
-              value={shiftInput}
-              onChange={(e) => setShiftInput(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && handleSaveShiftId()}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-amber-400 focus:border-amber-400 outline-none mb-4"
-              autoFocus
-            />
-            <div className="flex gap-3">
-              <button
-                type="button"
-                onClick={() => setShowShiftModal(false)}
-                className="flex-1 py-2 rounded-xl border border-gray-300 text-sm font-medium hover:bg-gray-50 transition"
-              >
-                Hủy
-              </button>
-              <button
-                type="button"
-                onClick={handleSaveShiftId}
-                className="flex-1 py-2 rounded-xl bg-amber-400 hover:bg-amber-500 text-white font-semibold text-sm transition"
-              >
-                Lưu
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

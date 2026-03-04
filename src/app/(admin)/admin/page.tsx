@@ -821,7 +821,7 @@ export default function AdminDashboard() {
     setMounted(true)
     const token = localStorage.getItem('accessToken')
     const role = localStorage.getItem('role')
-    if (!token || role !== 'admin') { router.replace('/auth?mode=login'); return }
+    if (!token || role !== 'ADMIN') { router.replace('/auth?mode=login'); return }
     setAdminEmail(localStorage.getItem('username') || '')
 
     // Load counts: User (role USER), Shopowner+Staff (role SHOPOWNER/STAFF), Admin, Subscriptions

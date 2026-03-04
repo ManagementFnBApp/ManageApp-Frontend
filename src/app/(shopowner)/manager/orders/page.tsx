@@ -102,8 +102,7 @@ const STATUS_BADGE: Record<
 const formatPrice = (n: number) =>
   new Intl.NumberFormat("vi-VN").format(n) + " ₫";
 
-const formatDate = (iso: string | null) => {
-  if (!iso) return "--/--/----";
+const formatDate = (iso: string) => {
   const d = new Date(iso);
   return d.toLocaleDateString("vi-VN", {
     day: "2-digit",
@@ -112,8 +111,7 @@ const formatDate = (iso: string | null) => {
   });
 };
 
-const formatTime = (iso: string | null) => {
-  if (!iso) return "--:--";
+const formatTime = (iso: string) => {
   const d = new Date(iso);
   return d.toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" });
 };
@@ -404,10 +402,16 @@ export default function OrdersPage() {
                           Thời gian
                         </p>
                         <p className="text-sm font-medium text-slate-700">
-                          {formatTime(order.createdAt)}
-                          <span className="text-xs text-slate-400 ml-1">
-                            {formatDate(order.createdAt)}
-                          </span>
+                          {order.createdAt ? (
+                            <>
+                              {formatTime(order.createdAt)}
+                              <span className="text-xs text-slate-400 ml-1">
+                                {formatDate(order.createdAt)}
+                              </span>
+                            </>
+                          ) : (
+                            "—"
+                          )}
                         </p>
                       </div>
 
@@ -467,8 +471,15 @@ export default function OrdersPage() {
                       <div className="flex items-center gap-1.5 text-slate-500">
                         <Clock size={13} />
                         <span className="text-xs">
-                          {formatTime(selectedOrder.createdAt)} ·{" "}
-                          {formatDate(selectedOrder.createdAt)}
+                          {selectedOrder.createdAt
+                            ? `${formatTime(selectedOrder.createdAt)} · ${formatDate(selectedOrder.createdAt)}`
+                            : "—"}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-1.5 text-slate-500">
+                        <User size={13} />
+                        <span className="text-xs">
+                          User #{selectedOrder.userId}
                         </span>
                       </div>
                     </div>

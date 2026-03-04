@@ -38,6 +38,8 @@ export default function ManagerStaffPage() {
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState('');
   const [success, setSuccess] = useState('');
+  const [currentUser, setCurrentUser] = useState<AppUser | null>(null);
+  const [userCheckError, setUserCheckError] = useState('');
 
   const load = useCallback(async () => {
     const uid =
@@ -49,9 +51,36 @@ export default function ManagerStaffPage() {
       const myStaff = users.filter(
         (u) => u.owner_manager_id != null && u.owner_manager_id === uid
       );
+      const self = users.find((u) => u.user_id === uid);
+      setCurrentUser(self || null);
+
+      // Kiểm tra điều kiện
+      if (self) {
+        console.log('Current SHOPOWNER info:', {
+          user_id: self.user_id,
+          username: self.username,
+          email: self.email,
+          role: self.role,
+          shop_id: self.shop_id,
+          is_active: self.is_active,
+        });
+
+        if (self.role !== 'SHOPOWNER') {
+          setUserCheckError(`Bạn không phải SHOPOWNER (hiện tại: ${self.role}). Chỉ SHOPOWNER được tạo nhân viên.`);
+        } else if (!self.shop_id) {
+          setUserCheckError('Bạn chưa có shop. Vui lòng đăng ký subscription trước khi tạo nhân viên.');
+        } else {
+          setUserCheckError('');
+        }
+      } else {
+        console.warn('Current user not found in users list');
+      }
+
       setStaffList(myStaff);
-    } catch {
+    } catch (err) {
+      console.error('Error loading staff:', err);
       setLoadError('Không thể tải danh sách nhân viên.');
+      setUserCheckError('');
     } finally {
       setLoading(false);
     }
@@ -62,6 +91,10 @@ export default function ManagerStaffPage() {
   }, [load]);
 
   const openModal = () => {
+    if (userCheckError) {
+      setFormError(userCheckError);
+      return;
+    }
     setForm(initialForm);
     setFormError('');
     setShowModal(true);
@@ -75,25 +108,53 @@ export default function ManagerStaffPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    if (userCheckError) {
+      setFormError(userCheckError);
+      return;
+    }
+
     if (form.password !== form.confirmPassword) {
       setFormError('Mật khẩu xác nhận không khớp.');
       return;
     }
+
     setSubmitting(true);
     setFormError('');
+
     try {
-      await createManagedUser({
+      console.log('Submitting create managed user...', form);
+      const result = await createManagedUser({
         email: form.email.trim(),
         username: form.username.trim(),
         password: form.password,
         role_code: form.role_code,
       });
+
       closeModal();
       await load();
       setSuccess('Tài khoản đã tạo. Thông tin đăng nhập đã được gửi đến email của người dùng.');
       setTimeout(() => setSuccess(''), 5000);
+      console.log('Created user:', result);
     } catch (e: unknown) {
-      setFormError(getErrorMessage(e));
+      const err = e as any;
+      const errorMsg = getErrorMessage(e);
+
+      console.error('Create managed user error:', {
+        status: err?.status,
+        message: err?.message,
+        originalError: err?.originalError,
+      });
+
+      if (err?.status === 401) {
+        setFormError(
+          'Bạn không đủ quyền hoặc phiên đăng nhập hết hạn. Vui lòng đăng nhập lại.'
+        );
+      } else if (err?.status === 400) {
+        setFormError(`Lỗi: ${errorMsg}`);
+      } else {
+        setFormError(errorMsg);
+      }
     } finally {
       setSubmitting(false);
     }
@@ -111,12 +172,26 @@ export default function ManagerStaffPage() {
         <button
           type="button"
           onClick={openModal}
-          className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 transition shadow-sm"
+          disabled={!!userCheckError}
+          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-white text-sm font-medium transition shadow-sm ${userCheckError
+              ? 'bg-gray-400 cursor-not-allowed'
+              : 'bg-blue-600 hover:bg-blue-700'
+            }`}
         >
           <UserPlus size={18} />
           Tạo tài khoản
         </button>
       </div>
+
+      {userCheckError && (
+        <div
+          role="alert"
+          className="mb-6 flex items-center gap-3 px-4 py-3 rounded-xl bg-red-50 border border-red-200 text-red-800"
+        >
+          <span className="text-red-500 text-xl">⚠️</span>
+          <p className="text-sm font-medium">{userCheckError}</p>
+        </div>
+      )}
 
       {success && (
         <div
@@ -145,7 +220,7 @@ export default function ManagerStaffPage() {
                   <th className="px-4 py-3 text-left">ID</th>
                   <th className="px-4 py-3 text-left">Username</th>
                   <th className="px-4 py-3 text-left">Email</th>
-                
+
                   <th className="px-4 py-3 text-left">Vai trò</th>
                   <th className="px-4 py-3 text-left">Trạng thái</th>
                   <th className="px-4 py-3 text-left">Ngày tạo</th>
@@ -157,23 +232,21 @@ export default function ManagerStaffPage() {
                     <td className="px-4 py-3 text-slate-500 font-mono">#{u.user_id}</td>
                     <td className="px-4 py-3 font-medium text-slate-800">{u.username}</td>
                     <td className="px-4 py-3 text-slate-600">{u.email}</td>
-                    
+
                     <td className="px-4 py-3">
                       <span
-                        className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${
-                          (u.role ?? '').toUpperCase() === 'SHOPOWNER'
-                            ? 'bg-green-100 text-green-700'
-                            : 'bg-blue-100 text-blue-700'
-                        }`}
+                        className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${(u.role ?? '').toUpperCase() === 'SHOPOWNER'
+                          ? 'bg-green-100 text-green-700'
+                          : 'bg-blue-100 text-blue-700'
+                          }`}
                       >
                         {u.role ?? '—'}
                       </span>
                     </td>
                     <td className="px-4 py-3">
                       <span
-                        className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${
-                          u.is_active ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-600'
-                        }`}
+                        className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${u.is_active ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-600'
+                          }`}
                       >
                         {u.is_active ? 'Hoạt động' : 'Vô hiệu'}
                       </span>

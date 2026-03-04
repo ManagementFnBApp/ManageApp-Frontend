@@ -1,84 +1,64 @@
-import { useState, useEffect, useCallback } from 'react';
-import type { Product } from '@/apis/productApi';
+import { useState, useEffect, useCallback } from "react";
 import {
   getProducts,
   createProduct,
   updateProduct,
   softDeleteProduct,
   hardDeleteProduct,
-} from '@/apis/productApi';
+  type Product,
+  type CreateProductPayload,
+  type UpdateProductPayload,
+} from "@/apis/productApi";
 
-// ── Hook dùng cho Menu Management page ──────────────────────────────────────
-// Nguồn chính: BE API (GET /products)
+// ── Hook dùng cho Menu Management page (kết nối thẳng BE) ───────────────────
 export function useMenuStore() {
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    // Xóa localStorage cũ nếu tồn tại
-    if (typeof window !== 'undefined') {
-      localStorage.removeItem('pos_menu_products');
-    }
-
-    // Fetch từ API
-    getProducts()
-      .then((apiProducts) => {
-        setProducts(apiProducts);
-        setError(null);
-      })
-      .catch(() => {
-        setError('Không thể tải danh sách sản phẩm từ máy chủ.');
-      })
-      .finally(() => setLoading(false));
-  }, []);
-
-  const refresh = useCallback(() => {
+  const fetchProducts = useCallback(async () => {
     setLoading(true);
-    getProducts()
-      .then((apiProducts) => {
-        setProducts(apiProducts);
-        setError(null);
-      })
-      .catch(() => setError('Không thể tải danh sách sản phẩm từ máy chủ.'))
-      .finally(() => setLoading(false));
+    try {
+      const data = await getProducts();
+      setProducts(data);
+      setError(null);
+    } catch (err: any) {
+      setError(err?.message ?? "Không thể tải danh sách sản phẩm");
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
-  const addProduct = useCallback(async (payload: Omit<Product, 'productId' | 'createdAt' | 'updatedAt'>) => {
-    const newProduct = await createProduct({
-      categoryId: payload.categoryId,
-      productName: payload.productName,
-      sku: payload.sku,
-      barcode: payload.barcode ?? undefined,
-      description: payload.description ?? undefined,
-      measureUnit: payload.measureUnit ?? undefined,
-      importPrice: payload.importPrice,
-      listPrice: payload.listPrice,
-      isActive: payload.isActive,
-    });
-    setProducts((prev) => [newProduct, ...prev]);
-    return newProduct;
-  }, []);
+  useEffect(() => {
+    fetchProducts();
+  }, [fetchProducts]);
 
-  const editProduct = useCallback(async (id: number, changes: Partial<Product>) => {
-    const updated = await updateProduct(id, {
-      categoryId: changes.categoryId,
-      productName: changes.productName,
-      sku: changes.sku,
-      barcode: changes.barcode ?? undefined,
-      description: changes.description ?? undefined,
-      measureUnit: changes.measureUnit ?? undefined,
-      importPrice: changes.importPrice,
-      listPrice: changes.listPrice,
-      isActive: changes.isActive,
-    });
-    setProducts((prev) => prev.map((p) => (p.productId === id ? updated : p)));
-  }, []);
+  const addProduct = useCallback(
+    async (payload: CreateProductPayload) => {
+      const created = await createProduct(payload);
+      setProducts((prev) => [created, ...prev]);
+      return created;
+    },
+    [],
+  );
+
+  const editProduct = useCallback(
+    async (id: number, changes: UpdateProductPayload) => {
+      const updated = await updateProduct(id, changes);
+      setProducts((prev) =>
+        prev.map((p) => (p.productId === id ? updated : p)),
+      );
+      return updated;
+    },
+    [],
+  );
 
   const deactivateProduct = useCallback(async (id: number) => {
     await softDeleteProduct(id);
     setProducts((prev) =>
-      prev.map((p) => (p.productId === id ? { ...p, isActive: false } : p))
+      prev.map((p) =>
+        p.productId === id ? { ...p, isActive: false } : p,
+      ),
     );
   }, []);
 
@@ -87,25 +67,48 @@ export function useMenuStore() {
     setProducts((prev) => prev.filter((p) => p.productId !== id));
   }, []);
 
-  const toggleActive = useCallback(async (id: number) => {
-    const target = products.find((p) => p.productId === id);
-    if (!target) return;
-    const updated = await updateProduct(id, { isActive: !target.isActive });
-    setProducts((prev) => prev.map((p) => (p.productId === id ? updated : p)));
-  }, [products]);
+  const toggleActive = useCallback(
+    async (id: number) => {
+      const current = products.find((p) => p.productId === id);
+      if (!current) return;
 
-  return { products, loading, addProduct, editProduct, deactivateProduct, removeProduct, toggleActive };
+      const updated = await updateProduct(id, {
+        isActive: !current.isActive,
+      });
+
+      setProducts((prev) =>
+        prev.map((p) => (p.productId === id ? updated : p)),
+      );
+    },
+    [products],
+  );
+
+  const refresh = useCallback(() => {
+    void fetchProducts();
+  }, [fetchProducts]);
+
+  return {
+    products,
+    loading,
+    error,
+    refresh,
+    addProduct,
+    editProduct,
+    deactivateProduct,
+    removeProduct,
+    toggleActive,
+  };
 }
 
 // ── Helper dùng cho POS page ────────────────────────────────────────────────
-// Lưu ý: Để lấy sản phẩm hoạt động ở POS page, hãy fetch từ API trực tiếp
-// vì không có caching trong localStorage nữa.
-// export function getActivePosProducts() {
-//   return [].filter((p: any) => p.isActive)
-//     .map((p: any) => ({
-//       id: p.productId,
-//       name: p.productName,
-//       price: p.listPrice,
-//       categoryId: String(p.categoryId),
-//     }));
-// }
+export async function getActivePosProducts() {
+  const products = await getProducts(true);
+  return products
+    .filter((p) => p.isActive)
+    .map((p) => ({
+      id: p.productId,
+      name: p.productName,
+      price: p.listPrice,
+      categoryId: p.categoryId,
+    }));
+}

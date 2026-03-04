@@ -16,7 +16,7 @@ export default function ShopOwnerGuardLayout({ children }: { children: React.Rea
       router.replace('/auth?mode=login');
       return;
     }
-    if (role === 'admin') {
+    if (role === 'ADMIN') {
       router.replace('/admin');
       return;
     }

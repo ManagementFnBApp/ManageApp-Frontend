@@ -1,29 +1,14 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import type { Product, CreateProductPayload } from "@/apis/productApi";
+import { getCategories, createCategory, type CreateCategoryPayload } from "@/apis/categoryApi";
 import { useMenuStore } from "@/data/useMenuStore";
-import {
-  type Category,
-  getCategories,
-  createCategory,
-} from "@/apis/categoryApi";
 
+type Category = { id: number; name: string };
 type ModalMode = "add" | "edit" | null;
 type ToastType = "create" | "edit" | "soft-delete" | "hard-delete";
-
-const EMPTY_FORM: CreateProductPayload = {
-  categoryId: 0,
-  productName: "",
-  sku: "",
-  barcode: "",
-  description: "",
-  measureUnit: "ly",
-  importPrice: 0,
-  listPrice: 0,
-  isActive: true,
-};
 
 const formatPrice = (n: number) =>
   new Intl.NumberFormat("vi-VN").format(n) + " ₫";
@@ -33,12 +18,54 @@ export default function MenuManagePage() {
   const {
     products,
     loading,
+    error: apiError,
+    refresh,
     addProduct,
     editProduct,
     deactivateProduct,
     removeProduct,
     toggleActive,
   } = useMenuStore();
+
+  // ── Categories từ API ──
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [categoriesLoading, setCategoriesLoading] = useState(true);
+  const [categoriesError, setCategoriesError] = useState<string | null>(null);
+  const [showCategoryModal, setShowCategoryModal] = useState(false);
+  const [categoryFormError, setCategoryFormError] = useState<string | null>(null);
+  const [categorySubmitting, setCategorySubmitting] = useState(false);
+  const [newCategoryName, setNewCategoryName] = useState("");
+
+  const fetchCategories = useCallback(async () => {
+    setCategoriesLoading(true);
+    try {
+      const res = await getCategories();
+      setCategories(res.map((c: any) => ({ id: c.id, name: c.categoryName })));
+      setCategoriesError(null);
+    } catch (err) {
+      console.error('Failed to fetch categories:', err);
+      setCategoriesError("Không thể tải danh mục");
+      setCategories([]);
+    } finally {
+      setCategoriesLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchCategories();
+  }, [fetchCategories]);
+
+  const EMPTY_FORM: CreateProductPayload = {
+    categoryId: categories[0]?.id ?? 0,
+    productName: "",
+    sku: "",
+    barcode: "",
+    description: "",
+    measureUnit: "ly",
+    importPrice: 0, // giá nhập kho
+    listPrice: 0, // giá bán lẻ
+    isActive: true,
+  };
 
   const [search, setSearch] = useState("");
   const [filterActive, setFilterActive] = useState<
@@ -51,19 +78,6 @@ export default function MenuManagePage() {
   const [formError, setFormError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
-  const [categories, setCategories] = useState<Category[]>([]);
-  const [categoryError, setCategoryError] = useState<string | null>(null);
-  const [loadingCategories, setLoadingCategories] = useState(false);
-  const [categoryModalOpen, setCategoryModalOpen] = useState(false);
-  const [categorySubmitting, setCategorySubmitting] = useState(false);
-  const [categoryForm, setCategoryForm] = useState<{
-    categoryName: string;
-    isActive: boolean;
-  }>({
-    categoryName: "",
-    isActive: true,
-  });
-
   const [deleteTarget, setDeleteTarget] = useState<Product | null>(null);
   const [hardDeleteTarget, setHardDeleteTarget] = useState<Product | null>(
     null,
@@ -71,30 +85,12 @@ export default function MenuManagePage() {
 
   const [toast, setToast] = useState<{ type: ToastType } | null>(null);
 
-  useEffect(() => {
-    setLoadingCategories(true);
-    getCategories()
-      .then((list) => {
-        setCategories(list);
-        setCategoryError(null);
-      })
-      .catch(() => {
-        setCategoryError(
-          "Không thể tải danh mục sản phẩm. Vui lòng kiểm tra backend /categories.",
-        );
-      })
-      .finally(() => setLoadingCategories(false));
-  }, []);
-
-  const activeCategories = categories.filter((c) => c.isActive);
-  const categoryIds = activeCategories.map((c) => c.id);
-  const hasCategories = categoryIds.length > 0;
-
   const showToast = (type: ToastType) => {
     setToast({ type });
     setTimeout(() => setToast(null), 3000);
   };
 
+  // ── Filtered list ──
   const filtered = products.filter((p) => {
     const matchSearch =
       !search.trim() ||
@@ -107,9 +103,52 @@ export default function MenuManagePage() {
     return matchSearch && matchActive;
   });
 
+  // ── Tạo category mới ──
+  const handleCreateCategory = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newCategoryName.trim()) {
+      setCategoryFormError("Tên danh mục không được trống");
+      return;
+    }
+
+    setCategorySubmitting(true);
+    setCategoryFormError(null);
+
+    try {
+      const res = await createCategory({
+        categoryName: newCategoryName.trim(),
+        isActive: true,
+      });
+
+      // Thêm category vào list
+      setCategories((prev) => [...prev, {
+        id: res.id,
+        name: res.categoryName
+      }]);
+
+      // Đóng modal
+      setShowCategoryModal(false);
+      setNewCategoryName("");
+
+      // Hiển thị success toast
+      setToast({ type: "create" });
+    } catch (err: unknown) {
+      const error = err as any;
+      const msg = error?.message || error?.response?.data?.message || "Không thể tạo danh mục";
+      setCategoryFormError(msg);
+      console.error('Create category error:', err);
+    } finally {
+      setCategorySubmitting(false);
+    }
+  };
+
+  // ── Open modals ──
   const openAdd = () => {
-    const defaultCategoryId = categoryIds[0] ?? 0;
-    setForm({ ...EMPTY_FORM, categoryId: defaultCategoryId });
+    if (categories.length === 0) {
+      setFormError("Bạn cần tạo danh mục trước khi thêm sản phẩm mới.");
+      return;
+    }
+    setForm({ ...EMPTY_FORM, categoryId: categories[0].id });
     setFormError(null);
     setEditTarget(null);
     setModalMode("add");
@@ -137,22 +176,9 @@ export default function MenuManagePage() {
     setEditTarget(null);
   };
 
+  // ── Submit form ──
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-
-    if (!hasCategories) {
-      setFormError(
-        "Bạn cần tạo danh mục sản phẩm trước khi thêm sản phẩm mới.",
-      );
-      return;
-    }
-
-    if (!form.categoryId || form.categoryId <= 0) {
-      setFormError(
-        "Vui lòng chọn danh mục hợp lệ. Hãy tạo loại sản phẩm trước nếu chưa có.",
-      );
-      return;
-    }
     if (!form.productName.trim()) {
       setFormError("Tên sản phẩm không được trống.");
       return;
@@ -199,24 +225,15 @@ export default function MenuManagePage() {
         showToast("edit");
       }
     } catch (err: unknown) {
-      let errorMessage = "Có lỗi xảy ra, thử lại.";
-      
-      if (err && typeof err === 'object') {
-        const error = err as any;
-        // Kiểm xem error có response data từ backend
-        if (error.response?.data?.message) {
-          errorMessage = error.response.data.message;
-        } else if (error.message) {
-          errorMessage = error.message;
-        }
-      }
-      
-      setFormError(errorMessage);
+      setFormError(
+        (err as { message?: string })?.message ?? "Có lỗi xảy ra, thử lại.",
+      );
     } finally {
       setSubmitting(false);
     }
   };
 
+  // ── Soft delete ──
   const confirmSoftDelete = async () => {
     if (!deleteTarget) return;
     await deactivateProduct(deleteTarget.productId);
@@ -224,6 +241,7 @@ export default function MenuManagePage() {
     showToast("soft-delete");
   };
 
+  // ── Hard delete ──
   const confirmHardDelete = async () => {
     if (!hardDeleteTarget) return;
     await removeProduct(hardDeleteTarget.productId);
@@ -231,38 +249,12 @@ export default function MenuManagePage() {
     showToast("hard-delete");
   };
 
-  const getCategoryName = (id: number) => {
-    const found = categories.find((c) => c.id === id);
-    return found ? found.categoryName : `Danh mục #${id}`;
-  };
-
-  const handleSubmitCategory = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!categoryForm.categoryName.trim()) {
-      setCategoryError("Tên loại sản phẩm không được trống.");
-      return;
-    }
-    setCategorySubmitting(true);
-    setCategoryError(null);
-    try {
-      const created = await createCategory({
-        categoryName: categoryForm.categoryName.trim(),
-        isActive: categoryForm.isActive,
-      });
-      setCategories((prev) => [created, ...prev]);
-      setCategoryModalOpen(false);
-    } catch {
-      setCategoryError(
-        "Không thể tạo loại sản phẩm. Vui lòng kiểm tra API /categories.",
-      );
-    } finally {
-      setCategorySubmitting(false);
-    }
-  };
+  const getCategoryName = (id: number) =>
+    categories.find((c) => c.id === id)?.name ?? `Cat #${id}`;
 
   return (
     <div className="min-h-screen bg-[#f0f0f0] flex flex-col">
-      {/* Toast */}
+      {/* ── Toast ── */}
       {toast && (
         <div className="fixed top-5 right-5 z-[60] flex items-center gap-3 bg-emerald-500 rounded-2xl shadow-xl px-5 py-4 min-w-[300px] max-w-sm">
           <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center shrink-0">
@@ -285,9 +277,7 @@ export default function MenuManagePage() {
               ? "Bạn đã thêm sản phẩm mới thành công!"
               : toast.type === "hard-delete"
                 ? "Bạn đã xóa thành công!"
-                : toast.type === "soft-delete"
-                  ? "Trạng thái bán đã được cập nhật!"
-                  : "Bạn đã chỉnh sửa thành công!"}
+                : "Bạn đã chỉnh sửa thành công!"}
           </p>
           <button
             type="button"
@@ -310,8 +300,7 @@ export default function MenuManagePage() {
           </button>
         </div>
       )}
-
-      {/* Header */}
+      {/* ── Header ── */}
       <header className="flex items-center justify-between px-8 py-4 bg-white border-b border-gray-200 shadow-sm">
         <button
           type="button"
@@ -335,22 +324,10 @@ export default function MenuManagePage() {
         </button>
         <h1 className="text-xl font-bold text-gray-800">Quản lý Menu</h1>
         <div className="flex items-center gap-3">
-          {!hasCategories && (
-            <div className="hidden sm:flex items-center gap-2 px-3 py-2 rounded-xl bg-amber-50 border border-amber-200 text-xs text-amber-700 font-medium max-w-xs">
-              <span>
-                Bạn cần tạo <span className="font-semibold">loại sản phẩm</span>{" "}
-                trước khi thêm sản phẩm.
-              </span>
-            </div>
-          )}
           <button
             type="button"
-            onClick={() => {
-              setCategoryForm({ categoryName: "", isActive: true });
-              setCategoryError(null);
-              setCategoryModalOpen(true);
-            }}
-            className="flex items-center gap-2 px-4 py-2 rounded-xl border border-lime-400 text-lime-600 bg-white hover:bg-lime-50 text-sm font-semibold transition"
+            onClick={() => setShowCategoryModal(true)}
+            className="flex items-center gap-2 px-4 py-2 bg-purple-400 hover:bg-purple-500 text-white font-semibold rounded-xl shadow transition"
           >
             <svg
               className="w-4 h-4"
@@ -365,17 +342,16 @@ export default function MenuManagePage() {
                 d="M12 4v16m8-8H4"
               />
             </svg>
-            Thêm loại sản phẩm
+            Thêm danh mục
           </button>
           <button
             type="button"
             onClick={openAdd}
-            disabled={!hasCategories}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl shadow font-semibold transition ${
-              hasCategories
-                ? "bg-lime-400 hover:bg-lime-500 text-white"
-                : "bg-gray-200 text-gray-400 cursor-not-allowed"
-            }`}
+            disabled={categories.length === 0 || categoriesLoading}
+            className={`flex items-center gap-2 px-4 py-2 font-semibold rounded-xl shadow transition ${categories.length === 0 || categoriesLoading
+              ? "bg-gray-300 text-gray-400 cursor-not-allowed"
+              : "bg-lime-400 hover:bg-lime-500 text-white"
+              }`}
           >
             <svg
               className="w-4 h-4"
@@ -395,7 +371,44 @@ export default function MenuManagePage() {
         </div>
       </header>
 
-      {/* Filters */}
+      {/* ── API error banner ── */}
+      {apiError && (
+        <div className="px-8 py-2.5 bg-amber-50 border-b border-amber-200 flex items-center gap-3">
+          <span className="text-amber-700 text-sm font-medium">{apiError}</span>
+          <button
+            type="button"
+            onClick={refresh}
+            className="ml-auto text-xs underline text-amber-600 hover:text-amber-800 transition"
+          >
+            Thử lại
+          </button>
+        </div>
+      )}
+
+      {/* ── Categories error banner ── */}
+      {categoriesError && (
+        <div className="px-8 py-2.5 bg-amber-50 border-b border-amber-200 flex items-center gap-3">
+          <span className="text-amber-700 text-sm font-medium">
+            {categoriesError}
+          </span>
+          <button
+            type="button"
+            onClick={fetchCategories}
+            className="ml-auto text-xs underline text-amber-600 hover:text-amber-800 transition"
+          >
+            Thử lại
+          </button>
+        </div>
+      )}
+
+      {/* ── No categories warning ── */}
+      {categories.length === 0 && !categoriesLoading && (
+        <div className="px-8 py-3 bg-amber-50 border-b border-amber-200 text-amber-700 text-sm font-medium">
+          Bạn cần tạo danh mục trước khi thêm sản phẩm mới.
+        </div>
+      )}
+
+      {/* ── Filters ── */}
       <div className="px-8 py-4 flex flex-wrap gap-3 items-center bg-white border-b border-gray-100">
         <input
           type="text"
@@ -410,11 +423,10 @@ export default function MenuManagePage() {
               key={v}
               type="button"
               onClick={() => setFilterActive(v)}
-              className={`px-4 py-2 font-medium transition ${
-                filterActive === v
-                  ? "bg-lime-400 text-white"
-                  : "bg-white text-gray-600 hover:bg-gray-50"
-              }`}
+              className={`px-4 py-2 font-medium transition ${filterActive === v
+                ? "bg-lime-400 text-white"
+                : "bg-white text-gray-600 hover:bg-gray-50"
+                }`}
             >
               {v === "all"
                 ? "Tất cả"
@@ -424,17 +436,12 @@ export default function MenuManagePage() {
             </button>
           ))}
         </div>
-        <span className="text-sm text-gray-400 ml-auto flex items-center gap-3">
-          {loadingCategories && (
-            <span className="text-xs text-gray-400">
-              Đang tải danh mục sản phẩm...
-            </span>
-          )}
-          <span>{filtered.length} sản phẩm</span>
+        <span className="text-sm text-gray-400 ml-auto">
+          {filtered.length} sản phẩm
         </span>
       </div>
 
-      {/* Table */}
+      {/* ── Table ── */}
       <main className="flex-1 px-8 py-6">
         {loading ? (
           <div className="flex items-center justify-center py-20">
@@ -505,16 +512,13 @@ export default function MenuManagePage() {
                           await toggleActive(p.productId);
                           showToast("soft-delete");
                         }}
-                        className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-semibold transition ${
-                          p.isActive
-                            ? "bg-green-100 text-green-700 hover:bg-green-200"
-                            : "bg-gray-100 text-gray-500 hover:bg-gray-200"
-                        }`}
+                        className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-semibold transition ${p.isActive
+                          ? "bg-green-100 text-green-700 hover:bg-green-200"
+                          : "bg-gray-100 text-gray-500 hover:bg-gray-200"
+                          }`}
                       >
                         <span
-                          className={`w-1.5 h-1.5 rounded-full ${
-                            p.isActive ? "bg-green-500" : "bg-gray-400"
-                          }`}
+                          className={`w-1.5 h-1.5 rounded-full ${p.isActive ? "bg-green-500" : "bg-gray-400"}`}
                         />
                         {p.isActive ? "Đang bán" : "Ngừng bán"}
                       </button>
@@ -591,7 +595,212 @@ export default function MenuManagePage() {
         )}
       </main>
 
-      {/* Soft delete confirm */}
+      {/* ══ ADD / EDIT MODAL ══ */}
+      {modalMode && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg mx-4 overflow-hidden">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+              <h2 className="text-lg font-bold text-gray-800">
+                {modalMode === "add"
+                  ? "Thêm sản phẩm mới"
+                  : `Chỉnh sửa: ${editTarget?.productName}`}
+              </h2>
+              <button
+                type="button"
+                onClick={closeModal}
+                className="text-gray-400 hover:text-gray-700 transition"
+              >
+                <svg
+                  className="w-5 h-5"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M6 18L18 6M6 6l12 12"
+                  />
+                </svg>
+              </button>
+            </div>
+
+            <form
+              onSubmit={handleSubmit}
+              className="px-6 py-5 space-y-4 max-h-[75vh] overflow-y-auto"
+            >
+              <div className="grid grid-cols-2 gap-4">
+                <div className="col-span-2">
+                  <label className="block text-xs font-semibold text-gray-600 mb-1">
+                    Tên sản phẩm *
+                  </label>
+                  <input
+                    type="text"
+                    value={form.productName}
+                    onChange={(e) =>
+                      setForm({ ...form, productName: e.target.value })
+                    }
+                    placeholder="VD: Cà phê sữa đá"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-lime-400 focus:border-lime-400 outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-600 mb-1">
+                    Danh mục *
+                  </label>
+                  <select
+                    value={form.categoryId}
+                    onChange={(e) =>
+                      setForm({ ...form, categoryId: Number(e.target.value) })
+                    }
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-lime-400 focus:border-lime-400 outline-none bg-white"
+                  >
+                    {categories.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-600 mb-1">
+                    Đơn vị
+                  </label>
+                  <input
+                    type="text"
+                    value={form.measureUnit}
+                    onChange={(e) =>
+                      setForm({ ...form, measureUnit: e.target.value })
+                    }
+                    placeholder="ly, hộp, kg..."
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-lime-400 focus:border-lime-400 outline-none"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-semibold text-gray-600 mb-1">
+                    SKU *
+                  </label>
+                  <input
+                    type="text"
+                    value={form.sku}
+                    onChange={(e) => setForm({ ...form, sku: e.target.value })}
+                    placeholder="VD: CF-001"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-lime-400 focus:border-lime-400 outline-none font-mono"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-600 mb-1">
+                    Barcode
+                  </label>
+                  <input
+                    type="text"
+                    value={form.barcode}
+                    onChange={(e) =>
+                      setForm({ ...form, barcode: e.target.value })
+                    }
+                    placeholder="Tùy chọn"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-lime-400 focus:border-lime-400 outline-none"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-semibold text-gray-600 mb-1">
+                    Giá nhập (VND) *
+                  </label>
+                  <input
+                    type="number"
+                    min={0}
+                    value={form.importPrice}
+                    onChange={(e) =>
+                      setForm({ ...form, importPrice: Number(e.target.value) })
+                    }
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-lime-400 focus:border-lime-400 outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-600 mb-1">
+                    Giá bán (VND) *
+                  </label>
+                  <input
+                    type="number"
+                    min={0}
+                    value={form.listPrice}
+                    onChange={(e) =>
+                      setForm({ ...form, listPrice: Number(e.target.value) })
+                    }
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-lime-400 focus:border-lime-400 outline-none"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 mb-1">
+                  Mô tả
+                </label>
+                <textarea
+                  value={form.description}
+                  onChange={(e) =>
+                    setForm({ ...form, description: e.target.value })
+                  }
+                  rows={2}
+                  placeholder="Mô tả ngắn về sản phẩm..."
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-lime-400 focus:border-lime-400 outline-none resize-none"
+                />
+              </div>
+
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => setForm({ ...form, isActive: !form.isActive })}
+                  className={`relative w-11 h-6 rounded-full transition-colors ${form.isActive ? "bg-lime-400" : "bg-gray-300"}`}
+                >
+                  <span
+                    className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${form.isActive ? "translate-x-5" : "translate-x-0"}`}
+                  />
+                </button>
+                <span className="text-sm text-gray-700">
+                  {form.isActive ? "Đang bán" : "Ngừng bán"}
+                </span>
+              </div>
+
+              {formError && (
+                <p className="text-sm text-red-500 bg-red-50 px-3 py-2 rounded-lg">
+                  {formError}
+                </p>
+              )}
+
+              <div className="flex gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={closeModal}
+                  className="flex-1 py-2.5 rounded-xl border border-gray-300 text-sm font-medium text-gray-700 hover:bg-gray-50 transition"
+                >
+                  Hủy
+                </button>
+                <button
+                  type="submit"
+                  disabled={submitting}
+                  className="flex-1 py-2.5 rounded-xl bg-lime-400 hover:bg-lime-500 text-white font-semibold text-sm transition disabled:opacity-60"
+                >
+                  {submitting
+                    ? "Đang lưu..."
+                    : modalMode === "add"
+                      ? "Thêm mới"
+                      : "Lưu thay đổi"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ══ SOFT DELETE CONFIRM ══ */}
       {deleteTarget && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm mx-4 p-6">
@@ -640,7 +849,7 @@ export default function MenuManagePage() {
         </div>
       )}
 
-      {/* Hard delete confirm */}
+      {/* ══ HARD DELETE CONFIRM ══ */}
       {hardDeleteTarget && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm mx-4 p-6">
@@ -691,246 +900,23 @@ export default function MenuManagePage() {
         </div>
       )}
 
-      {/* Add/Edit Product Modal */}
-      {modalMode && (
+      {/* ══ CREATE CATEGORY MODAL ══ */}
+      {showCategoryModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl mx-4 p-8 max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="text-2xl font-bold text-gray-800">
-                {modalMode === "add" ? "Thêm sản phẩm mới" : "Chỉnh sửa sản phẩm"}
-              </h2>
-              <button
-                onClick={closeModal}
-                className="text-gray-400 hover:text-gray-600 transition"
-              >
-                <svg
-                  className="w-6 h-6"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M6 18L18 6M6 6l12 12"
-                  />
-                </svg>
-              </button>
-            </div>
-
-            <form onSubmit={handleSubmit} className="space-y-4">
-              {formError && (
-                <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
-                  {formError}
-                </div>
-              )}
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Tên sản phẩm *
-                  </label>
-                  <input
-                    type="text"
-                    value={form.productName}
-                    onChange={(e) =>
-                      setForm({ ...form, productName: e.target.value })
-                    }
-                    placeholder="Nhập tên sản phẩm"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-lime-400 focus:border-transparent outline-none"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    SKU *
-                  </label>
-                  <input
-                    type="text"
-                    value={form.sku}
-                    onChange={(e) => setForm({ ...form, sku: e.target.value })}
-                    placeholder="Nhập mã SKU"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-lime-400 focus:border-transparent outline-none"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Danh mục *
-                  </label>
-                  <select
-                    value={form.categoryId || ""}
-                    onChange={(e) =>
-                      setForm({
-                        ...form,
-                        categoryId: e.target.value
-                          ? parseInt(e.target.value, 10)
-                          : 0,
-                      })
-                    }
-                    disabled={!hasCategories}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-lime-400 focus:border-transparent outline-none bg-white disabled:bg-gray-100 disabled:text-gray-400"
-                  >
-                    <option value="" disabled>
-                      {hasCategories
-                        ? "Chọn danh mục sản phẩm"
-                        : "Chưa có danh mục nào"}
-                    </option>
-                    {categoryIds.map((id) => (
-                      <option key={id} value={id}>
-                        {getCategoryName(id)}
-                      </option>
-                    ))}
-                  </select>
-                  <p className="mt-1 text-xs text-gray-400">
-                    Mỗi sản phẩm phải thuộc một loại đã tồn tại trong hệ thống.
-                  </p>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Đơn vị tính
-                  </label>
-                  <input
-                    type="text"
-                    value={form.measureUnit}
-                    onChange={(e) =>
-                      setForm({ ...form, measureUnit: e.target.value })
-                    }
-                    placeholder="Ví dụ: cái, ly, kg..."
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-lime-400 focus:border-transparent outline-none"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Mã vạch
-                </label>
-                <input
-                  type="text"
-                  value={form.barcode}
-                  onChange={(e) =>
-                    setForm({ ...form, barcode: e.target.value })
-                  }
-                  placeholder="Nhập mã vạch"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-lime-400 focus:border-transparent outline-none"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Mô tả
-                </label>
-                <textarea
-                  value={form.description}
-                  onChange={(e) =>
-                    setForm({ ...form, description: e.target.value })
-                  }
-                  placeholder="Mô tả chi tiết sản phẩm"
-                  rows={3}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-lime-400 focus:border-transparent outline-none resize-none"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Giá vốn *
-                  </label>
-                  <input
-                    type="number"
-                    value={form.importPrice}
-                    onChange={(e) =>
-                      setForm({
-                        ...form,
-                        importPrice: parseFloat(e.target.value) || 0,
-                      })
-                    }
-                    step="0.01"
-                    min="0"
-                    placeholder="0"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-lime-400 focus:border-transparent outline-none"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Giá bán *
-                  </label>
-                  <input
-                    type="number"
-                    value={form.listPrice}
-                    onChange={(e) =>
-                      setForm({
-                        ...form,
-                        listPrice: parseFloat(e.target.value) || 0,
-                      })
-                    }
-                    step="0.01"
-                    min="0"
-                    placeholder="0"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-lime-400 focus:border-transparent outline-none"
-                  />
-                </div>
-              </div>
-
-              <div className="flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  id="isActive"
-                  checked={form.isActive}
-                  onChange={(e) =>
-                    setForm({ ...form, isActive: e.target.checked })
-                  }
-                  className="w-4 h-4 accent-lime-400 rounded"
-                />
-                <label htmlFor="isActive" className="text-sm text-gray-700">
-                  Đang bán
-                </label>
-              </div>
-
-              <div className="flex gap-3 pt-4 border-t mt-6">
-                <button
-                  type="button"
-                  onClick={closeModal}
-                  disabled={submitting}
-                  className="flex-1 py-2.5 rounded-xl border border-gray-300 text-sm font-medium hover:bg-gray-50 transition disabled:opacity-50"
-                >
-                  Hủy
-                </button>
-                <button
-                  type="submit"
-                  disabled={submitting}
-                  className="flex-1 py-2.5 rounded-xl bg-lime-400 hover:bg-lime-500 text-white font-semibold text-sm transition disabled:opacity-50"
-                >
-                  {submitting
-                    ? "Đang xử lý..."
-                    : modalMode === "add"
-                      ? "Thêm sản phẩm"
-                      : "Cập nhật"}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* Add Category Modal */}
-      {categoryModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 p-6">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-xl font-bold text-gray-800">
-                Thêm loại sản phẩm
-              </h2>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 overflow-hidden">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+              <h2 className="text-lg font-bold text-gray-800">Thêm danh mục mới</h2>
               <button
                 type="button"
-                onClick={() => setCategoryModalOpen(false)}
-                className="text-gray-400 hover:text-gray-600 transition"
+                onClick={() => {
+                  setShowCategoryModal(false);
+                  setNewCategoryName("");
+                  setCategoryFormError(null);
+                }}
+                className="text-gray-400 hover:text-gray-700 transition"
               >
                 <svg
-                  className="w-6 h-6"
+                  className="w-5 h-5"
                   fill="none"
                   stroke="currentColor"
                   viewBox="0 0 24 24"
@@ -945,67 +931,46 @@ export default function MenuManagePage() {
               </button>
             </div>
 
-            <form onSubmit={handleSubmitCategory} className="space-y-4">
-              {categoryError && (
-                <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
-                  {categoryError}
-                </div>
+            <form onSubmit={handleCreateCategory} className="px-6 py-5 space-y-4">
+              {categoryFormError && (
+                <p className="text-sm text-red-500 bg-red-50 px-3 py-2 rounded-lg">
+                  {categoryFormError}
+                </p>
               )}
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Tên loại sản phẩm *
+                <label className="block text-xs font-semibold text-gray-600 mb-1">
+                  Tên danh mục *
                 </label>
                 <input
                   type="text"
-                  value={categoryForm.categoryName}
-                  onChange={(e) =>
-                    setCategoryForm({
-                      ...categoryForm,
-                      categoryName: e.target.value,
-                    })
-                  }
-                  placeholder="Ví dụ: Cà phê, Trà, Bánh ngọt..."
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-lime-400 focus:border-transparent outline-none"
+                  required
+                  value={newCategoryName}
+                  onChange={(e) => setNewCategoryName(e.target.value)}
+                  placeholder="VD: Cà phê, Nước ép..."
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-purple-400 focus:border-purple-400 outline-none"
+                  autoFocus
                 />
               </div>
 
-              <div className="flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  id="category-is-active"
-                  checked={categoryForm.isActive}
-                  onChange={(e) =>
-                    setCategoryForm({
-                      ...categoryForm,
-                      isActive: e.target.checked,
-                    })
-                  }
-                  className="w-4 h-4 accent-lime-400 rounded"
-                />
-                <label
-                  htmlFor="category-is-active"
-                  className="text-sm text-gray-700"
-                >
-                  Đang sử dụng
-                </label>
-              </div>
-
-              <div className="flex gap-3 pt-3 border-t mt-4">
+              <div className="flex gap-3 pt-2">
                 <button
                   type="button"
-                  onClick={() => setCategoryModalOpen(false)}
-                  disabled={categorySubmitting}
-                  className="flex-1 py-2.5 rounded-xl border border-gray-300 text-sm font-medium hover:bg-gray-50 transition disabled:opacity-50"
+                  onClick={() => {
+                    setShowCategoryModal(false);
+                    setNewCategoryName("");
+                    setCategoryFormError(null);
+                  }}
+                  className="flex-1 py-2.5 rounded-xl border border-gray-300 text-sm font-medium text-gray-700 hover:bg-gray-50 transition"
                 >
                   Hủy
                 </button>
                 <button
                   type="submit"
                   disabled={categorySubmitting}
-                  className="flex-1 py-2.5 rounded-xl bg-lime-400 hover:bg-lime-500 text-white font-semibold text-sm transition disabled:opacity-50"
+                  className="flex-1 py-2.5 rounded-xl bg-purple-400 hover:bg-purple-500 text-white font-semibold text-sm transition disabled:opacity-60"
                 >
-                  {categorySubmitting ? "Đang lưu..." : "Thêm loại sản phẩm"}
+                  {categorySubmitting ? "Đang tạo..." : "Tạo danh mục"}
                 </button>
               </div>
             </form>
