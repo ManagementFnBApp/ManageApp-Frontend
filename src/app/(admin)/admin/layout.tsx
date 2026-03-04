@@ -15,15 +15,7 @@ export default function AdminGuardLayout({ children }: { children: React.ReactNo
     const token = localStorage.getItem('accessToken');
     const role = getStoredRoleNormalized();
 
-    if (!token) {
-      router.replace('/auth?mode=login');
-      return;
-    }
-    if (role === ROLE_CODE_STAFF || role === ROLE_CODE_SHOP_OWNER) {
-      router.replace('/manager');
-      return;
-    }
-    if (role !== ROLE_CODE_ADMIN) {
+    if (!token || role !== 'admin') {
       router.replace('/auth?mode=login');
       return;
     }

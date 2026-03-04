@@ -49,22 +49,53 @@ interface BackendLoginResponse {
  * Role lấy từ JWT (backend đặt payload.role = role_code).
  */
 export const login = async (data: LoginDto): Promise<LoginResponse> => {
-  if (typeof window !== 'undefined' && !BASE_URL) {
-    throw new Error(
-      'Chưa cấu hình API backend. Tạo file .env với NEXT_PUBLIC_SERVER_API_URL=http://localhost:2999 (đúng port backend).'
-    );
+  const isEmail = data.username.includes('@');
+
+  // Admin login: dùng fetch thuần để tránh axios interceptor gọi handleLogout khi 401
+  if (isEmail) {
+    try {
+      const res = await fetch(`${BASE_URL}/admins/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: data.username, password: data.password }),
+      });
+      if (res.ok) {
+        const json = await res.json();
+        const adminData = json.data ?? json;
+        if (adminData?.token) {
+          localStorage.setItem('accessToken', adminData.token);
+          localStorage.setItem('userId', String(adminData.adminId));
+          localStorage.setItem('username', data.username);
+          localStorage.setItem('role', 'admin');
+        }
+        return {
+          user_id: adminData.adminId,
+          username: data.username,
+          token: adminData.token,
+          expiredTime: adminData.expiredTime,
+          role: 'admin',
+        };
+      }
+      // Admin login thất bại → tiếp tục staff login
+    } catch {
+      // Network error → tiếp tục staff login
+    }
   }
 
-  const response = await apiClient.post<BackendLoginResponse>('/auth/login', {
-    username: data.username.trim(),
-    password: data.password,
-  });
-
-  const body = response.data;
-  const authData = body?.data;
-
-  if (!authData?.token) {
-    throw new Error(body?.message ?? 'Đăng nhập thất bại: không nhận được token từ server.');
+  // User login: POST /auth/login
+  const response = await apiClient.post<{ data?: { user_id: number; token: string; expiredTime: number } } & { user_id: number; token: string; expiredTime: number }>(
+    '/auth/login',
+    { username: data.username, password: data.password }
+  );
+  const authData = response.data?.data ?? response.data;
+  if (authData?.token) {
+    // Decode JWT để lấy role thực sự (SHOPOWNER, null, ...)
+    const payload = decodeJwt<UserJwtPayload>(authData.token);
+    const userRole = payload?.role ?? null; // null = chưa mua gói
+    localStorage.setItem('accessToken', authData.token);
+    localStorage.setItem('userId', String(authData.user_id));
+    localStorage.setItem('username', data.username);
+    localStorage.setItem('role', userRole ?? '');
   }
 
   const payload = decodeJwt<UserJwtPayload>(authData.token);

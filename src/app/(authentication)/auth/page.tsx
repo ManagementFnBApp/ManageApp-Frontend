@@ -66,7 +66,7 @@ export default function AuthPage() {
 
       const role = (response.role ?? '').toString().toUpperCase();
       let destination = '/';
-      if (role === ROLE_CODE_ADMIN) {
+      if (response.role === 'admin') {
         destination = '/admin';
       } else if (role === ROLE_CODE_SHOP_OWNER || role === ROLE_CODE_STAFF) {
         // SHOPOWNER và STAFF cùng vào hệ thống quản lý cửa hàng (/manager), sidebar sẽ phân quyền

@@ -13,17 +13,6 @@ export interface Order {
   orderType: 'eat-in' | 'takeaway';
   cashier: string;
   status: 'paid';
-  /** Số bàn (chỉ có khi orderType === 'eat-in' và đơn tại bàn; đơn mang đi không có) */
-  tableId?: string;
-}
-
-/** Đơn lưu tạm theo bàn (chưa thanh toán) */
-export interface SavedDraft {
-  tableId: string;
-  items: OrderItem[];
-  total: number;
-  createdAt: string;
-  cashier: string;
 }
 
 const STORAGE_KEY = 'pos_orders';

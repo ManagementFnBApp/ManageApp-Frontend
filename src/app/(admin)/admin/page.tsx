@@ -820,8 +820,8 @@ export default function AdminDashboard() {
   useEffect(() => {
     setMounted(true)
     const token = localStorage.getItem('accessToken')
-    const role = getStoredRoleNormalized() // Khớp role từ backend (ADMIN/admin)
-    if (!token || role !== ROLE_CODE_ADMIN) { router.replace('/auth?mode=login'); return }
+    const role = localStorage.getItem('role')
+    if (!token || role !== 'admin') { router.replace('/auth?mode=login'); return }
     setAdminEmail(localStorage.getItem('username') || '')
 
     // Load counts: User (role USER), Shopowner+Staff (role SHOPOWNER/STAFF), Admin, Subscriptions
