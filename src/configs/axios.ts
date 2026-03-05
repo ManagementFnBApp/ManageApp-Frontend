@@ -59,10 +59,14 @@ export class ApiClientService {
 
   private handleError(error: AxiosError): Promise<never> {
     const status = error.response?.status;
+    const isLoginRequest = error.config?.url?.includes('/auth/login') && error.config?.method === 'post';
+    const isManagedUserRequest = error.config?.url?.includes('/users/managed') && error.config?.method === 'post';
 
-    if (status === 401) {
+    // Không auto logout trên /users/managed vì có validation ở backend
+    if (status === 401 && !isLoginRequest && !isManagedUserRequest) {
       this.errorHandler?.onUnauthorized?.();
-    } else if (status === 403) {
+    } else if (status === 403 && !isLoginRequest) {
+      // 403 từ login → không redirect, để trang login hiển thị message (vd: tài khoản bị chặn)
       this.errorHandler?.onForbidden?.();
     }
 

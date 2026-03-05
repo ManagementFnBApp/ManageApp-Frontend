@@ -1,7 +1,11 @@
-﻿'use client';
+'use client';
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { ROLE_CODE_ADMIN, getStoredRoleNormalized } from '@/apis/auth';
+
+const ROLE_CODE_SHOP_OWNER = 'SHOPOWNER';
+const ROLE_CODE_STAFF = 'STAFF';
 
 export default function AdminGuardLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
@@ -9,13 +13,13 @@ export default function AdminGuardLayout({ children }: { children: React.ReactNo
 
   useEffect(() => {
     const token = localStorage.getItem('accessToken');
-    const role  = localStorage.getItem('role');
+    const role = getStoredRoleNormalized();
 
     if (!token || role !== 'ADMIN') {
       router.replace('/auth?mode=login');
-    } else {
-      setAuthorized(true);
+      return;
     }
+    setAuthorized(true);
   }, [router]);
 
   if (!authorized) {

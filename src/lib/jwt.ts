@@ -14,10 +14,13 @@ export function decodeJwt<T = Record<string, unknown>>(token: string): T | null 
   }
 }
 
+/** Khớp payload JWT từ backend (role từ bảng roles, có thể snake_case) */
 export interface UserJwtPayload {
   sub: number;
   username: string;
-  role: string | null;
+  role?: string | null;
+  role_id?: number | null;
+  owner_manager_id?: number | null;
   ownerManagerId?: number | null;
   iat?: number;
   exp?: number;

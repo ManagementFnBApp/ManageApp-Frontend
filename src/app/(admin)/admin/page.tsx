@@ -1,21 +1,19 @@
-﻿'use client'
+'use client'
 import Link from 'next/link'
 import { useEffect, useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
-import { handleLogout } from '@/apis/auth'
+import { handleLogout, ROLE_CODE_ADMIN, getStoredRoleNormalized, isStoredRoleShopOwner } from '@/apis/auth'
 import {
-  getAdmins, createAdmin, deleteAdmin, toggleAdminStatus,
-  getUsers,
-  getTenants, deleteTenant,
+  getUsers, createUser, updateUser, assignAdminRole, createManagedUser,
   getSubscriptions, createSubscription,
-  AdminUser, AppUser, Tenant, SubscriptionPlan,
+  AdminUser, AppUser, SubscriptionPlan, CreateManagedUserDto,
 } from '@/apis/adminApi'
 
 type Tab = 'users' | 'tenants' | 'admins' | 'subscriptions'
 
 const TABS: { id: Tab; label: string; icon: string; color: string }[] = [
   { id: 'users',         label: 'Quản lý User',         icon: '👤', color: 'blue' },
-  { id: 'tenants',       label: 'Quản lý Tenant',       icon: '🏢', color: 'indigo' },
+  { id: 'tenants',       label: 'Quản lý Shopowner',    icon: '🏢', color: 'indigo' },
   { id: 'admins',        label: 'Quản lý Admin',        icon: '👑', color: 'purple' },
   { id: 'subscriptions', label: 'Quản lý Subscription', icon: '📦', color: 'green' },
 ]
@@ -68,8 +66,16 @@ function ErrorRow({ cols, message, onRetry }: { cols: number; message: string; o
   )
 }
 
+const isAdminRole = (role: string | null | undefined) => (role ?? '').toUpperCase() === 'ADMIN'
+/** User = account không có role (role_id null). Bảng role chỉ có ADMIN, SHOPOWNER, STAFF. */
+const isUserAccount = (u: AppUser) => u.role_id == null
+const isShopownerOrStaff = (role: string | null | undefined) => {
+  const r = (role ?? '').toUpperCase()
+  return r === 'SHOPOWNER' || r === 'STAFF'
+}
+
 // ============================================================
-// TAB: USERS
+// TAB: USERS (chỉ hiển thị account có role_id null - user thường)
 // ============================================================
 function UsersTab() {
   const [users, setUsers] = useState<AppUser[]>([])
@@ -86,17 +92,20 @@ function UsersTab() {
 
   useEffect(() => { load() }, [load])
 
-  const filtered = users.filter(u =>
+  const onlyUsers = users.filter(u => isUserAccount(u))
+  const filtered = onlyUsers.filter(u =>
     u.username.toLowerCase().includes(search.toLowerCase()) ||
-    u.email.toLowerCase().includes(search.toLowerCase())
+    (u.email ?? '').toLowerCase().includes(search.toLowerCase())
   )
+
+  const formatDate = (d: string | undefined) => d ? new Date(d).toLocaleDateString('vi-VN') : '—'
 
   return (
     <div>
       <div className="flex items-center justify-between mb-5">
         <div>
           <h2 className="text-lg font-bold text-gray-900">Danh sách User</h2>
-          <p className="text-sm text-gray-500">{users.length} tài khoản trong hệ thống</p>
+          <p className="text-sm text-gray-500">{onlyUsers.length} account </p>
         </div>
         <input
           type="text"
@@ -114,7 +123,7 @@ function UsersTab() {
               <th className="px-4 py-3 text-left">Username</th>
               <th className="px-4 py-3 text-left">Email</th>
               <th className="px-4 py-3 text-left">Role</th>
-              <th className="px-4 py-3 text-left">Tenant</th>
+              {/* <th className="px-4 py-3 text-left">Cửa hàng (shop_id)</th> */}
               <th className="px-4 py-3 text-left">Trạng thái</th>
               <th className="px-4 py-3 text-left">Ngày tạo</th>
             </tr>
@@ -131,13 +140,13 @@ function UsersTab() {
                 <td className="px-4 py-3">
                   {u.role
                     ? <Badge text={u.role} color={u.role === 'SHOPOWNER' ? 'green' : 'blue'} />
-                    : <Badge text="Chưa có gói" color="gray" />}
+                    : <Badge text="user" color="gray" />}
                 </td>
-                <td className="px-4 py-3 text-gray-500">{u.tenantId ? `#${u.tenantId}` : <span className="text-gray-300">—</span>}</td>
+                {/* <td className="px-4 py-3 text-gray-500">{u.shop_id != null ? `#${u.shop_id}` : <span className="text-gray-300">—</span>}</td> */}
                 <td className="px-4 py-3">
-                  <Badge text={u.isActive ? 'Hoạt động' : 'Vô hiệu'} color={u.isActive ? 'green' : 'red'} />
+                  <Badge text={u.is_active ? 'Hoạt động' : 'Vô hiệu'} color={u.is_active ? 'green' : 'red'} />
                 </td>
-                <td className="px-4 py-3 text-gray-500">{new Date(u.createdAt).toLocaleDateString('vi-VN')}</td>
+                <td className="px-4 py-3 text-gray-500">{formatDate(u.created_at)}</td>
               </tr>
             ))}
           </tbody>
@@ -148,87 +157,220 @@ function UsersTab() {
 }
 
 // ============================================================
-// TAB: TENANTS
+// TAB: SHOPOWNER (hiển thị account Shopowner và Staff của shopowner)
+// Backend: tạo user qua POST /users/managed → gửi username/password qua email
 // ============================================================
 function TenantsTab() {
-  const [tenants, setTenants] = useState<Tenant[]>([])
+  const [users, setUsers] = useState<AppUser[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
-  const [deletingId, setDeletingId] = useState<number | null>(null)
   const [search, setSearch] = useState('')
+  const [showManagedForm, setShowManagedForm] = useState(false)
+  const [managedSubmitting, setManagedSubmitting] = useState(false)
+  const [managedFormError, setManagedFormError] = useState('')
+  const [managedSuccess, setManagedSuccess] = useState('')
+  const [managedForm, setManagedForm] = useState<CreateManagedUserDto & { confirmPassword: string }>({
+    email: '',
+    username: '',
+    password: '',
+    confirmPassword: '',
+    role_code: 'STAFF',
+  })
+  const [isShopOwner, setIsShopOwner] = useState(false)
 
   const load = useCallback(async () => {
     setLoading(true); setError('')
-    try { setTenants(await getTenants()) }
-    catch { setError('Không thể tải danh sách tenant') }
+    try { setUsers(await getUsers()) }
+    catch { setError('Không thể tải danh sách shopowner/staff') }
     finally { setLoading(false) }
   }, [])
 
   useEffect(() => { load() }, [load])
+  useEffect(() => { setIsShopOwner(isStoredRoleShopOwner()) }, [])
 
-  const handleDelete = async (id: number, name: string) => {
-    if (!confirm(`Xóa tenant "${name}"? Hành động này không thể hoàn tác.`)) return
-    setDeletingId(id)
-    try { await deleteTenant(id); setTenants(prev => prev.filter(t => t.tenant_id !== id)) }
-    catch (e: unknown) { alert((e as { message?: string })?.message || 'Xóa thất bại') }
-    finally { setDeletingId(null) }
+  const getManagedErrorMessage = (e: unknown): string => {
+    const err = e as { message?: string; response?: { data?: { message?: string | string[] } } }
+    const msg = err?.message
+    if (typeof msg === 'string' && msg.trim()) return msg
+    const apiMsg = err?.response?.data?.message
+    if (Array.isArray(apiMsg)) return apiMsg.join(', ')
+    if (typeof apiMsg === 'string') return apiMsg
+    return 'Đã xảy ra lỗi. Vui lòng thử lại.'
   }
 
-  const filtered = tenants.filter(t =>
-    t.tenant_name.toLowerCase().includes(search.toLowerCase())
+  const handleCreateManaged = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (managedForm.password !== managedForm.confirmPassword) {
+      setManagedFormError('Mật khẩu xác nhận không khớp.')
+      return
+    }
+    setManagedSubmitting(true); setManagedFormError('')
+    try {
+      await createManagedUser({
+        email: managedForm.email.trim(),
+        username: managedForm.username.trim(),
+        password: managedForm.password,
+        role_code: managedForm.role_code,
+      })
+      setShowManagedForm(false)
+      setManagedForm({ email: '', username: '', password: '', confirmPassword: '', role_code: 'STAFF' })
+      await load()
+      setManagedSuccess('Tài khoản đã tạo. Thông tin đăng nhập (username, mật khẩu) đã được gửi đến email của người dùng.')
+      setTimeout(() => setManagedSuccess(''), 5000)
+    } catch (e: unknown) {
+      setManagedFormError(getManagedErrorMessage(e))
+    } finally {
+      setManagedSubmitting(false)
+    }
+  }
+
+  const shopownerAndStaff = users.filter(u => isShopownerOrStaff(u.role))
+  const filtered = shopownerAndStaff.filter(u =>
+    u.username.toLowerCase().includes(search.toLowerCase()) ||
+    (u.email ?? '').toLowerCase().includes(search.toLowerCase()) ||
+    (u.profile?.full_name ?? '').toLowerCase().includes(search.toLowerCase())
   )
+
+  const formatDate = (d: string | undefined) => d ? new Date(d).toLocaleDateString('vi-VN') : '—'
 
   return (
     <div>
+      {managedSuccess && (
+        <div role="alert" className="mb-4 flex items-center gap-3 px-4 py-3 rounded-xl bg-green-50 border border-green-200 text-green-800">
+          <span className="text-green-500 text-xl">✓</span>
+          <p className="text-sm font-medium">{managedSuccess}</p>
+        </div>
+      )}
       <div className="flex items-center justify-between mb-5">
         <div>
-          <h2 className="text-lg font-bold text-gray-900">Danh sách Tenant</h2>
-          <p className="text-sm text-gray-500">{tenants.length} cửa hàng trong hệ thống</p>
+          <h2 className="text-lg font-bold text-gray-900">Danh sách Shopowner & Staff</h2>
+          <p className="text-sm text-gray-500">{shopownerAndStaff.length} account (Shopowner + Staff)</p>
         </div>
-        <input
-          type="text"
-          placeholder="Tìm theo tên tenant..."
-          value={search}
-          onChange={e => setSearch(e.target.value)}
-          className="px-4 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300 w-64"
-        />
+        <div className="flex items-center gap-3">
+          {isShopOwner ? (
+            <button
+              type="button"
+              onClick={() => { setShowManagedForm(true); setManagedFormError(''); setManagedForm({ email: '', username: '', password: '', confirmPassword: '', role_code: 'STAFF' }) }}
+              className="px-4 py-2 rounded-xl text-sm font-medium bg-indigo-600 text-white hover:bg-indigo-700 transition"
+            >
+              Thêm nhân viên / Shopowner
+            </button>
+          ) : (
+            <p className="text-sm text-gray-500 italic">Chỉ tài khoản SHOPOWNER mới có thể tạo nhân viên / Shopowner cho shop của mình.</p>
+          )}
+          <input
+            type="text"
+            placeholder="Tìm theo username, email, tên..."
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            className="px-4 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300 w-64"
+          />
+        </div>
       </div>
+      {isShopOwner && showManagedForm && (
+        <div className="mb-5 p-5 rounded-xl border border-indigo-200 bg-indigo-50/50">
+          <h3 className="text-base font-semibold text-gray-900 mb-3">Tạo tài khoản (thông tin đăng nhập sẽ gửi qua email)</h3>
+          {managedFormError && (
+            <p className="text-sm text-red-600 mb-3">{managedFormError}</p>
+          )}
+          <form onSubmit={handleCreateManaged} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Email</label>
+              <input
+                type="email"
+                required
+                value={managedForm.email}
+                onChange={e => setManagedForm(f => ({ ...f, email: e.target.value }))}
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Username</label>
+              <input
+                type="text"
+                required
+                minLength={3}
+                value={managedForm.username}
+                onChange={e => setManagedForm(f => ({ ...f, username: e.target.value }))}
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Mật khẩu</label>
+              <input
+                type="password"
+                required
+                minLength={6}
+                value={managedForm.password}
+                onChange={e => setManagedForm(f => ({ ...f, password: e.target.value }))}
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Xác nhận mật khẩu</label>
+              <input
+                type="password"
+                required
+                value={managedForm.confirmPassword}
+                onChange={e => setManagedForm(f => ({ ...f, confirmPassword: e.target.value }))}
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm"
+              />
+            </div>
+            <div className="sm:col-span-2 flex items-end gap-2">
+              <select
+                value={managedForm.role_code}
+                onChange={e => setManagedForm(f => ({ ...f, role_code: e.target.value as 'SHOPOWNER' | 'STAFF' }))}
+                className="px-3 py-2 border border-gray-200 rounded-lg text-sm"
+              >
+                <option value="STAFF">STAFF</option>
+                <option value="SHOPOWNER">SHOPOWNER</option>
+              </select>
+              <button type="submit" disabled={managedSubmitting} className="px-4 py-2 rounded-lg bg-indigo-600 text-white text-sm font-medium hover:bg-indigo-700 disabled:opacity-50">
+                {managedSubmitting ? 'Đang tạo...' : 'Tạo tài khoản'}
+              </button>
+              <button type="button" onClick={() => setShowManagedForm(false)} className="px-4 py-2 rounded-lg border border-gray-300 text-sm hover:bg-gray-50">
+                Hủy
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
       <div className="overflow-x-auto rounded-xl border border-gray-200">
         <table className="w-full text-sm">
           <thead className="bg-gray-50 text-gray-600 uppercase text-xs">
             <tr>
               <th className="px-4 py-3 text-left">ID</th>
-              <th className="px-4 py-3 text-left">Tên cửa hàng</th>
-              <th className="px-4 py-3 text-left">Admin ID</th>
-              <th className="px-4 py-3 text-left">Điểm loyalty</th>
+              <th className="px-4 py-3 text-left">Username</th>
+              <th className="px-4 py-3 text-left">Email</th>
+              <th className="px-4 py-3 text-left">Họ tên</th>
+              <th className="px-4 py-3 text-left">Role</th>
+              <th className="px-4 py-3 text-left">Cửa hàng (shop_id)</th>
+              <th className="px-4 py-3 text-left">Chủ shop (owner_manager_id)</th>
               <th className="px-4 py-3 text-left">Trạng thái</th>
               <th className="px-4 py-3 text-left">Ngày tạo</th>
-              <th className="px-4 py-3 text-left">Thao tác</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
-            {loading ? <LoadingRow cols={7} /> :
-             error   ? <ErrorRow cols={7} message={error} onRetry={load} /> :
-             filtered.length === 0 ? <EmptyRow cols={7} message="Chưa có tenant nào" /> :
-             filtered.map(t => (
-              <tr key={t.tenant_id} className="hover:bg-gray-50 transition">
-                <td className="px-4 py-3 text-gray-400 font-mono">#{t.tenant_id}</td>
-                <td className="px-4 py-3 font-medium text-gray-900">{t.tenant_name}</td>
-                <td className="px-4 py-3 text-gray-500">Admin #{t.admin_id}</td>
-                <td className="px-4 py-3 text-gray-600">{t.loyal_point_per_unit ?? 0} pt/đv</td>
+            {loading ? <LoadingRow cols={9} /> :
+             error   ? <ErrorRow cols={9} message={error} onRetry={load} /> :
+             filtered.length === 0 ? <EmptyRow cols={9} message="Chưa có shopowner hoặc staff nào" /> :
+             filtered.map(u => (
+              <tr key={u.user_id} className="hover:bg-gray-50 transition">
+                <td className="px-4 py-3 text-gray-400 font-mono">#{u.user_id}</td>
+                <td className="px-4 py-3 font-medium text-gray-900">{u.username}</td>
+                <td className="px-4 py-3 text-gray-600">{u.email}</td>
+                <td className="px-4 py-3 text-gray-600">{u.profile?.full_name ?? '—'}</td>
                 <td className="px-4 py-3">
-                  <Badge text={t.is_active ? 'Hoạt động' : 'Tạm dừng'} color={t.is_active ? 'green' : 'red'} />
+                  {u.role
+                    ? <Badge text={u.role} color={u.role.toUpperCase() === 'SHOPOWNER' ? 'green' : 'blue'} />
+                    : <Badge text="—" color="gray" />}
                 </td>
-                <td className="px-4 py-3 text-gray-500">{new Date(t.created_at).toLocaleDateString('vi-VN')}</td>
+                <td className="px-4 py-3 text-gray-500">{u.shop_id != null ? `#${u.shop_id}` : <span className="text-gray-300">—</span>}</td>
+                <td className="px-4 py-3 text-gray-500">{u.owner_manager_id != null ? `#${u.owner_manager_id}` : <span className="text-gray-300">—</span>}</td>
                 <td className="px-4 py-3">
-                  <button
-                    onClick={() => handleDelete(t.tenant_id, t.tenant_name)}
-                    disabled={deletingId === t.tenant_id}
-                    className="text-xs px-3 py-1 rounded-lg bg-red-50 text-red-600 hover:bg-red-100 transition disabled:opacity-50"
-                  >
-                    {deletingId === t.tenant_id ? 'Đang xóa...' : 'Xóa'}
-                  </button>
+                  <Badge text={u.is_active ? 'Hoạt động' : 'Vô hiệu'} color={u.is_active ? 'green' : 'red'} />
                 </td>
+                <td className="px-4 py-3 text-gray-500">{formatDate(u.created_at)}</td>
               </tr>
             ))}
           </tbody>
@@ -239,7 +381,7 @@ function TenantsTab() {
 }
 
 // ============================================================
-// TAB: ADMINS
+// TAB: ADMINS (chỉ hiển thị tài khoản có role admin)
 // ============================================================
 function AdminsTab() {
   const [admins, setAdmins] = useState<AdminUser[]>([])
@@ -248,52 +390,143 @@ function AdminsTab() {
   const [showForm, setShowForm] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [formError, setFormError] = useState('')
-  const [form, setForm] = useState({ email: '', password: '', fullName: '', phone: '' })
+  const [form, setForm] = useState({ email: '', username: '', password: '', fullName: '', phone: '' })
+  const [actioningId, setActioningId] = useState<number | null>(null)
+  const [successMessage, setSuccessMessage] = useState('')
+  const [actionError, setActionError] = useState<string | null>(null)
+
+  const mapUserToAdmin = (u: AppUser): AdminUser => ({
+    adminId: u.user_id,
+    email: u.email ?? '',
+    fullName: u.profile?.full_name ?? u.username,
+    phone: u.profile?.phone ?? null,
+    isActive: u.is_active,
+    lastLogin: u.last_login != null ? (typeof u.last_login === 'string' ? u.last_login : new Date(u.last_login).toISOString()) : null,
+    createdAt: u.created_at,
+  })
 
   const load = useCallback(async () => {
     setLoading(true); setError('')
-    try { setAdmins(await getAdmins()) }
-    catch { setError('Không thể tải danh sách admin') }
-    finally { setLoading(false) }
+    try {
+      const users = await getUsers()
+      const onlyAdmins = users.filter(u => isAdminRole(u.role))
+      setAdmins(onlyAdmins.map(mapUserToAdmin))
+    } catch {
+      setError('Không thể tải danh sách admin')
+    } finally {
+      setLoading(false)
+    }
   }, [])
 
   useEffect(() => { load() }, [load])
 
+  const getErrorMessage = (e: unknown): string => {
+    const err = e as {
+      message?: string
+      originalError?: { code?: string; message?: string; response?: { data?: { message?: string | string[] } } }
+      response?: { data?: { message?: string | string[] } }
+    }
+    const msg = err?.message ?? err?.originalError?.message
+    if (msg === 'Network Error' || err?.originalError?.code === 'ERR_NETWORK' || (typeof msg === 'string' && (msg.includes('CORS') || msg.includes('blocked')))) {
+      return 'Không thể kết nối tới server. Backend (localhost:2999) cần cấu hình CORS cho phép method PATCH.'
+    }
+    if (typeof msg === 'string' && msg.trim()) return msg
+    const data = err?.response?.data ?? err?.originalError?.response?.data
+    const apiMsg = data?.message
+    if (Array.isArray(apiMsg)) return apiMsg.join(', ')
+    if (typeof apiMsg === 'string') return apiMsg
+    return 'Đã xảy ra lỗi. Vui lòng thử lại.'
+  }
+
+  // Backend: POST /users (role_code: 'ADMIN') → PATCH /users/:id (full_name, phone). CORS phải cho phép PATCH.
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault()
     setSubmitting(true); setFormError('')
     try {
-      const newAdmin = await createAdmin({
-        email: form.email,
+      const newUser = await createUser({
+        email: form.email.trim(),
+        username: form.username.trim(),
         password: form.password,
-        fullName: form.fullName,
-        phone: form.phone || undefined,
+        role_code: 'ADMIN',
       })
-      setAdmins(prev => [...prev, newAdmin])
+      // Cập nhật họ tên/SĐT (PATCH). Nếu PATCH lỗi (vd CORS) vẫn coi tạo admin thành công.
+      if (form.fullName.trim() || form.phone?.trim()) {
+        try {
+          await updateUser(newUser.user_id, {
+            full_name: form.fullName.trim() || undefined,
+            phone: form.phone?.trim() || undefined,
+          })
+        } catch {
+          // Bỏ qua: admin đã tạo, có thể cập nhật họ tên sau
+        }
+      }
       setShowForm(false)
-      setForm({ email: '', password: '', fullName: '', phone: '' })
+      setForm({ email: '', username: '', password: '', fullName: '', phone: '' })
+      await load()
+      setSuccessMessage('Đã thêm Admin thành công!')
+      setTimeout(() => setSuccessMessage(''), 3500)
     } catch (e: unknown) {
-      setFormError((e as { message?: string })?.message || 'Tạo admin thất bại')
+      setFormError(getErrorMessage(e) || 'Tạo admin thất bại. Kiểm tra kết nối hoặc thông tin đã nhập.')
     } finally {
       setSubmitting(false)
     }
   }
 
-  const handleDelete = async (id: number, email: string) => {
-    if (!confirm(`Xóa admin "${email}"?`)) return
-    try { await deleteAdmin(id); setAdmins(prev => prev.filter(a => a.adminId !== id)) }
-    catch (e: unknown) { alert((e as { message?: string })?.message || 'Xóa thất bại') }
+  // Backend: PATCH /users/:id với role_id: null → bỏ quyền admin (UserService.updateUser)
+  const handleRemoveAdmin = async (id: number, email: string) => {
+    if (!confirm(`Bỏ quyền Admin của "${email}"? Tài khoản vẫn tồn tại nhưng không còn là admin.`)) return
+    setActioningId(id)
+    setActionError(null)
+    try {
+      await updateUser(id, { role_id: null })
+      setAdmins(prev => prev.filter(a => a.adminId !== id))
+    } catch (e: unknown) {
+      setActionError(getErrorMessage(e))
+    } finally {
+      setActioningId(null)
+    }
   }
 
+  // Backend: PATCH /users/:id với is_active → vô hiệu hóa/bật lại (UserService.updateUser)
   const handleToggle = async (id: number, current: boolean) => {
+    setActioningId(id)
+    setActionError(null)
     try {
-      const updated = await toggleAdminStatus(id, !current)
-      setAdmins(prev => prev.map(a => a.adminId === id ? { ...a, isActive: updated.isActive } : a))
-    } catch (e: unknown) { alert((e as { message?: string })?.message || 'Cập nhật thất bại') }
+      const updated = await updateUser(id, { is_active: !current })
+      setAdmins(prev => prev.map(a => a.adminId === id ? { ...a, isActive: updated.is_active } : a))
+    } catch (e: unknown) {
+      setActionError(getErrorMessage(e))
+    } finally {
+      setActioningId(null)
+    }
   }
 
   return (
-    <div>
+    <div className="relative">
+      {successMessage && (
+        <div role="alert" className="fixed top-24 right-6 z-[100] animate-[slideInRight_0.4s_ease-out]">
+          <div className="flex items-center gap-3 px-5 py-4 rounded-xl shadow-lg bg-green-500 text-white max-w-sm">
+            <span className="flex-shrink-0 w-10 h-10 rounded-full bg-white/20 flex items-center justify-center text-xl">✓</span>
+            <p className="font-medium">{successMessage}</p>
+          </div>
+        </div>
+      )}
+      {actionError && (
+        <div role="alert" className="mb-4 flex items-start gap-3 p-4 rounded-xl bg-red-50 border border-red-200 text-red-800">
+          <span className="flex-shrink-0 text-red-500 text-xl">⚠️</span>
+          <div className="flex-1 min-w-0">
+            <p className="font-medium">Lỗi thao tác</p>
+            <p className="text-sm mt-0.5">{actionError}</p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setActionError(null)}
+            className="flex-shrink-0 px-3 py-1.5 rounded-lg bg-red-100 hover:bg-red-200 text-red-700 text-sm font-medium transition"
+          >
+            Đóng
+          </button>
+        </div>
+      )}
       <div className="flex items-center justify-between mb-5">
         <div>
           <h2 className="text-lg font-bold text-gray-900">Danh sách Admin</h2>
@@ -311,20 +544,28 @@ function AdminsTab() {
       {showForm && (
         <form onSubmit={handleCreate} className="mb-6 p-5 bg-purple-50 border border-purple-100 rounded-2xl space-y-3">
           <h3 className="font-semibold text-purple-800 mb-1">Tạo tài khoản Admin mới</h3>
-          {formError && <p className="text-red-500 text-sm">{formError}</p>}
+          {formError && (
+            <div role="alert" className="flex items-start gap-2 p-3 bg-red-50 border border-red-200 rounded-xl text-red-700 text-sm">
+              <span className="flex-shrink-0">⚠️</span>
+              <p>{formError}</p>
+            </div>
+          )}
           <div className="grid grid-cols-2 gap-3">
             <input required type="email" placeholder="Email *" value={form.email}
               onChange={e => setForm(f => ({ ...f, email: e.target.value }))}
               className="px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-purple-300" />
+            <input required type="text" placeholder="Username * (≥3 ký tự)" value={form.username}
+              onChange={e => setForm(f => ({ ...f, username: e.target.value }))} minLength={3}
+              className="px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-purple-300" />
             <input required type="password" placeholder="Mật khẩu * (≥6 ký tự)" value={form.password}
               onChange={e => setForm(f => ({ ...f, password: e.target.value }))} minLength={6}
               className="px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-purple-300" />
-            <input required type="text" placeholder="Họ tên *" value={form.fullName}
+            <input type="text" placeholder="Họ tên" value={form.fullName}
               onChange={e => setForm(f => ({ ...f, fullName: e.target.value }))}
               className="px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-purple-300" />
-            <input type="text" placeholder="Số điện thoại" value={form.phone}
+            {/* <input type="text" placeholder="Số điện thoại" value={form.phone}
               onChange={e => setForm(f => ({ ...f, phone: e.target.value }))}
-              className="px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-purple-300" />
+              className="px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-purple-300" /> */}
           </div>
           <div className="flex gap-2">
             <button type="submit" disabled={submitting}
@@ -339,50 +580,97 @@ function AdminsTab() {
         </form>
       )}
 
-      <div className="overflow-x-auto rounded-xl border border-gray-200">
-        <table className="w-full text-sm">
-          <thead className="bg-gray-50 text-gray-600 uppercase text-xs">
-            <tr>
-              <th className="px-4 py-3 text-left">ID</th>
-              <th className="px-4 py-3 text-left">Họ tên</th>
-              <th className="px-4 py-3 text-left">Email</th>
-              <th className="px-4 py-3 text-left">SĐT</th>
-              <th className="px-4 py-3 text-left">Trạng thái</th>
-              <th className="px-4 py-3 text-left">Đăng nhập lần cuối</th>
-              <th className="px-4 py-3 text-left">Thao tác</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-100">
-            {loading ? <LoadingRow cols={7} /> :
-             error   ? <ErrorRow cols={7} message={error} onRetry={load} /> :
-             admins.length === 0 ? <EmptyRow cols={7} message="Chưa có admin nào" /> :
-             admins.map(a => (
-              <tr key={a.adminId} className="hover:bg-gray-50 transition">
-                <td className="px-4 py-3 text-gray-400 font-mono">#{a.adminId}</td>
-                <td className="px-4 py-3 font-medium text-gray-900">{a.fullName}</td>
-                <td className="px-4 py-3 text-gray-600">{a.email}</td>
-                <td className="px-4 py-3 text-gray-500">{a.phone || <span className="text-gray-300">—</span>}</td>
-                <td className="px-4 py-3">
-                  <Badge text={a.isActive ? 'Hoạt động' : 'Vô hiệu'} color={a.isActive ? 'green' : 'red'} />
-                </td>
-                <td className="px-4 py-3 text-gray-500">
-                  {a.lastLogin ? new Date(a.lastLogin).toLocaleString('vi-VN') : <span className="text-gray-300">Chưa đăng nhập</span>}
-                </td>
-                <td className="px-4 py-3 flex gap-2">
-                  <button onClick={() => handleToggle(a.adminId, a.isActive)}
-                    className={`text-xs px-3 py-1 rounded-lg transition ${a.isActive ? 'bg-yellow-50 text-yellow-700 hover:bg-yellow-100' : 'bg-green-50 text-green-700 hover:bg-green-100'}`}>
-                    {a.isActive ? 'Vô hiệu' : 'Kích hoạt'}
-                  </button>
-                  <button onClick={() => handleDelete(a.adminId, a.email)}
-                    className="text-xs px-3 py-1 rounded-lg bg-red-50 text-red-600 hover:bg-red-100 transition">
-                    Xóa
-                  </button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+<div className="overflow-x-auto rounded-xl border border-gray-200">
+  <table className="w-full text-sm">
+    <thead className="bg-gray-50 text-gray-600 uppercase text-xs">
+      <tr>
+        <th className="px-4 py-3 text-left">ID</th>
+        <th className="px-4 py-3 text-left">Họ tên</th>
+        <th className="px-4 py-3 text-left">Email</th>
+        <th className="px-4 py-3 text-left">Trạng thái</th>
+        <th className="px-4 py-3 text-center">Ngày Tạo</th>
+        <th className="px-4 py-3 text-center">Thao tác</th>
+      </tr>
+    </thead>
+
+    <tbody className="divide-y divide-gray-100">
+      {loading ? (
+        <LoadingRow cols={6} />
+      ) : error ? (
+        <ErrorRow cols={6} message={error} onRetry={load} />
+      ) : admins.length === 0 ? (
+        <EmptyRow cols={6} message="Chưa có admin nào" />
+      ) : (
+        admins.map((a) => (
+          <tr key={a.adminId} className="hover:bg-gray-50 transition">
+            <td className="px-4 py-3 text-gray-400 font-mono">
+              #{a.adminId}
+            </td>
+
+            <td className="px-4 py-3 font-medium text-gray-900">
+              {a.fullName}
+            </td>
+
+            <td className="px-4 py-3 text-gray-600">
+              {a.email}
+            </td>
+
+            <td className="px-4 py-3">
+              <Badge
+                text={a.isActive ? 'Hoạt động' : 'Vô hiệu'}
+                color={a.isActive ? 'green' : 'red'}
+              />
+            </td>
+
+            {/* Ngày tạo căn giữa */}
+            <td className="px-4 py-3 text-gray-500 text-center">
+              {new Date(a.createdAt).toLocaleString('vi-VN')}
+            </td>
+
+            {/* Thao tác căn giữa đúng cách */}
+            <td className="px-4 py-3">
+              <div className="flex justify-center gap-2">
+                <button
+                  type="button"
+                  disabled={actioningId === a.adminId}
+                  onClick={() =>
+                    handleToggle(a.adminId, a.isActive)
+                  }
+                  className={`text-xs px-3 py-1 rounded-lg transition 
+                  disabled:opacity-50 disabled:cursor-not-allowed 
+                  ${
+                    a.isActive
+                      ? 'bg-yellow-50 text-yellow-700 hover:bg-yellow-100'
+                      : 'bg-green-50 text-green-700 hover:bg-green-100'
+                  }`}
+                >
+                  {actioningId === a.adminId
+                    ? 'Đang xử lý...'
+                    : a.isActive
+                    ? 'Vô hiệu'
+                    : 'Kích hoạt'}
+                </button>
+
+                <button
+                  type="button"
+                  disabled={actioningId === a.adminId}
+                  onClick={() =>
+                    handleRemoveAdmin(a.adminId, a.email)
+                  }
+                  className="text-xs px-3 py-1 rounded-lg bg-red-50 text-red-600 hover:bg-red-100 transition disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {actioningId === a.adminId
+                    ? 'Đang xử lý...'
+                    : 'Bỏ quyền Admin'}
+                </button>
+              </div>
+            </td>
+          </tr>
+        ))
+      )}
+    </tbody>
+  </table>
+</div>
     </div>
   )
 }
@@ -536,13 +824,17 @@ export default function AdminDashboard() {
     if (!token || role !== 'ADMIN') { router.replace('/auth?mode=login'); return }
     setAdminEmail(localStorage.getItem('username') || '')
 
-    // Load counts
-    Promise.allSettled([getUsers(), getTenants(), getAdmins(), getSubscriptions()]).then(results => {
+    // Load counts: User (role USER), Shopowner+Staff (role SHOPOWNER/STAFF), Admin, Subscriptions
+    Promise.allSettled([getUsers(), getSubscriptions()]).then(results => {
+      const usersList = results[0].status === 'fulfilled' ? results[0].value : []
+      const userCount = Array.isArray(usersList) ? usersList.filter((u: AppUser) => isUserAccount(u)).length : 0
+      const shopownerStaffCount = Array.isArray(usersList) ? usersList.filter((u: AppUser) => isShopownerOrStaff(u.role)).length : 0
+      const adminCount = Array.isArray(usersList) ? usersList.filter((u: AppUser) => isAdminRole(u.role)).length : 0
       setStats({
-        users:         results[0].status === 'fulfilled' ? results[0].value.length : 0,
-        tenants:       results[1].status === 'fulfilled' ? results[1].value.length : 0,
-        admins:        results[2].status === 'fulfilled' ? results[2].value.length : 0,
-        subscriptions: results[3].status === 'fulfilled' ? results[3].value.length : 0,
+        users:         userCount,
+        tenants:       shopownerStaffCount,
+        admins:        adminCount,
+        subscriptions: results[1].status === 'fulfilled' ? results[1].value.length : 0,
       })
     })
   }, [router])
@@ -551,7 +843,7 @@ export default function AdminDashboard() {
 
   const STAT_CARDS = [
     { label: 'Tổng User',         value: stats.users,         icon: '👤', bg: 'bg-blue-50 border-blue-200',   text: 'text-blue-600',   tab: 'users' as Tab },
-    { label: 'Tổng Tenant',       value: stats.tenants,       icon: '🏢', bg: 'bg-indigo-50 border-indigo-200', text: 'text-indigo-600', tab: 'tenants' as Tab },
+    { label: 'Shopowner & Staff', value: stats.tenants,       icon: '🏢', bg: 'bg-indigo-50 border-indigo-200', text: 'text-indigo-600', tab: 'tenants' as Tab },
     { label: 'Tổng Admin',        value: stats.admins,        icon: '👑', bg: 'bg-purple-50 border-purple-200', text: 'text-purple-600', tab: 'admins' as Tab },
     { label: 'Gói Subscription',  value: stats.subscriptions, icon: '📦', bg: 'bg-green-50 border-green-200',  text: 'text-green-600',  tab: 'subscriptions' as Tab },
   ]

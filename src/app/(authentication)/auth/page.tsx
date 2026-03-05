@@ -1,9 +1,11 @@
-﻿"use client";
+"use client";
 
 import Image from "next/image";
 import { useState, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { login, register } from "@/apis/auth";
+import { login, register, ROLE_CODE_ADMIN, ROLE_CODE_SHOP_OWNER } from "@/apis/auth";
+
+const ROLE_CODE_STAFF = 'STAFF';
 
 export default function AuthPage() {
   const searchParams = useSearchParams();
@@ -21,7 +23,7 @@ export default function AuthPage() {
   }, [mode]);
 
   const [loginData, setLoginData] = useState({
-    usernameOrEmail: "",
+    username: "",
     password: "",
   });
 
@@ -57,22 +59,35 @@ export default function AuthPage() {
 
     try {
       const response = await login({
-        username: loginData.usernameOrEmail.trim(),
+        username: loginData.username,
         password: loginData.password,
       });
       setSuccessMessage("Bạn đã đăng nhập thành công!");
 
+      const role = (response.role ?? '').toString().toUpperCase();
       let destination = '/';
       if (response.role === 'ADMIN') {
         destination = '/admin';
-      } else if (response.role === 'SHOPOWNER') {
+      } else if (role === ROLE_CODE_SHOP_OWNER || role === ROLE_CODE_STAFF) {
+        // SHOPOWNER và STAFF cùng vào hệ thống quản lý cửa hàng (/manager), sidebar sẽ phân quyền
         destination = '/manager';
       }
-      // role === null hoặc chưa có → về trang chủ
+      // role === null hoặc khác → về trang chủ
 
       setTimeout(() => router.push(destination), 1200);
     } catch (err: any) {
-      setError(err.message || "Đăng nhập thất bại. Vui lòng kiểm tra lại thông tin.");
+      // Ưu tiên message từ API (vd: 403 tài khoản bị chặn)
+      const message =
+        err?.response?.data?.message ||
+        err?.message ||
+        err?.originalError?.message;
+      if (message) {
+        setError(message);
+      } else if (err?.originalError?.code === 'ERR_NETWORK' || err?.message?.includes('Network')) {
+        setError("Không thể kết nối đến server. Kiểm tra backend đã chạy và NEXT_PUBLIC_SERVER_API_URL trong .env.");
+      } else {
+        setError("Đăng nhập thất bại. Vui lòng kiểm tra lại username và mật khẩu.");
+      }
     } finally {
       setIsLoading(false);
     }
@@ -237,25 +252,24 @@ export default function AuthPage() {
 
                     <form onSubmit={handleLoginSubmit} className="space-y-5">
                       {error && (
-                        <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-red-700 text-sm">
-                          {error}
+                        <div role="alert" className="p-3 bg-red-50 border border-red-200 rounded-xl text-red-700 text-sm flex items-start gap-2">
+                          <span className="flex-shrink-0 mt-0.5">⚠️</span>
+                          <span>{error}</span>
                         </div>
                       )}
                       <div className="relative animate-[slideUp_0.7s_ease-out_0.1s_both]">
                         <input
-                          id="usernameOrEmail"
+                          id="username"
                           type="text"
                           required
                           autoComplete="username"
                           className="w-full px-4 py-3 pr-10 bg-gray-50 border-0 rounded-xl outline-none transition-all focus:bg-white focus:ring-2 focus:ring-blue-500"
-                          placeholder="Username hoặc Email"
-                          value={loginData.usernameOrEmail}
-                          onChange={(e) =>
-                            setLoginData({
-                              ...loginData,
-                              usernameOrEmail: e.target.value,
-                            })
-                          }
+                          placeholder="Username"
+                          value={loginData.username}
+                          onChange={(e) => {
+                            setLoginData({ ...loginData, username: e.target.value });
+                            if (error) setError("");
+                          }}
                         />
                         <div className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400">
                           <svg
@@ -282,12 +296,10 @@ export default function AuthPage() {
                           className="w-full px-4 py-3 pr-10 bg-gray-50 border-0 rounded-xl outline-none transition-all focus:bg-white focus:ring-2 focus:ring-blue-500"
                           placeholder="Password"
                           value={loginData.password}
-                          onChange={(e) =>
-                            setLoginData({
-                              ...loginData,
-                              password: e.target.value,
-                            })
-                          }
+                          onChange={(e) => {
+                            setLoginData({ ...loginData, password: e.target.value });
+                            if (error) setError("");
+                          }}
                         />
                         <div className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400">
                           <svg

@@ -1,25 +1,12 @@
-﻿"use client";
+"use client";
 
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import type { Product, CreateProductPayload } from "@/apis/productApi";
-import { MENU_CATEGORIES } from "@/data/mockMenu";
+import { getCategories, createCategory, type CreateCategoryPayload } from "@/apis/categoryApi";
 import { useMenuStore } from "@/data/useMenuStore";
 
-const CATEGORIES = MENU_CATEGORIES.map((c) => ({ id: c.id, name: c.label }));
-
-const EMPTY_FORM: CreateProductPayload = {
-  categoryId: CATEGORIES[0].id,
-  productName: "",
-  sku: "",
-  barcode: "",
-  description: "",
-  measureUnit: "ly",
-  importPrice: 0, // giá nhập kho
-  listPrice: 0, // giá bán lẻ
-  isActive: true,
-};
-
+type Category = { id: number; name: string };
 type ModalMode = "add" | "edit" | null;
 type ToastType = "create" | "edit" | "soft-delete" | "hard-delete";
 
@@ -39,6 +26,46 @@ export default function MenuManagePage() {
     removeProduct,
     toggleActive,
   } = useMenuStore();
+
+  // ── Categories từ API ──
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [categoriesLoading, setCategoriesLoading] = useState(true);
+  const [categoriesError, setCategoriesError] = useState<string | null>(null);
+  const [showCategoryModal, setShowCategoryModal] = useState(false);
+  const [categoryFormError, setCategoryFormError] = useState<string | null>(null);
+  const [categorySubmitting, setCategorySubmitting] = useState(false);
+  const [newCategoryName, setNewCategoryName] = useState("");
+
+  const fetchCategories = useCallback(async () => {
+    setCategoriesLoading(true);
+    try {
+      const res = await getCategories();
+      setCategories(res.map((c: any) => ({ id: c.id, name: c.categoryName })));
+      setCategoriesError(null);
+    } catch (err) {
+      console.error('Failed to fetch categories:', err);
+      setCategoriesError("Không thể tải danh mục");
+      setCategories([]);
+    } finally {
+      setCategoriesLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchCategories();
+  }, [fetchCategories]);
+
+  const EMPTY_FORM: CreateProductPayload = {
+    categoryId: categories[0]?.id ?? 0,
+    productName: "",
+    sku: "",
+    barcode: "",
+    description: "",
+    measureUnit: "ly",
+    importPrice: 0, // giá nhập kho
+    listPrice: 0, // giá bán lẻ
+    isActive: true,
+  };
 
   const [search, setSearch] = useState("");
   const [filterActive, setFilterActive] = useState<
@@ -76,9 +103,52 @@ export default function MenuManagePage() {
     return matchSearch && matchActive;
   });
 
+  // ── Tạo category mới ──
+  const handleCreateCategory = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newCategoryName.trim()) {
+      setCategoryFormError("Tên danh mục không được trống");
+      return;
+    }
+
+    setCategorySubmitting(true);
+    setCategoryFormError(null);
+
+    try {
+      const res = await createCategory({
+        categoryName: newCategoryName.trim(),
+        isActive: true,
+      });
+
+      // Thêm category vào list
+      setCategories((prev) => [...prev, {
+        id: res.id,
+        name: res.categoryName
+      }]);
+
+      // Đóng modal
+      setShowCategoryModal(false);
+      setNewCategoryName("");
+
+      // Hiển thị success toast
+      setToast({ type: "create" });
+    } catch (err: unknown) {
+      const error = err as any;
+      const msg = error?.message || error?.response?.data?.message || "Không thể tạo danh mục";
+      setCategoryFormError(msg);
+      console.error('Create category error:', err);
+    } finally {
+      setCategorySubmitting(false);
+    }
+  };
+
   // ── Open modals ──
   const openAdd = () => {
-    setForm(EMPTY_FORM);
+    if (categories.length === 0) {
+      setFormError("Bạn cần tạo danh mục trước khi thêm sản phẩm mới.");
+      return;
+    }
+    setForm({ ...EMPTY_FORM, categoryId: categories[0].id });
     setFormError(null);
     setEditTarget(null);
     setModalMode("add");
@@ -130,9 +200,9 @@ export default function MenuManagePage() {
           categoryId: form.categoryId,
           productName: form.productName,
           sku: form.sku,
-          barcode: form.barcode || null,
-          description: form.description || null,
-          measureUnit: form.measureUnit || null,
+          barcode: form.barcode || undefined,
+          description: form.description || undefined,
+          measureUnit: form.measureUnit || undefined,
           importPrice: form.importPrice,
           listPrice: form.listPrice,
           isActive: form.isActive ?? true,
@@ -144,9 +214,9 @@ export default function MenuManagePage() {
           categoryId: form.categoryId,
           productName: form.productName,
           sku: form.sku,
-          barcode: form.barcode || null,
-          description: form.description || null,
-          measureUnit: form.measureUnit || null,
+          barcode: form.barcode || undefined,
+          description: form.description || undefined,
+          measureUnit: form.measureUnit || undefined,
           importPrice: form.importPrice,
           listPrice: form.listPrice,
           isActive: form.isActive,
@@ -180,7 +250,7 @@ export default function MenuManagePage() {
   };
 
   const getCategoryName = (id: number) =>
-    CATEGORIES.find((c) => c.id === id)?.name ?? `Cat #${id}`;
+    categories.find((c) => c.id === id)?.name ?? `Cat #${id}`;
 
   return (
     <div className="min-h-screen bg-[#f0f0f0] flex flex-col">
@@ -253,26 +323,52 @@ export default function MenuManagePage() {
           Dashboard
         </button>
         <h1 className="text-xl font-bold text-gray-800">Quản lý Menu</h1>
-        <button
-          type="button"
-          onClick={openAdd}
-          className="flex items-center gap-2 px-4 py-2 bg-lime-400 hover:bg-lime-500 text-white font-semibold rounded-xl shadow transition"
-        >
-          <svg
-            className="w-4 h-4"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={() => setShowCategoryModal(true)}
+            className="flex items-center gap-2 px-4 py-2 bg-purple-400 hover:bg-purple-500 text-white font-semibold rounded-xl shadow transition"
           >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M12 4v16m8-8H4"
-            />
-          </svg>
-          Thêm sản phẩm
-        </button>
+            <svg
+              className="w-4 h-4"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M12 4v16m8-8H4"
+              />
+            </svg>
+            Thêm danh mục
+          </button>
+          <button
+            type="button"
+            onClick={openAdd}
+            disabled={categories.length === 0 || categoriesLoading}
+            className={`flex items-center gap-2 px-4 py-2 font-semibold rounded-xl shadow transition ${categories.length === 0 || categoriesLoading
+              ? "bg-gray-300 text-gray-400 cursor-not-allowed"
+              : "bg-lime-400 hover:bg-lime-500 text-white"
+              }`}
+          >
+            <svg
+              className="w-4 h-4"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M12 4v16m8-8H4"
+              />
+            </svg>
+            Thêm sản phẩm
+          </button>
+        </div>
       </header>
 
       {/* ── API error banner ── */}
@@ -286,6 +382,29 @@ export default function MenuManagePage() {
           >
             Thử lại
           </button>
+        </div>
+      )}
+
+      {/* ── Categories error banner ── */}
+      {categoriesError && (
+        <div className="px-8 py-2.5 bg-amber-50 border-b border-amber-200 flex items-center gap-3">
+          <span className="text-amber-700 text-sm font-medium">
+            {categoriesError}
+          </span>
+          <button
+            type="button"
+            onClick={fetchCategories}
+            className="ml-auto text-xs underline text-amber-600 hover:text-amber-800 transition"
+          >
+            Thử lại
+          </button>
+        </div>
+      )}
+
+      {/* ── No categories warning ── */}
+      {categories.length === 0 && !categoriesLoading && (
+        <div className="px-8 py-3 bg-amber-50 border-b border-amber-200 text-amber-700 text-sm font-medium">
+          Bạn cần tạo danh mục trước khi thêm sản phẩm mới.
         </div>
       )}
 
@@ -304,11 +423,10 @@ export default function MenuManagePage() {
               key={v}
               type="button"
               onClick={() => setFilterActive(v)}
-              className={`px-4 py-2 font-medium transition ${
-                filterActive === v
-                  ? "bg-lime-400 text-white"
-                  : "bg-white text-gray-600 hover:bg-gray-50"
-              }`}
+              className={`px-4 py-2 font-medium transition ${filterActive === v
+                ? "bg-lime-400 text-white"
+                : "bg-white text-gray-600 hover:bg-gray-50"
+                }`}
             >
               {v === "all"
                 ? "Tất cả"
@@ -394,11 +512,10 @@ export default function MenuManagePage() {
                           await toggleActive(p.productId);
                           showToast("soft-delete");
                         }}
-                        className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-semibold transition ${
-                          p.isActive
-                            ? "bg-green-100 text-green-700 hover:bg-green-200"
-                            : "bg-gray-100 text-gray-500 hover:bg-gray-200"
-                        }`}
+                        className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-semibold transition ${p.isActive
+                          ? "bg-green-100 text-green-700 hover:bg-green-200"
+                          : "bg-gray-100 text-gray-500 hover:bg-gray-200"
+                          }`}
                       >
                         <span
                           className={`w-1.5 h-1.5 rounded-full ${p.isActive ? "bg-green-500" : "bg-gray-400"}`}
@@ -539,7 +656,7 @@ export default function MenuManagePage() {
                     }
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-lime-400 focus:border-lime-400 outline-none bg-white"
                   >
-                    {CATEGORIES.map((c) => (
+                    {categories.map((c) => (
                       <option key={c.id} value={c.id}>
                         {c.name}
                       </option>
@@ -779,6 +896,84 @@ export default function MenuManagePage() {
                 Xóa vĩnh viễn
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ══ CREATE CATEGORY MODAL ══ */}
+      {showCategoryModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 overflow-hidden">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+              <h2 className="text-lg font-bold text-gray-800">Thêm danh mục mới</h2>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowCategoryModal(false);
+                  setNewCategoryName("");
+                  setCategoryFormError(null);
+                }}
+                className="text-gray-400 hover:text-gray-700 transition"
+              >
+                <svg
+                  className="w-5 h-5"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M6 18L18 6M6 6l12 12"
+                  />
+                </svg>
+              </button>
+            </div>
+
+            <form onSubmit={handleCreateCategory} className="px-6 py-5 space-y-4">
+              {categoryFormError && (
+                <p className="text-sm text-red-500 bg-red-50 px-3 py-2 rounded-lg">
+                  {categoryFormError}
+                </p>
+              )}
+
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 mb-1">
+                  Tên danh mục *
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={newCategoryName}
+                  onChange={(e) => setNewCategoryName(e.target.value)}
+                  placeholder="VD: Cà phê, Nước ép..."
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-purple-400 focus:border-purple-400 outline-none"
+                  autoFocus
+                />
+              </div>
+
+              <div className="flex gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowCategoryModal(false);
+                    setNewCategoryName("");
+                    setCategoryFormError(null);
+                  }}
+                  className="flex-1 py-2.5 rounded-xl border border-gray-300 text-sm font-medium text-gray-700 hover:bg-gray-50 transition"
+                >
+                  Hủy
+                </button>
+                <button
+                  type="submit"
+                  disabled={categorySubmitting}
+                  className="flex-1 py-2.5 rounded-xl bg-purple-400 hover:bg-purple-500 text-white font-semibold text-sm transition disabled:opacity-60"
+                >
+                  {categorySubmitting ? "Đang tạo..." : "Tạo danh mục"}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

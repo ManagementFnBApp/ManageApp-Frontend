@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { useEffect, useState } from 'react'
 import { usePathname, useRouter } from 'next/navigation'
-import { handleLogout } from '@/apis/auth'
+import { handleLogout, ROLE_CODE_ADMIN, ROLE_CODE_SHOP_OWNER, getStoredRoleNormalized } from '@/apis/auth'
 import { LogOut, LayoutDashboard, ShoppingBag, Crown } from 'lucide-react'
 import {
   DropdownMenu,
@@ -20,7 +20,6 @@ export default function Header() {
   const [isLoggedIn, setIsLoggedIn] = useState(false)
   const [username, setUsername] = useState<string | null>(null)
   const [role, setRole] = useState<string | null>(null)
-  const [token, setToken] = useState<string | null>(null)
 
   useEffect(() => {
     const onScroll = () => setIsScrolled(window.scrollY > 10)
@@ -32,15 +31,13 @@ export default function Header() {
     if (typeof window !== 'undefined') {
       const storedToken = localStorage.getItem('accessToken')
       const storedUsername = localStorage.getItem('username')
-      const storedRole = localStorage.getItem('role')
-      setToken(storedToken)
       setIsLoggedIn(!!storedToken)
       setUsername(storedUsername)
-      setRole(storedToken ? storedRole : null)
+      setRole(storedToken ? getStoredRoleNormalized() || null : null) // Khớp role từ API backend
     }
   }, [pathname])
 
-  // Ẩn header trên các trang dashboard (POS, manager, admin)
+  // Ẩn header trên các trang dashboard
   if (pathname.startsWith('/manager') || pathname.startsWith('/pos')) return null
   if (pathname.startsWith('/admin')) return null
 
@@ -49,7 +46,7 @@ export default function Header() {
   const navItemClass = (active: boolean) =>
     `relative px-4 py-2 rounded-full text-sm font-medium transition-all duration-300
      ${active
-        ? 'bg-white text-blue-600 shadow-lg transform-gpu style-3d-active'
+        ? 'bg-white text-blue-600 shadow-lg'
         : 'text-gray-700 hover:text-blue-600 hover:scale-105'
      }`
 
@@ -57,14 +54,10 @@ export default function Header() {
     <header
       className="fixed top-0 left-0 right-0 z-50 transition-all duration-300"
       style={{
-        backgroundColor: isScrolled
-          ? 'rgba(255,255,255,0.9)'
-          : 'rgba(255,255,255,0)',
+        backgroundColor: isScrolled ? 'rgba(255,255,255,0.9)' : 'rgba(255,255,255,0)',
         backdropFilter: isScrolled ? 'blur(12px)' : 'none',
         WebkitBackdropFilter: isScrolled ? 'blur(12px)' : 'none',
-        borderBottom: isScrolled
-          ? '1px solid rgba(229,231,235,0.6)'
-          : '1px solid transparent',
+        borderBottom: isScrolled ? '1px solid rgba(229,231,235,0.6)' : '1px solid transparent',
       }}
     >
       <nav className="container mx-auto px-6 py-4">
@@ -75,9 +68,7 @@ export default function Header() {
             <div className="w-9 h-9 rounded-lg bg-blue-500 flex items-center justify-center">
               <span className="text-white font-bold">MA</span>
             </div>
-            <span className="font-bold text-lg text-gray-800">
-              ManageApp
-            </span>
+            <span className="font-bold text-lg text-gray-800">ManageApp</span>
           </Link>
 
           {/* Right Side */}
@@ -86,7 +77,7 @@ export default function Header() {
             {/* Navigation */}
             <div className="hidden md:flex items-center space-x-2" style={{ perspective: '1000px' }}>
               {[
-                ...(isLoggedIn && role === 'SHOPOWNER' ? [{ href: '/pos', label: 'POS' }] : []),
+                ...(isLoggedIn && role === ROLE_CODE_SHOP_OWNER ? [{ href: '/pos', label: 'POS' }] : []),
                 { href: '/products', label: 'Sản phẩm' },
                 { href: '/solutions', label: 'Giải pháp' },
                 { href: '/customers', label: 'Khách hàng' },
@@ -95,28 +86,22 @@ export default function Header() {
                 { href: '/news', label: 'Tin tức' },
                 { href: '/about', label: 'Về ManageApp' },
               ].map(item => (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  className={navItemClass(isActive(item.href))}
-                >
+                <Link key={item.href} href={item.href} className={navItemClass(isActive(item.href))}>
                   {item.label}
-
-                  {/* Arrow indicator with 3D effect */}
                   {isActive(item.href) && (
-                    <span 
-                      className="absolute left-1/2 -bottom-2 w-3 h-3 bg-white shadow-lg transform-gpu style-3d-arrow"
+                    <span
+                      className="absolute left-1/2 -bottom-2 w-3 h-3 bg-white shadow-lg"
                       style={{
                         transform: 'translateX(-50%) rotate(45deg) translateZ(8px)',
-                        filter: 'drop-shadow(0 4px 6px rgba(0, 0, 0, 0.15))'
+                        filter: 'drop-shadow(0 4px 6px rgba(0,0,0,0.15))',
                       }}
-                    ></span>
+                    />
                   )}
                 </Link>
               ))}
             </div>
 
-            {/* Auth buttons / User info */}
+            {/* Auth / User dropdown */}
             <div className="hidden md:flex items-center space-x-3">
               {isLoggedIn ? (
                 <DropdownMenu>
@@ -133,7 +118,7 @@ export default function Header() {
                       {role === 'ADMIN' && (
                         <span className="text-xs bg-purple-100 text-purple-600 font-semibold px-1.5 py-0.5 rounded-full">Admin</span>
                       )}
-                      {role === 'SHOPOWNER' && (
+                      {role === ROLE_CODE_SHOP_OWNER && (
                         <span className="text-xs bg-green-100 text-green-700 font-semibold px-1.5 py-0.5 rounded-full">Shop Owner</span>
                       )}
                       <svg className="w-3.5 h-3.5 text-gray-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -142,7 +127,6 @@ export default function Header() {
                     </button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end" className="w-52">
-                    {/* User info header */}
                     <DropdownMenuItem disabled className="gap-2 opacity-70">
                       <div className={`w-6 h-6 rounded-full flex items-center justify-center text-white font-semibold text-xs flex-shrink-0 ${
                         role === 'ADMIN' ? 'bg-purple-500' : role === 'SHOPOWNER' ? 'bg-green-500' : 'bg-blue-400'
@@ -164,7 +148,7 @@ export default function Header() {
                         Admin Dashboard
                       </DropdownMenuItem>
                     )}
-                    {role === 'SHOPOWNER' && (
+                    {role === ROLE_CODE_SHOP_OWNER && (
                       <DropdownMenuItem className="gap-2 cursor-pointer" onClick={() => router.push('/manager')}>
                         <LayoutDashboard size={14} className="text-green-600" />
                         Hệ thống quản lý
@@ -176,7 +160,6 @@ export default function Header() {
                         Mua gói dịch vụ
                       </DropdownMenuItem>
                     )}
-
                     <DropdownMenuSeparator />
                     <DropdownMenuItem variant="destructive" className="gap-2 cursor-pointer" onClick={handleLogout}>
                       <LogOut size={14} />
@@ -186,16 +169,10 @@ export default function Header() {
                 </DropdownMenu>
               ) : (
                 <>
-                  <Link
-                    href="/auth?mode=login"
-                    className="px-5 py-2 text-sm font-medium rounded-lg border-2 border-blue-500 text-blue-500 hover:bg-blue-50 transition"
-                  >
+                  <Link href="/auth?mode=login" className="px-5 py-2 text-sm font-medium rounded-lg border-2 border-blue-500 text-blue-500 hover:bg-blue-50 transition">
                     Đăng nhập
                   </Link>
-                  <Link
-                    href="/auth?mode=register"
-                    className="px-5 py-2 text-sm font-medium rounded-lg bg-blue-500 text-white hover:bg-blue-600 transition"
-                  >
+                  <Link href="/auth?mode=register" className="px-5 py-2 text-sm font-medium rounded-lg bg-blue-500 text-white hover:bg-blue-600 transition">
                     Đăng ký
                   </Link>
                 </>
