@@ -4,7 +4,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { getAllProducts } from "@/apis/test";
+import { getProducts } from "@/apis/productApi";
 import { getSubscriptions, SubscriptionPlan } from "@/apis/subscription";
 
 // ─────────────────────────────────────────────
@@ -298,7 +298,7 @@ export function ProductsPage() {
       try {
         setProductsLoading(true);
         setProductsError(null);
-        const data = await getAllProducts();
+        const data = await getProducts();
         setProducts(Array.isArray(data) ? data : []);
       } catch (err: unknown) {
         setProductsError(

@@ -99,8 +99,3 @@ export const createDefaultApiClient = (): AxiosInstance => {
 };
 
 export const apiClient = createDefaultApiClient();
-
-export const endpoint: any = {
-  product: '/products',
-  products: '/products'
-};

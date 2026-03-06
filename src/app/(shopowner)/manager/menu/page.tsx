@@ -1,24 +1,11 @@
 ﻿"use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import type { Product, CreateProductPayload } from "@/apis/productApi";
 import { MENU_CATEGORIES } from "@/data/mockMenu";
 import { useMenuStore } from "@/data/useMenuStore";
-
-const CATEGORIES = MENU_CATEGORIES.map((c) => ({ id: c.id, name: c.label }));
-
-const EMPTY_FORM: CreateProductPayload = {
-  categoryId: CATEGORIES[0].id,
-  productName: "",
-  sku: "",
-  barcode: "",
-  description: "",
-  measureUnit: "ly",
-  importPrice: 0, // giá nhập kho
-  listPrice: 0, // giá bán lẻ
-  isActive: true,
-};
+import { useCategoryStore } from "@/data/useCategoryStore";
 
 type ModalMode = "add" | "edit" | null;
 type ToastType = "create" | "edit" | "soft-delete" | "hard-delete";
@@ -40,6 +27,27 @@ export default function MenuManagePage() {
     toggleActive,
   } = useMenuStore();
 
+  const { categories: apiCategories } = useCategoryStore();
+  const CATEGORIES = useMemo(
+    () => apiCategories.map((c) => ({ id: c.id, name: c.label })),
+    [apiCategories],
+  );
+
+  const EMPTY_FORM = useMemo<CreateProductPayload>(
+    () => ({
+      categoryId: CATEGORIES[0]?.id ?? MENU_CATEGORIES[0].id,
+      productName: "",
+      sku: "",
+      barcode: "",
+      description: "",
+      measureUnit: "ly",
+      importPrice: 0,
+      listPrice: 0,
+      isActive: true,
+    }),
+    [CATEGORIES],
+  );
+
   const [search, setSearch] = useState("");
   const [filterActive, setFilterActive] = useState<
     "all" | "active" | "inactive"
@@ -47,7 +55,17 @@ export default function MenuManagePage() {
 
   const [modalMode, setModalMode] = useState<ModalMode>(null);
   const [editTarget, setEditTarget] = useState<Product | null>(null);
-  const [form, setForm] = useState<CreateProductPayload>(EMPTY_FORM);
+  const [form, setForm] = useState<CreateProductPayload>({
+    categoryId: MENU_CATEGORIES[0].id,
+    productName: "",
+    sku: "",
+    barcode: "",
+    description: "",
+    measureUnit: "ly",
+    importPrice: 0,
+    listPrice: 0,
+    isActive: true,
+  });
   const [formError, setFormError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 

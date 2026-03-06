@@ -1,17 +1,13 @@
 ﻿"use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
-import { MENU_CATEGORIES, toPosProducts } from "@/data/mockMenu";
-import { getProducts } from "@/apis/productApi";
+import { toPosProducts } from "@/data/mockMenu";
+import { useCategoryStore } from "@/data/useCategoryStore";
+import { getProducts, type Product } from "@/apis/productApi";
 import { savePosCart } from "@/lib/posCart";
 import { decodeJwt, type UserJwtPayload } from "@/lib/jwt";
-
-const CATEGORIES = [
-  { id: "all", label: "Tất Cả" },
-  ...MENU_CATEGORIES.map((c) => ({ id: c.slug, label: c.label })),
-];
 
 type OrderType = "eat-in" | "takeaway";
 
@@ -33,6 +29,12 @@ type PosProduct = ReturnType<typeof toPosProducts>[number];
 
 export default function PosPage() {
   const router = useRouter();
+  const { categories: apiCategories } = useCategoryStore();
+  const CATEGORIES = useMemo(() => [
+    { id: "all", label: "Tất Cả" },
+    ...apiCategories.map((c) => ({ id: c.slug, label: c.label })),
+  ], [apiCategories]);
+
   const [username, setUsername] = useState<string>("Nguyen Van A");
   const [userId, setUserId] = useState<number>(0);
   const [activeCategory, setActiveCategory] = useState<string>("all");
@@ -41,6 +43,7 @@ export default function PosPage() {
   const [cart, setCart] = useState<CartItem[]>([]);
   const [currentTime, setCurrentTime] = useState<Date | null>(null);
   const [posProducts, setPosProducts] = useState<PosProduct[]>([]);
+  const [rawProducts, setRawProducts] = useState<Product[]>([]);
   const [productError, setProductError] = useState<string | null>(null);
 
   // ── HARDCODE: Shift ID ───────────────────────────────────────────────────
@@ -59,10 +62,11 @@ export default function PosPage() {
     return () => clearInterval(timer);
   }, []);
 
+  // Fetch products once on mount
   useEffect(() => {
     getProducts(true)
       .then((apiProducts) => {
-        setPosProducts(toPosProducts(apiProducts));
+        setRawProducts(apiProducts);
         setProductError(null);
       })
       .catch(() => {
@@ -71,6 +75,13 @@ export default function PosPage() {
         );
       });
   }, []);
+
+  // Remap products whenever categories or raw products change
+  useEffect(() => {
+    if (rawProducts.length === 0) return;
+    const slugMap = new Map(apiCategories.map((c) => [c.id, c.slug]));
+    setPosProducts(toPosProducts(rawProducts, slugMap));
+  }, [rawProducts, apiCategories]);
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -272,7 +283,9 @@ export default function PosPage() {
                 onClick={() => {
                   setProductError(null);
                   getProducts(true)
-                    .then((p) => setPosProducts(toPosProducts(p)))
+                    .then((p) => {
+                      setRawProducts(p);
+                    })
                     .catch(() =>
                       setProductError(
                         "❌ Không tải được sản phẩm. Kiểm tra kết nối và thử lại.",
