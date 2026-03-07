@@ -37,14 +37,41 @@ export const getCategories = async (): Promise<Category[]> => {
   return arr.map(mapBackendCategoryToFrontend);
 };
 
+/** Chỉ ADMIN dùng. SHOPOWNER không có quyền tạo category tổng. */
 export const createCategory = async (
   payload: CreateCategoryPayload,
 ): Promise<Category> => {
   const res = await apiClient.post("/categories", {
-    categoryName: payload.categoryName,
-    isActive: payload.isActive ?? true,
+    category_name: payload.categoryName,
   });
   const raw = unwrap<Record<string, unknown>>(res.data);
   return mapBackendCategoryToFrontend(raw ?? {});
+};
+
+// ===== SHOP-CATEGORY APIs =====
+
+interface ShopCategoryRaw {
+  shop_id: number;
+  category_id: number;
+  category: { id: number; category_name: string; is_active: boolean };
+}
+
+/** Lấy các category đã được gắn vào shop của user đang đăng nhập. */
+export const getShopCategories = async (): Promise<Category[]> => {
+  const res = await apiClient.get("/shop-categories");
+  const list = unwrap<ShopCategoryRaw[]>(res.data);
+  const arr = Array.isArray(list) ? list : [];
+  return arr.map((item) => ({
+    id: item.category_id,
+    categoryName: item.category?.category_name ?? "",
+    isActive: item.category?.is_active ?? true,
+  }));
+};
+
+/** Gắn một hoặc nhiều category vào shop (chọn trong danh sách category tổng). */
+export const addShopCategories = async (
+  categoryIds: number[],
+): Promise<void> => {
+  await apiClient.post("/shop-categories", { category_id: categoryIds });
 };
 

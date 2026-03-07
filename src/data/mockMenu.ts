@@ -19,6 +19,8 @@ export function toPosProducts(products: Product[]) {
       id: p.productId,
       name: p.productName,
       price: p.listPrice, // Dùng listPrice (giá bán) thay vì unitPrice
-      categoryId: MENU_CATEGORIES.find((c) => c.id === p.categoryId)?.slug ?? 'other',
+      categoryId: p.categoryId,
+      categorySlug: MENU_CATEGORIES.find((c) => c.id === p.categoryId)?.slug ?? 'other',
+      description: p.description ?? null,
     }));
 }

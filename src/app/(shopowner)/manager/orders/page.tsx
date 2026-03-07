@@ -235,6 +235,11 @@ export default function OrdersPage() {
         note: editForm.note || undefined,
         totalAmount: editForm.totalAmount,
         shiftId: editForm.shiftId > 0 ? editForm.shiftId : undefined,
+        order_items: selectedOrder.items.map((i) => ({
+          product_id: i.product_id,
+          quantity: i.quantity,
+          unit_price: i.unit_price,
+        })),
       });
       setOrders((prev) =>
         prev.map((o) =>
@@ -571,7 +576,7 @@ export default function OrdersPage() {
             </button>
 
             <button
-              onClick={() => setConfirmCancel(true)}
+              onClick={(handleCancel)}
               className="flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-lg bg-rose-500 hover:bg-rose-600 text-white font-semibold"
             >
               <XCircle size={16} />

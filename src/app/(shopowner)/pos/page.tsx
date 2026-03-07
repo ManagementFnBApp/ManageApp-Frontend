@@ -3,15 +3,11 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
-import { MENU_CATEGORIES, toPosProducts } from "@/data/mockMenu";
+import { toPosProducts } from "@/data/mockMenu";
 import { getActiveProducts } from "@/apis/productApi";
+import { getCategories } from "@/apis/categoryApi";
 import { savePosCart } from "@/lib/posCart";
 import { decodeJwt, type UserJwtPayload } from "@/lib/jwt";
-
-const CATEGORIES = [
-  { id: "all", label: "Tất Cả" },
-  ...MENU_CATEGORIES.map((c) => ({ id: c.slug, label: c.label })),
-];
 
 type OrderType = "eat-in" | "takeaway";
 
@@ -35,13 +31,16 @@ export default function PosPage() {
   const router = useRouter();
   const [username, setUsername] = useState<string>("Nguyen Van A");
   const [userId, setUserId] = useState<number>(0);
-  const [activeCategory, setActiveCategory] = useState<string>("all");
+  const [activeCategory, setActiveCategory] = useState<number | "all">("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [orderType, setOrderType] = useState<OrderType>("eat-in");
   const [cart, setCart] = useState<CartItem[]>([]);
   const [currentTime, setCurrentTime] = useState<Date | null>(null);
   const [posProducts, setPosProducts] = useState<PosProduct[]>([]);
   const [productError, setProductError] = useState<string | null>(null);
+  const [categories, setCategories] = useState<{ id: number; name: string }[]>(
+    [],
+  );
 
   // ── HARDCODE: Shift ID ───────────────────────────────────────────────────
   // TODO: Thay bằng shift management thực khi BE có API GET /shifts.
@@ -73,6 +72,14 @@ export default function PosPage() {
   }, []);
 
   useEffect(() => {
+    getCategories()
+      .then((cats) =>
+        setCategories(cats.map((c) => ({ id: c.id, name: c.categoryName }))),
+      )
+      .catch(() => {}); // silent fail, filter vẫn hoạt động với "Tất Cả"
+  }, []);
+
+  useEffect(() => {
     if (typeof window !== "undefined") {
       const name = localStorage.getItem("username");
       if (name) setUsername(name);
@@ -84,10 +91,18 @@ export default function PosPage() {
       setShiftId(validId);
       setShiftInput(String(validId));
 
-      // Lấy userId từ JWT
+      // Lấy userId từ JWT (backend dùng "id", không phải "sub")
       const token = localStorage.getItem("accessToken");
       const payload = token ? decodeJwt<UserJwtPayload>(token) : null;
-      if (payload?.sub) setUserId(payload.sub);
+      if (typeof payload?.id === "number" && payload.id > 0) {
+        setUserId(payload.id);
+      } else {
+        const storedUserId = localStorage.getItem("userId");
+        const parsedUserId = storedUserId ? parseInt(storedUserId, 10) : NaN;
+        if (!isNaN(parsedUserId) && parsedUserId > 0) {
+          setUserId(parsedUserId);
+        }
+      }
     }
   }, []);
 
@@ -288,11 +303,17 @@ export default function PosPage() {
 
           {/* Category filters */}
           <div className="flex flex-wrap gap-2 mb-4 flex-shrink-0">
-            {CATEGORIES.map((cat) => (
+            {[
+              { id: "all" as const, label: "Tất Cả" },
+              ...categories.map((c) => ({
+                id: c.id as number | "all",
+                label: c.name,
+              })),
+            ].map((cat) => (
               <button
                 key={cat.id}
                 type="button"
-                onClick={() => setActiveCategory(cat.id)}
+                onClick={() => setActiveCategory(cat.id as number | "all")}
                 className={`px-4 py-2 rounded-full text-sm font-medium transition ${
                   activeCategory === cat.id
                     ? "bg-blue-500 text-white"
@@ -371,6 +392,11 @@ export default function PosPage() {
                   <p className="text-blue-600 font-semibold text-sm mt-1">
                     {formatPrice(product.price)}
                   </p>
+                  {product.description && (
+                    <p className="text-xs text-gray-400 mt-1 line-clamp-2 leading-snug">
+                      {product.description}
+                    </p>
+                  )}
                 </button>
               ))}
             </div>
