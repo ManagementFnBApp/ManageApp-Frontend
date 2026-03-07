@@ -34,6 +34,8 @@ export interface UpdateOrderPayload {
   shiftId?: number;
   note?: string;
   totalAmount?: number;
+  /** BE dùng cùng DTO với create, order_items là required nên phải gửi kèm */
+  order_items?: OrderItemPayload[];
 }
 
 export interface OrderItemResponse {
