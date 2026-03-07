@@ -167,7 +167,7 @@ export default function PosPage() {
       total,
       orderType,
       shiftId, // HARDCODE: nhân viên nhập qua badge "Ca #X" trong header
-      userId, // lấy từ JWT sub
+      userId, // lấy từ JWT id (user id đã decode)
     });
 
     router.push("/checkout-order");
