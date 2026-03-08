@@ -69,13 +69,10 @@ export default function ForgotPasswordPage() {
 
     if (!/^\d{6}$/.test(paste)) return;
 
+    e.preventDefault();
+
     const newOtp = paste.split("");
     setOtp(newOtp);
-
-    newOtp.forEach((digit, i) => {
-      const input = inputRefs.current[i];
-      if (input) input.value = digit;
-    });
 
     inputRefs.current[5]?.focus();
   };
@@ -98,6 +95,11 @@ export default function ForgotPasswordPage() {
       const token = response?.data?.token;
       if (token) {
         router.push(`/reset-password?token=${encodeURIComponent(token)}`);
+      } else {
+        setError(
+          response.message ||
+            "Không thể tiếp tục với mã OTP này. Vui lòng thử lại hoặc yêu cầu mã OTP mới.",
+        );
       }
     } catch (err: any) {
       setError(err.message || "Invalid OTP");
@@ -110,6 +112,12 @@ export default function ForgotPasswordPage() {
     e.preventDefault();
     setIsLoading(true);
     const code = otp.join("");
+    // Only submit if OTP is exactly 6 digits
+    if (!/^\d{6}$/.test(code)) {
+      setIsLoading(false);
+      setError("Vui lòng nhập đầy đủ mã OTP 6 chữ số.");
+      return;
+    }
     await verifyOTP(code);
   };
 
@@ -270,6 +278,7 @@ export default function ForgotPasswordPage() {
                             handleOTPChange(index, e.target.value)
                           }
                           onKeyDown={(e) => handleKeyDown(index, e)}
+                          disabled={isLoading}
                           className="w-12 h-14 text-center text-xl font-semibold bg-gray-50 border rounded-xl outline-none focus:ring-2 focus:ring-blue-500"
                         />
                       ))}
