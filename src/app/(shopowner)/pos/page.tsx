@@ -30,6 +30,8 @@ interface CategoryFilter {
 }
 
 
+type PosProduct = ReturnType<typeof toPosProducts>[number];
+
 export default function PosPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -96,6 +98,26 @@ export default function PosPage() {
     if (typeof window !== "undefined") {
       const name = localStorage.getItem("username");
       if (name) setUsername(name);
+
+      // HARDCODE: Load shift ID từ localStorage, mặc định 1
+      const savedShift = localStorage.getItem(SHIFT_ID_STORAGE_KEY);
+      const parsed = savedShift ? parseInt(savedShift, 10) : 1;
+      const validId = isNaN(parsed) || parsed < 1 ? 1 : parsed;
+      setShiftId(validId);
+      setShiftInput(String(validId));
+
+      // Lấy userId từ JWT (backend dùng "id", không phải "sub")
+      const token = localStorage.getItem("accessToken");
+      const payload = token ? decodeJwt<UserJwtPayload>(token) : null;
+      if (typeof payload?.id === "number" && payload.id > 0) {
+        setUserId(payload.id);
+      } else {
+        const storedUserId = localStorage.getItem("userId");
+        const parsedUserId = storedUserId ? parseInt(storedUserId, 10) : NaN;
+        if (!isNaN(parsedUserId) && parsedUserId > 0) {
+          setUserId(parsedUserId);
+        }
+      }
     }
   }, []);
 
@@ -170,7 +192,7 @@ export default function PosPage() {
 
   const filteredProducts = posProducts.filter((p) => {
     const matchCategory =
-      activeCategory === "all" || String(p.categoryId) === activeCategory;
+      activeCategory === "all" || p.categoryId === activeCategory;
     const matchSearch =
       !searchQuery.trim() ||
       p.name.toLowerCase().includes(searchQuery.toLowerCase());
@@ -321,6 +343,7 @@ export default function PosPage() {
 
   return (
     <div className="h-screen flex flex-col bg-gray-50">
+      {/* Header */}
       <header className="flex-shrink-0 flex items-center gap-4 px-5 py-3 bg-white border-b border-gray-200">
         <button
           type="button"
@@ -356,8 +379,10 @@ export default function PosPage() {
           )}
         </div>
 
+        {/* Spacer */}
         <div className="flex-1" />
 
+        {/* Clock */}
         {currentTime && (
           <div className="hidden sm:flex flex-col items-center px-3 py-1 bg-gray-50 rounded-lg border border-gray-200 min-w-[90px]">
             <span className="text-lg font-bold text-gray-800 tabular-nums tracking-tight leading-tight">
@@ -376,6 +401,7 @@ export default function PosPage() {
           </div>
         )}
 
+        {/* User */}
         <div className="flex items-center gap-2 py-1 pl-1 pr-3 rounded-full bg-gray-100">
           <div className="w-7 h-7 rounded-full bg-blue-500 flex items-center justify-center text-white font-semibold text-xs">
             {(username || "S").charAt(0).toUpperCase()}
@@ -387,10 +413,46 @@ export default function PosPage() {
       </header>
 
       <div className="flex-1 flex flex-col lg:flex-row min-h-0">
+        {/* Left column - Products (kéo dài theo chiều cao cột món đã chọn) */}
         <div className="flex-1 flex flex-col p-6 lg:max-w-[66.666%] min-h-0">
+          {/* Banner lỗi khi không lấy được sản phẩm từ API */}
+          {productError && (
+            <div
+              className={`mb-3 px-4 py-2.5 rounded-lg text-sm font-medium flex items-center gap-2 flex-shrink-0 ${
+                productError.startsWith("⚠")
+                  ? "bg-amber-50 text-amber-700 border border-amber-200"
+                  : "bg-red-50 text-red-700 border border-red-200"
+              }`}
+            >
+              <span>{productError}</span>
+              <button
+                type="button"
+                onClick={() => {
+                  setProductError(null);
+                  getActiveProducts()
+                    .then((p) => setPosProducts(toPosProducts(p)))
+                    .catch(() =>
+                      setProductError(
+                        "❌ Không tải được sản phẩm. Kiểm tra kết nối và thử lại.",
+                      ),
+                    );
+                }}
+                className="ml-auto underline text-xs opacity-70 hover:opacity-100"
+              >
+                Thử lại
+              </button>
+            </div>
+          )}
+
           {/* Category filters */}
           <div className="flex flex-wrap gap-2 mb-4 flex-shrink-0">
-            {categories.map((cat) => (
+            {[
+              { id: "all" as const, label: "Tất Cả" },
+              ...categories.map((c) => ({
+                id: c.id as number | "all",
+                label: c.name,
+              })),
+            ].map((cat) => (
               <button
                 key={cat.id}
                 type="button"
@@ -405,7 +467,9 @@ export default function PosPage() {
             ))}
           </div>
 
+          {/* Search + Order type row */}
           <div className="mb-4 flex flex-col lg:flex-row lg:items-end gap-3 flex-shrink-0">
+            {/* Search */}
             <div className="flex-1">
               <label className="block text-sm text-gray-700 mb-1">
                 Tìm kiếm sản phẩm :
@@ -419,6 +483,7 @@ export default function PosPage() {
               />
             </div>
 
+            {/* Order type - moved ngang với tìm kiếm sản phẩm */}
             <div className="w-full lg:w-64">
               <div className="text-xs font-medium text-gray-700 mb-1">
                 Loại đơn hàng
@@ -448,6 +513,7 @@ export default function PosPage() {
             </div>
           </div>
 
+          {/* Product grid - kéo dài, scroll theo danh sách món đã chọn */}
           <div className="flex-1 min-h-0 overflow-auto">
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 pb-4">
               {filteredProducts.map((product) => (
@@ -466,13 +532,20 @@ export default function PosPage() {
                   <p className="text-blue-600 font-semibold text-sm mt-1">
                     {formatPrice(product.price)}
                   </p>
+                  {product.description && (
+                    <p className="text-xs text-gray-400 mt-1 line-clamp-2 leading-snug">
+                      {product.description}
+                    </p>
+                  )}
                 </button>
               ))}
             </div>
           </div>
         </div>
 
+        {/* Right column - Order summary (cùng chiều cao với cột trái) */}
         <div className="w-full lg:w-[33.333%] lg:min-w-[320px] border-l border-gray-200 bg-white flex flex-col min-h-0">
+          {/* Order items - light green area */}
           <div className="flex-1 min-h-0 p-4 bg-green-50/80 overflow-auto">
             {cart.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-10 gap-2 text-gray-400">
@@ -543,6 +616,7 @@ export default function PosPage() {
             )}
           </div>
 
+          {/* Bottom - total & checkout */}
           <div className="p-4 bg-gray-100 border-t border-gray-200">
             <div className="flex justify-between items-center mb-3">
               <span className="text-gray-700 font-medium">Tổng cộng:</span>
@@ -609,6 +683,51 @@ export default function PosPage() {
           </div>
         </div>
       </div>
+
+      {/* ── HARDCODE: Shift ID Modal ─────────────────────────────────────────
+           Dùng khi chưa có shift management API.
+           Nhân viên nhập shift ID khớp với bảng shifts trong DB.
+           TODO: Xóa khi BE có API GET /shifts/active để tự lấy shift hiện tại.
+      ──────────────────────────────────────────────────────────────────────── */}
+      {showShiftModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-xs mx-4 p-6">
+            <h3 className="font-bold text-gray-800 mb-1">Đặt Shift ID</h3>
+            <p className="text-xs text-gray-400 mb-4">
+              Nhập ID của ca làm việc trong DB (bảng{" "}
+              <code className="bg-gray-100 px-1 rounded">shifts</code>).
+              <br />
+              <span className="text-amber-500 font-medium">⚠ HARDCODE</span> —
+              cần khớp với DB.
+            </p>
+            <input
+              type="number"
+              min={1}
+              value={shiftInput}
+              onChange={(e) => setShiftInput(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && handleSaveShiftId()}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-amber-400 focus:border-amber-400 outline-none mb-4"
+              autoFocus
+            />
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={() => setShowShiftModal(false)}
+                className="flex-1 py-2 rounded-xl border border-gray-300 text-sm font-medium hover:bg-gray-50 transition"
+              >
+                Hủy
+              </button>
+              <button
+                type="button"
+                onClick={handleSaveShiftId}
+                className="flex-1 py-2 rounded-xl bg-amber-400 hover:bg-amber-500 text-white font-semibold text-sm transition"
+              >
+                Lưu
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

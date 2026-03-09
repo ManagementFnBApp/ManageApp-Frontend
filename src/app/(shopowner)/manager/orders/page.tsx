@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useState, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -486,29 +486,10 @@ export default function OrdersPage() {
               </div>
 
               {/* ── Cột phải: chi tiết ── */}
-              <div className="w-1/2">
-                {selectedOrder ? (
-                  <div className="h-full bg-white rounded-2xl border border-slate-100 shadow-sm flex flex-col overflow-hidden">
-                    {/* Header panel */}
-                    <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
-                      <div>
-                        <p className="text-xs text-slate-400 mb-0.5">
-                          Chi tiết đơn hàng
-                        </p>
-                        <p className="text-sm font-bold text-slate-800 font-mono">
-                          #{selectedOrder.orderId}
-                        </p>
-                      </div>
-                      <span
-                        className={`text-xs font-semibold px-2.5 py-1 rounded-full ${
-                          STATUS_BADGE[selectedOrder.status]?.className ??
-                          "bg-slate-100 text-slate-500"
-                        }`}
-                      >
-                        {STATUS_BADGE[selectedOrder.status]?.label ??
-                          selectedOrder.status}
-                      </span>
-                    </div>
+              {/* ───────── RIGHT PANEL ───────── */}
+<div className="w-1/2">
+  {selectedOrder ? (
+    <div className="flex flex-col h-[calc(100vh-180px)] bg-white rounded-2xl border shadow-sm overflow-hidden">
 
                     {/* Meta info */}
                     <div className="px-5 py-3 bg-slate-50 flex items-center gap-6 border-b border-slate-100">
@@ -528,70 +509,31 @@ export default function OrdersPage() {
                       </div>
                     </div>
 
-                    {/* Note + Items */}
-                    <div className="flex-1 overflow-y-auto px-5 py-3 flex flex-col gap-4">
-                      {selectedOrder.note && (
-                        <div>
-                          <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">
-                            Ghi chú
-                          </p>
-                          <p className="text-sm text-slate-700">
-                            {selectedOrder.note}
-                          </p>
-                        </div>
-                      )}
+        <span
+          className={`text-xs font-semibold px-2.5 py-1 rounded-full ${
+            STATUS_BADGE[selectedOrder.status]?.className ??
+            "bg-slate-100 text-slate-500"
+          }`}
+        >
+          {STATUS_BADGE[selectedOrder.status]?.label ??
+            selectedOrder.status}
+        </span>
+      </div>
 
-                      {/* Order items */}
-                      <div>
-                        <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">
-                          Sản phẩm
-                        </p>
-                        {selectedOrder.items.length === 0 ? (
-                          <p className="text-sm text-slate-400 italic">
-                            Không có sản phẩm
-                          </p>
-                        ) : (
-                          <div className="flex flex-col gap-1.5">
-                            {selectedOrder.items.map((item) => (
-                              <div
-                                key={item.id}
-                                className="flex items-center justify-between px-3 py-2 bg-slate-50 rounded-lg border border-slate-100"
-                              >
-                                <div className="flex-1 min-w-0">
-                                  <p className="text-sm font-medium text-slate-700 truncate">
-                                    {item.product.product_name}
-                                  </p>
-                                  <p className="text-xs text-slate-400">
-                                    Đơn giá: {formatPrice(item.unit_price)}
-                                  </p>
-                                </div>
-                                <div className="text-right shrink-0 ml-3">
-                                  <p className="text-xs text-slate-400">
-                                    x{item.quantity}
-                                  </p>
-                                  <p className="text-sm font-semibold text-slate-700">
-                                    {formatPrice(
-                                      item.unit_price * item.quantity,
-                                    )}
-                                  </p>
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    </div>
+      {/* META */}
+      <div className="px-5 py-3 bg-slate-50 flex gap-6 text-xs text-slate-500 border-b">
+        <div className="flex items-center gap-1">
+          <Clock size={13} />
+          {selectedOrder.createdAt
+            ? `${formatTime(selectedOrder.createdAt)} · ${formatDate(selectedOrder.createdAt)}`
+            : "—"}
+        </div>
 
-                    {/* Footer: total + action buttons */}
-                    <div className="px-5 py-4 bg-slate-50 border-t border-slate-100 flex flex-col gap-3">
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm font-semibold text-slate-600">
-                          Tổng cộng
-                        </span>
-                        <span className="text-lg font-bold text-rose-600">
-                          {formatPrice(selectedOrder.total)}
-                        </span>
-                      </div>
+        <div className="flex items-center gap-1">
+          <User size={13} />
+          User #{selectedOrder.userId}
+        </div>
+      </div>
 
                       {/* Action buttons — chỉ hiện khi PENDING */}
                       {selectedOrder.status === "PENDING" &&
@@ -673,8 +615,75 @@ export default function OrdersPage() {
                       Chọn đơn để xem chi tiết
                     </p>
                   </div>
-                )}
-              </div>
+
+                  <div className="text-right ml-3">
+                    <p className="text-xs text-slate-400">
+                      x{item.quantity}
+                    </p>
+                    <p className="text-sm font-semibold text-slate-700">
+                      {formatPrice(item.unit_price * item.quantity)}
+                    </p>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* FOOTER */}
+      <div className="px-5 py-4 bg-slate-50 border-t flex flex-col gap-4">
+
+        <div className="flex justify-between items-center">
+          <span className="font-semibold text-slate-600">
+            Tổng cộng
+          </span>
+
+          <span className="text-lg font-bold text-rose-600">
+            {formatPrice(selectedOrder.total)}
+          </span>
+        </div>
+
+        {selectedOrder.status === "PENDING" && (
+          <div className="flex gap-3">
+
+            <button
+              onClick={openEdit}
+              className="flex items-center gap-2 px-4 py-3 rounded-lg border bg-white text-slate-600 hover:bg-slate-100"
+            >
+              <Pencil size={16} />
+              Sửa
+            </button>
+
+            <button
+              onClick={handleComplete}
+              className="flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-lg bg-emerald-500 hover:bg-emerald-600 text-white font-semibold"
+            >
+              <CheckCircle size={16} />
+              Hoàn thành
+            </button>
+
+            <button
+              onClick={(handleCancel)}
+              className="flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-lg bg-rose-500 hover:bg-rose-600 text-white font-semibold"
+            >
+              <XCircle size={16} />
+              Huỷ
+            </button>
+
+          </div>
+        )}
+      </div>
+    </div>
+  ) : (
+    <div className="h-full bg-white/50 rounded-2xl border border-dashed flex flex-col items-center justify-center text-slate-300 gap-3">
+      <Receipt size={40} strokeWidth={1.2} />
+      <p className="text-sm font-medium">
+        Chọn đơn để xem chi tiết
+      </p>
+    </div>
+  )}
+</div>
             </div>
           )}
         </div>

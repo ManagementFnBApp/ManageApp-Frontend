@@ -32,7 +32,6 @@ export default function MenuManagePage() {
     refresh,
     addProduct,
     editProduct,
-    deactivateProduct,
     removeProduct,
     toggleActive,
   } = useMenuStore();
@@ -56,6 +55,14 @@ export default function MenuManagePage() {
       setShopCategoriesLoading(false);
     }
   }, []);
+
+  // Load tất cả category tổng khi mở modal để user chọn
+  useEffect(() => {
+    if (!showCategoryModal) return;
+    getCategories()
+      .then((cats) => setAllCategories(cats))
+      .catch(() => {});
+  }, [showCategoryModal]);
 
   useEffect(() => {
     fetchShopCategories();
@@ -123,7 +130,8 @@ export default function MenuManagePage() {
   const [formError, setFormError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
-  const [deleteTarget, setDeleteTarget] = useState<Product | null>(null);
+  const [toggleConfirmTarget, setToggleConfirmTarget] =
+    useState<Product | null>(null);
   const [hardDeleteTarget, setHardDeleteTarget] = useState<Product | null>(
     null,
   );
@@ -476,10 +484,11 @@ export default function MenuManagePage() {
               key={v}
               type="button"
               onClick={() => setFilterActive(v)}
-              className={`px-4 py-2 font-medium transition ${filterActive === v
-                ? "bg-lime-400 text-white"
-                : "bg-white text-gray-600 hover:bg-gray-50"
-                }`}
+              className={`px-4 py-2 font-medium transition ${
+                filterActive === v
+                  ? "bg-lime-400 text-white"
+                  : "bg-white text-gray-600 hover:bg-gray-50"
+              }`}
             >
               {v === "all"
                 ? "Tất cả"
@@ -600,26 +609,6 @@ export default function MenuManagePage() {
                               strokeLinejoin="round"
                               strokeWidth={2}
                               d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
-                            />
-                          </svg>
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setDeleteTarget(p)}
-                          title="Ngừng bán"
-                          className="p-1.5 rounded-lg text-orange-400 hover:bg-orange-50 transition"
-                        >
-                          <svg
-                            className="w-4 h-4"
-                            fill="none"
-                            stroke="currentColor"
-                            viewBox="0 0 24 24"
-                          >
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              strokeWidth={2}
-                              d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"
                             />
                           </svg>
                         </button>
@@ -858,14 +847,14 @@ export default function MenuManagePage() {
         </div>
       )}
 
-      {/* ══ SOFT DELETE CONFIRM ══ */}
-      {deleteTarget && (
+      {/* ══ TOGGLE CONFIRM (chỉ khi tắt sản phẩm) ══ */}
+      {toggleConfirmTarget && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm mx-4 p-6">
             <div className="flex items-center gap-3 mb-4">
-              <div className="w-10 h-10 rounded-full bg-orange-100 flex items-center justify-center">
+              <div className="w-10 h-10 rounded-full bg-amber-100 flex items-center justify-center">
                 <svg
-                  className="w-5 h-5 text-orange-500"
+                  className="w-5 h-5 text-amber-500"
                   fill="none"
                   stroke="currentColor"
                   viewBox="0 0 24 24"
@@ -881,7 +870,7 @@ export default function MenuManagePage() {
               <div>
                 <h3 className="font-bold text-gray-800">Ngừng bán sản phẩm?</h3>
                 <p className="text-sm text-gray-500">
-                  Sản phẩm sẽ bị ẩn khỏi menu, không bị xóa.
+                  Bạn có thể bật lại bất cứ lúc nào.
                 </p>
               </div>
             </div>
@@ -891,14 +880,14 @@ export default function MenuManagePage() {
             </p>
             <div className="flex gap-3">
               <button
-                onClick={() => setDeleteTarget(null)}
+                onClick={() => setToggleConfirmTarget(null)}
                 className="flex-1 py-2.5 rounded-xl border border-gray-300 text-sm font-medium hover:bg-gray-50 transition"
               >
                 Hủy
               </button>
               <button
-                onClick={confirmSoftDelete}
-                className="flex-1 py-2.5 rounded-xl bg-orange-400 hover:bg-orange-500 text-white font-semibold text-sm transition"
+                onClick={() => confirmToggle(toggleConfirmTarget)}
+                className="flex-1 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-semibold text-sm transition"
               >
                 Ngừng bán
               </button>

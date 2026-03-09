@@ -73,21 +73,36 @@ export function useMenuStore() {
     setProducts((prev) => prev.filter((p) => p.productId !== id));
   }, []);
 
-  const toggleActive = useCallback(
-    async (id: number) => {
-      const current = products.find((p) => p.productId === id);
-      if (!current) return;
+  const toggleActive = useCallback(async (id: number) => {
+    // Use functional update to avoid stale closure
+    setProducts((prevProducts) => {
+      const current = prevProducts.find((p) => p.productId === id);
+      if (!current) return prevProducts;
 
-      const updated = await updateProduct(id, {
-        isActive: !current.isActive,
-      });
-
-      setProducts((prev) =>
-        prev.map((p) => (p.productId === id ? updated : p)),
+      // Optimistically update UI
+      const optimisticProducts = prevProducts.map((p) =>
+        p.productId === id ? { ...p, isActive: !p.isActive } : p
       );
-    },
-    [products],
-  );
+
+      // Make API call in background
+      updateProduct(id, { isActive: !current.isActive })
+        .then((updated) => {
+          // Update with real server response
+          setProducts((prev) =>
+            prev.map((p) => (p.productId === id ? updated : p))
+          );
+        })
+        .catch((err) => {
+          console.error('Toggle active failed:', err);
+          // Revert optimistic update on error
+          setProducts((prev) =>
+            prev.map((p) => (p.productId === id ? current : p))
+          );
+        });
+
+      return optimisticProducts;
+    });
+  }, []);
 
   const refresh = useCallback(() => {
     void fetchProducts();
