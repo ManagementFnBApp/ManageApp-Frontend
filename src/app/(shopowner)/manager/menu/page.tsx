@@ -56,14 +56,6 @@ export default function MenuManagePage() {
     }
   }, []);
 
-  // Load tất cả category tổng khi mở modal để user chọn
-  useEffect(() => {
-    if (!showCategoryModal) return;
-    getCategories()
-      .then((cats) => setAllCategories(cats))
-      .catch(() => {});
-  }, [showCategoryModal]);
-
   useEffect(() => {
     fetchShopCategories();
   }, [fetchShopCategories]);
@@ -269,16 +261,16 @@ export default function MenuManagePage() {
 
   // ── Soft delete (ngừng bán) ──
   const confirmSoftDelete = async () => {
-    if (!deleteTarget) return;
+    if (!toggleConfirmTarget) return;
     try {
-      await deactivateProduct(deleteTarget.productId);
-      setDeleteTarget(null);
+      await toggleActive(toggleConfirmTarget.productId);
+      setToggleConfirmTarget(null);
       setFormError(null);
       showToast("soft-delete");
       refresh();
     } catch (err: unknown) {
       setFormError(getApiErrorMessage(err));
-      setDeleteTarget(null);
+      setToggleConfirmTarget(null);
     }
   };
 
@@ -875,8 +867,8 @@ export default function MenuManagePage() {
               </div>
             </div>
             <p className="text-sm text-gray-700 bg-gray-50 rounded-lg px-3 py-2 mb-5">
-              <span className="font-semibold">{deleteTarget.productName}</span>{" "}
-              — Ảnh: {deleteTarget.image || deleteTarget.sku || "—"}
+              <span className="font-semibold">{toggleConfirmTarget.productName}</span>{" "}
+              — Ảnh: {toggleConfirmTarget.image || toggleConfirmTarget.sku || "—"}
             </p>
             <div className="flex gap-3">
               <button
@@ -886,7 +878,7 @@ export default function MenuManagePage() {
                 Hủy
               </button>
               <button
-                onClick={() => confirmToggle(toggleConfirmTarget)}
+                onClick={confirmSoftDelete}
                 className="flex-1 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-semibold text-sm transition"
               >
                 Ngừng bán

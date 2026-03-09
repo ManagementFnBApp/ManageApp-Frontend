@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useState, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -121,6 +121,7 @@ export default function OrdersPage() {
   const newOrderId = searchParams?.get("new") ?? null;
 
   const [isShopOwner, setIsShopOwner] = useState(false);
+  const [isStaff, setIsStaff] = useState(false);
   const [orders, setOrders] = useState<Order[]>([]);
   const [activeStatus, setActiveStatus] = useState<StatusFilter>("ALL");
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
@@ -132,7 +133,9 @@ export default function OrdersPage() {
   const [successBanner, setSuccessBanner] = useState<string | null>(null);
 
   useEffect(() => {
-    setIsShopOwner(getStoredRoleNormalized() === 'SHOPOWNER');
+    const role = getStoredRoleNormalized();
+    setIsShopOwner(role === 'SHOPOWNER');
+    setIsStaff(role === 'STAFF');
   }, []);
 
   // ── Edit modal state ──
@@ -161,7 +164,14 @@ export default function OrdersPage() {
           }
         }
       })
-      .catch((err) => setError(err?.message ?? "Không thể tải đơn hàng"))
+      .catch((err) => {
+        const status = (err as { status?: number })?.status;
+        if (status === 403) {
+          setError('Bạn không có quyền xem đơn hàng. Vui lòng liên hệ SHOPOWNER.');
+        } else {
+          setError(err?.message ?? "Không thể tải đơn hàng");
+        }
+      })
       .finally(() => setLoading(false));
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -407,6 +417,12 @@ export default function OrdersPage() {
             <div className="h-full flex flex-col items-center justify-center gap-3 text-slate-300">
               <Receipt size={48} strokeWidth={1.2} />
               <p className="text-sm font-medium">Chưa có đơn hàng nào</p>
+              {isStaff && (
+                <p className="text-xs text-slate-400 text-center max-w-xs">
+                  Chỉ hiển thị đơn hàng do bạn tạo trong ca làm việc hiện tại.
+                  Tạo đơn mới tại trang <strong>Tạo đơn hàng</strong>.
+                </p>
+              )}
             </div>
           ) : (
             <div className="h-full flex gap-5">
@@ -486,10 +502,24 @@ export default function OrdersPage() {
               </div>
 
               {/* ── Cột phải: chi tiết ── */}
-              {/* ───────── RIGHT PANEL ───────── */}
-<div className="w-1/2">
-  {selectedOrder ? (
-    <div className="flex flex-col h-[calc(100vh-180px)] bg-white rounded-2xl border shadow-sm overflow-hidden">
+              <div className="w-1/2">
+                {selectedOrder ? (
+                  <div className="flex flex-col h-[calc(100vh-180px)] bg-white rounded-2xl border shadow-sm overflow-hidden">
+                    {/* Header */}
+                    <div className="px-5 py-3 border-b border-slate-100 flex items-center justify-between">
+                      <span className="font-bold text-slate-800 text-sm">
+                        Đơn #{selectedOrder.orderId}
+                      </span>
+                      <span
+                        className={`text-xs font-semibold px-2.5 py-1 rounded-full ${
+                          STATUS_BADGE[selectedOrder.status]?.className ??
+                          "bg-slate-100 text-slate-500"
+                        }`}
+                      >
+                        {STATUS_BADGE[selectedOrder.status]?.label ??
+                          selectedOrder.status}
+                      </span>
+                    </div>
 
                     {/* Meta info */}
                     <div className="px-5 py-3 bg-slate-50 flex items-center gap-6 border-b border-slate-100">
@@ -509,36 +539,58 @@ export default function OrdersPage() {
                       </div>
                     </div>
 
-        <span
-          className={`text-xs font-semibold px-2.5 py-1 rounded-full ${
-            STATUS_BADGE[selectedOrder.status]?.className ??
-            "bg-slate-100 text-slate-500"
-          }`}
-        >
-          {STATUS_BADGE[selectedOrder.status]?.label ??
-            selectedOrder.status}
-        </span>
-      </div>
+                    {/* Items list */}
+                    <div className="flex-1 overflow-y-auto px-5 py-3 flex flex-col gap-2">
+                      {selectedOrder.items.length === 0 ? (
+                        <p className="text-xs text-slate-400 text-center py-6">
+                          Không có món
+                        </p>
+                      ) : (
+                        selectedOrder.items.map((item) => (
+                          <div
+                            key={item.id}
+                            className="flex items-center justify-between py-1.5 border-b border-slate-50"
+                          >
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-medium text-slate-700 truncate">
+                                {item.product?.product_name ?? `#${item.product_id}`}
+                              </p>
+                              <p className="text-xs text-slate-400">
+                                {formatPrice(item.unit_price)} × {item.quantity}
+                              </p>
+                            </div>
+                            <div className="text-right ml-3">
+                              <p className="text-xs text-slate-400">
+                                x{item.quantity}
+                              </p>
+                              <p className="text-sm font-semibold text-slate-700">
+                                {formatPrice(item.unit_price * item.quantity)}
+                              </p>
+                            </div>
+                          </div>
+                        ))
+                      )}
+                      {selectedOrder.note && (
+                        <p className="text-xs text-slate-500 bg-slate-50 rounded-lg px-3 py-2 mt-2">
+                          Ghi chú: {selectedOrder.note}
+                        </p>
+                      )}
+                    </div>
 
-      {/* META */}
-      <div className="px-5 py-3 bg-slate-50 flex gap-6 text-xs text-slate-500 border-b">
-        <div className="flex items-center gap-1">
-          <Clock size={13} />
-          {selectedOrder.createdAt
-            ? `${formatTime(selectedOrder.createdAt)} · ${formatDate(selectedOrder.createdAt)}`
-            : "—"}
-        </div>
-
-        <div className="flex items-center gap-1">
-          <User size={13} />
-          User #{selectedOrder.userId}
-        </div>
-      </div>
+                    {/* Footer */}
+                    <div className="px-5 py-4 bg-slate-50 border-t flex flex-col gap-4">
+                      <div className="flex justify-between items-center">
+                        <span className="font-semibold text-slate-600">
+                          Tổng cộng
+                        </span>
+                        <span className="text-lg font-bold text-rose-600">
+                          {formatPrice(selectedOrder.total)}
+                        </span>
+                      </div>
 
                       {/* Action buttons — chỉ hiện khi PENDING */}
                       {selectedOrder.status === "PENDING" &&
                         (confirmCancel ? (
-                          // ── Inline confirm huỷ đơn ──
                           <div className="flex flex-col gap-2">
                             <p className="text-xs text-center text-slate-600 font-medium">
                               Xác nhận huỷ đơn{" "}
@@ -570,9 +622,7 @@ export default function OrdersPage() {
                             </div>
                           </div>
                         ) : (
-                          // ── Normal action buttons ──
                           <div className="flex gap-2">
-                            {/* Sửa đơn chỉ hiện với SHOPOWNER */}
                             {isShopOwner && (
                               <button
                                 type="button"
@@ -615,75 +665,8 @@ export default function OrdersPage() {
                       Chọn đơn để xem chi tiết
                     </p>
                   </div>
-
-                  <div className="text-right ml-3">
-                    <p className="text-xs text-slate-400">
-                      x{item.quantity}
-                    </p>
-                    <p className="text-sm font-semibold text-slate-700">
-                      {formatPrice(item.unit_price * item.quantity)}
-                    </p>
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
-        </div>
-      </div>
-
-      {/* FOOTER */}
-      <div className="px-5 py-4 bg-slate-50 border-t flex flex-col gap-4">
-
-        <div className="flex justify-between items-center">
-          <span className="font-semibold text-slate-600">
-            Tổng cộng
-          </span>
-
-          <span className="text-lg font-bold text-rose-600">
-            {formatPrice(selectedOrder.total)}
-          </span>
-        </div>
-
-        {selectedOrder.status === "PENDING" && (
-          <div className="flex gap-3">
-
-            <button
-              onClick={openEdit}
-              className="flex items-center gap-2 px-4 py-3 rounded-lg border bg-white text-slate-600 hover:bg-slate-100"
-            >
-              <Pencil size={16} />
-              Sửa
-            </button>
-
-            <button
-              onClick={handleComplete}
-              className="flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-lg bg-emerald-500 hover:bg-emerald-600 text-white font-semibold"
-            >
-              <CheckCircle size={16} />
-              Hoàn thành
-            </button>
-
-            <button
-              onClick={(handleCancel)}
-              className="flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-lg bg-rose-500 hover:bg-rose-600 text-white font-semibold"
-            >
-              <XCircle size={16} />
-              Huỷ
-            </button>
-
-          </div>
-        )}
-      </div>
-    </div>
-  ) : (
-    <div className="h-full bg-white/50 rounded-2xl border border-dashed flex flex-col items-center justify-center text-slate-300 gap-3">
-      <Receipt size={40} strokeWidth={1.2} />
-      <p className="text-sm font-medium">
-        Chọn đơn để xem chi tiết
-      </p>
-    </div>
-  )}
-</div>
+                )}
+              </div>
             </div>
           )}
         </div>
