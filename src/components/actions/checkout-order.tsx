@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { loadPosCart, clearPosCart } from "@/lib/posCart";
 import type { PosCartPayload } from "@/lib/posCart";
-import { createOrder } from "@/apis/orderApi";
+import { createOrder, completeOrder } from "@/apis/orderApi";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -70,11 +70,9 @@ export default function CheckoutOrderPage() {
     setErrorMsg("");
 
     try {
-      // 1️⃣ Tạo đơn hàng (PENDING)
+      // 1️⃣ Tạo đơn hàng (PENDING) — userId BE lấy từ JWT
       const orderResponse = await createOrder({
-        userId: cart.userId,
-        customerId: 1, // HARDCODE: khách vãng lai, dùng tạm ID=1 cho đến khi có customer management
-        shiftId: cart.shiftId, // HARDCODE: lấy từ POS header, lưu posCart
+        shiftId: cart.shiftId,
         totalAmount: cart.total,
         note: `[${cart.orderType}]`,
         order_items: cart.items.map((item) => ({
@@ -84,8 +82,8 @@ export default function CheckoutOrderPage() {
         })),
       });
 
-      // TODO: Gọi POST /payments khi BE có endpoint:
-      // await createPayment({ orderId: orderResponse.id, amount: cart.total, paymentMethod: selectedMethod, ... });
+      // 2️⃣ Đánh dấu hoàn thành (BE có PUT /orders/:id/complete)
+      await completeOrder(orderResponse.id);
 
       clearPosCart();
       setOrderRef(String(orderResponse.id));

@@ -23,7 +23,13 @@ export function useMenuStore() {
       setProducts(data);
       setError(null);
     } catch (err: any) {
-      setError(err?.message ?? "Không thể tải danh sách sản phẩm");
+      const status = err?.status ?? err?.originalError?.response?.status;
+      const msg = err?.message ?? err?.originalError?.message;
+      if (status === 500 || msg?.toLowerCase?.().includes("internal server error")) {
+        setError("Máy chủ trả lỗi 500. Chạy backend (port 2999) rồi bấm Thử lại.");
+      } else {
+        setError(msg ?? "Không thể tải danh sách sản phẩm.");
+      }
     } finally {
       setLoading(false);
     }

@@ -37,12 +37,12 @@ export const getCategories = async (): Promise<Category[]> => {
   return arr.map(mapBackendCategoryToFrontend);
 };
 
+/** BE AdminCreateCategoryDto nhận category_name (snake_case). */
 export const createCategory = async (
   payload: CreateCategoryPayload,
 ): Promise<Category> => {
   const res = await apiClient.post("/categories", {
-    categoryName: payload.categoryName,
-    isActive: payload.isActive ?? true,
+    category_name: payload.categoryName,
   });
   const raw = unwrap<Record<string, unknown>>(res.data);
   return mapBackendCategoryToFrontend(raw ?? {});

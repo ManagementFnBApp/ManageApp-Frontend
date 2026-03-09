@@ -1,6 +1,6 @@
 import { apiClient } from '../configs/axios';
 
-// ===== TYPES =====
+// ===== TYPES (khớp backend OrderDto, OrderResponseDto) =====
 
 export interface OrderItemPayload {
   product_id: number;
@@ -8,32 +8,24 @@ export interface OrderItemPayload {
   unit_price: number;
 }
 
+/** Body tạo đơn - backend OrderDto: shiftUserId (id bảng shift_users), customerId?, note?, totalAmount, order_items */
 export interface CreateOrderPayload {
-  /** ID của nhân viên (lấy từ JWT sub). */
-  userId: number;
-  /**
-   * ID của khách hàng.
-   * HARDCODE: tạm thời luôn là 1 (khách vãng lai) cho đến khi có customer management.
-   * TODO: lấy từ customer management khi BE có.
-   */
-  customerId: number;
-  /**
-   * ID của ca làm việc (cột NOT NULL trong DB).
-   * HARDCODE: nhân viên tự nhập qua badge "Ca #X" trong header POS.
-   * TODO: lấy từ GET /shifts/active khi BE có endpoint.
-   */
-  shiftId: number;
+  customerId?: number;
+  /** ID ca làm (shift_users.id) - bắt buộc */
+  shiftUserId: number;
   note?: string;
   totalAmount: number;
   order_items: OrderItemPayload[];
 }
 
+/** Body cập nhật đơn - backend OrderDto yêu cầu shiftUserId + order_items (bắt buộc) */
 export interface UpdateOrderPayload {
   customerId?: number;
-  userId?: number;
-  shiftId?: number;
+  shiftUserId?: number;
   note?: string;
   totalAmount?: number;
+  /** Bắt buộc gửi kèm: backend sẽ xóa items cũ và tạo lại */
+  order_items?: OrderItemPayload[];
 }
 
 export interface OrderItemResponse {
@@ -41,22 +33,20 @@ export interface OrderItemResponse {
   product_id: number;
   quantity: number;
   unit_price: number;
-  product: {
-    product_name: string;
-  };
+  product: { product_name: string };
 }
 
+/** Khớp backend OrderResponseDto - có shiftUserId */
 export interface OrderResponse {
   id: number;
-  customerId: number;
-  userId: number;
-  shiftId: number;
+  customerId?: number | null;
+  shiftUserId: number;
   note: string | null;
   totalAmount: number;
-  orderStatus: 'PENDING' | 'COMPLETED' | 'CANCELLED';
-  createdAt: string | null;
-  completedAt: string | null;
-  cancelledAt: string | null;
+  orderStatus: string;
+  createdAt?: string | null;
+  completedAt?: string | null;
+  cancelledAt?: string | null;
   order_items?: OrderItemResponse[];
 }
 
@@ -71,34 +61,66 @@ function unwrap<T>(raw: unknown): T {
 
 // ===== ORDER APIs =====
 
-/** Tạo đơn hàng mới. */
-export const createOrder = async (payload: CreateOrderPayload): Promise<OrderResponse> => {
-  const res = await apiClient.post('/orders', payload);
+export const createOrder = async (
+  payload: CreateOrderPayload,
+): Promise<OrderResponse> => {
+  const res = await apiClient.post('/orders', {
+    customerId: payload.customerId,
+    shiftUserId: payload.shiftUserId,
+    note: payload.note,
+    totalAmount: payload.totalAmount,
+    order_items: payload.order_items,
+  });
   return unwrap<OrderResponse>(res.data);
 };
 
-/** Cập nhật thông tin đơn hàng. */
-export const updateOrder = async (id: number, payload: UpdateOrderPayload): Promise<OrderResponse> => {
+export const updateOrder = async (
+  id: number,
+  payload: UpdateOrderPayload,
+): Promise<OrderResponse> => {
   const res = await apiClient.put(`/orders/${id}`, payload);
   return unwrap<OrderResponse>(res.data);
 };
 
-/** Đánh dấu đơn hàng hoàn thành (COMPLETED). */
-export const completeOrder = async (id: number): Promise<OrderResponse> => {
+export const completeOrder = async (
+  id: number,
+): Promise<OrderResponse> => {
   const res = await apiClient.put(`/orders/${id}/complete`);
   return unwrap<OrderResponse>(res.data);
 };
 
-/** Huỷ đơn hàng (CANCELLED). */
-export const cancelOrder = async (id: number): Promise<OrderResponse> => {
+export const cancelOrder = async (
+  id: number,
+): Promise<OrderResponse> => {
   const res = await apiClient.put(`/orders/${id}/cancel`);
   return unwrap<OrderResponse>(res.data);
 };
 
-/** Lấy danh sách đơn hàng. Truyền status để lọc: 'PENDING' | 'COMPLETED' | 'CANCELLED'. Không truyền để lấy tất cả. */
-export const getOrders = async (status?: string): Promise<OrderResponse[]> => {
-  // BE dùng @Post('list') → endpoint POST /orders/list, đọc status từ body
-  // Khi tab "Tất cả": không gửi status để BE trả về toàn bộ đơn hàng
+/** POST /orders/list - body { status?: string } - Backend lấy user từ JWT */
+export const getOrders = async (
+  status?: string,
+): Promise<OrderResponse[]> => {
   const res = await apiClient.post('/orders/list', status ? { status } : {});
-  return unwrap<OrderResponse[]>(res.data);
+  const list = unwrap<OrderResponse[]>(res.data);
+  return Array.isArray(list) ? list : [];
+};
+
+// ===== SHIFT APIs =====
+
+export interface ShiftUserInfo {
+  id: number;
+  shift_id: number;
+  shift_name: string;
+  user_id: number;
+  username: string;
+  shop_id: number;
+  notes: string | null;
+  created_at: string;
+}
+
+/** GET /shifts/users - Lấy tất cả shift assignments của shop (SHOPOWNER) */
+export const getShiftUsers = async (): Promise<ShiftUserInfo[]> => {
+  const res = await apiClient.get('/shifts/users');
+  const list = unwrap<ShiftUserInfo[]>(res.data);
+  return Array.isArray(list) ? list : [];
 };

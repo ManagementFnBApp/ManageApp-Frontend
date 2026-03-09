@@ -135,12 +135,15 @@ function CheckoutContent() {
               </span>
             </div>
           </div>
-          <button
-            onClick={() => router.push('/manager')}
-            className="w-full py-4 bg-blue-600 text-white rounded-xl font-semibold text-lg hover:bg-blue-700 transition-all hover:-translate-y-0.5 hover:shadow-lg"
+          <p className="text-amber-600 text-sm mb-4">
+            Vui lòng đăng nhập lại để nhận quyền Shop Owner và vào trang quản lý.
+          </p>
+          <Link
+            href={`/auth?mode=login&returnUrl=${encodeURIComponent('/manager')}`}
+            className="block w-full py-4 bg-blue-600 text-white rounded-xl font-semibold text-lg hover:bg-blue-700 transition-all hover:-translate-y-0.5 hover:shadow-lg text-center"
           >
-            Vào hệ thống quản lý →
-          </button>
+            Đăng nhập lại → Vào quản lý
+          </Link>
         </div>
       </div>
     )

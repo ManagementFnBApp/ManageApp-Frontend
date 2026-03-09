@@ -1,6 +1,20 @@
 import axios, { AxiosInstance, AxiosError } from 'axios';
 import { BASE_URL } from '../global-configs';
 
+/** Decode JWT payload client-side (no verification) to check expiry */
+function isJwtExpired(token: string): boolean {
+  try {
+    const parts = token.split('.');
+    if (parts.length !== 3) return true;
+    const payload = JSON.parse(atob(parts[1]));
+    if (!payload.exp) return false;
+    // exp is seconds since epoch; add 5s buffer
+    return Date.now() / 1000 > payload.exp - 5;
+  } catch {
+    return true;
+  }
+}
+
 export interface ErrorHandler {
   onUnauthorized?: () => void;
   onForbidden?: () => void;
@@ -39,11 +53,17 @@ export class ApiClientService {
   }
 
   private setupInterceptors(): void {
-    // Request interceptor - Add token to headers
+    // Request interceptor - Add token to headers (or logout if expired)
     this.instance.interceptors.request.use((config) => {
       if (typeof window !== 'undefined') {
         const token = localStorage.getItem('accessToken');
         if (token) {
+          if (isJwtExpired(token)) {
+            // Backend auth.guard throws TokenExpiredError → 500 (not 401).
+            // Intercept here before the request so we can logout cleanly.
+            this.errorHandler?.onUnauthorized?.();
+            return Promise.reject({ status: 401, message: 'Token hết hạn. Vui lòng đăng nhập lại.' });
+          }
           config.headers.Authorization = `Bearer ${token}`;
         }
       }
@@ -61,12 +81,15 @@ export class ApiClientService {
     const status = error.response?.status;
     const isLoginRequest = error.config?.url?.includes('/auth/login') && error.config?.method === 'post';
     const isManagedUserRequest = error.config?.url?.includes('/users/managed') && error.config?.method === 'post';
+    const isGetUsersRequest = error.config?.url?.includes('/users') && (error.config?.method === 'get' || error.config?.method === 'GET');
+    // STAFF không có quyền GET /shifts/users → POS page tự xử lý fallback, không redirect /403
+    const isGetShiftUsersRequest = error.config?.url?.includes('/shifts/users') && (error.config?.method === 'get' || error.config?.method === 'GET');
 
     // Không auto logout trên /users/managed vì có validation ở backend
     if (status === 401 && !isLoginRequest && !isManagedUserRequest) {
       this.errorHandler?.onUnauthorized?.();
-    } else if (status === 403 && !isLoginRequest) {
-      // 403 từ login → không redirect, để trang login hiển thị message (vd: tài khoản bị chặn)
+    } else if (status === 403 && !isLoginRequest && !isGetUsersRequest && !isGetShiftUsersRequest) {
+      // 403 từ login → không redirect. GET /users (trang quản lý nhân viên) → không redirect, để adminApi.getUsersForStaffPage() xử lý 403 và trả { users: [], isAdmin: false } cho SHOPOWNER.
       this.errorHandler?.onForbidden?.();
     }
 

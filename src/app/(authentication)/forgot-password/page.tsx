@@ -54,6 +54,7 @@ export default function ForgotPasswordPage() {
                   src="/image/image1.jpg"
                   alt="Forgot Password Background"
                   fill
+                  sizes="(max-width: 1023px) 0px, 50vw"
                   style={{ objectFit: "cover" }}
                   priority
                 />

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   ArrowLeft,
   Receipt,
@@ -19,6 +19,7 @@ import {
   updateOrder,
   type OrderResponse,
 } from "@/apis/orderApi";
+import { getStoredRoleNormalized } from "@/apis/auth";
 
 // Map BE response to the shape used by this page
 type OrderItem = {
@@ -34,8 +35,7 @@ type Order = {
   createdAt: string | null;
   total: number;
   status: "PENDING" | "COMPLETED" | "CANCELLED";
-  userId: number;
-  shiftId: number;
+  shiftUserId: number;
   note: string | null;
   items: OrderItem[];
 };
@@ -46,8 +46,7 @@ function toOrder(r: OrderResponse): Order {
     createdAt: r.createdAt ?? null,
     total: r.totalAmount,
     status: r.orderStatus as Order["status"],
-    userId: r.userId,
-    shiftId: r.shiftId,
+    shiftUserId: r.shiftUserId,
     note: r.note,
     items: (r.order_items ?? []) as OrderItem[],
   };
@@ -118,6 +117,10 @@ const formatTime = (iso: string) => {
 
 export default function OrdersPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const newOrderId = searchParams?.get("new") ?? null;
+
+  const [isShopOwner, setIsShopOwner] = useState(false);
   const [orders, setOrders] = useState<Order[]>([]);
   const [activeStatus, setActiveStatus] = useState<StatusFilter>("ALL");
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
@@ -126,13 +129,18 @@ export default function OrdersPage() {
   const [error, setError] = useState<string | null>(null);
   const [actionLoading, setActionLoading] = useState<string | null>(null); // 'complete' | 'cancel' | 'update'
   const [confirmCancel, setConfirmCancel] = useState(false);
+  const [successBanner, setSuccessBanner] = useState<string | null>(null);
+
+  useEffect(() => {
+    setIsShopOwner(getStoredRoleNormalized() === 'SHOPOWNER');
+  }, []);
 
   // ── Edit modal state ──
   const [editOpen, setEditOpen] = useState(false);
   const [editForm, setEditForm] = useState({
     note: "",
     totalAmount: 0,
-    shiftId: 0,
+    shiftUserId: 0,
   });
   const [editError, setEditError] = useState<string | null>(null);
 
@@ -140,9 +148,22 @@ export default function OrdersPage() {
     setLoading(true);
     setError(null);
     getOrders()
-      .then((data) => setOrders(data.map(toOrder)))
+      .then((data) => {
+        const mapped = data.map(toOrder);
+        setOrders(mapped);
+        // Auto-select and highlight the newly created order from POS
+        if (newOrderId) {
+          const found = mapped.find((o) => o.orderId === newOrderId);
+          if (found) {
+            setSelectedOrder(found);
+            setActiveStatus("PENDING");
+            setSuccessBanner(`Đơn hàng #${newOrderId} đã được tạo thành công với trạng thái Đang chờ.`);
+          }
+        }
+      })
       .catch((err) => setError(err?.message ?? "Không thể tải đơn hàng"))
       .finally(() => setLoading(false));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Bỏ chọn khi đổi tab
@@ -217,7 +238,7 @@ export default function OrdersPage() {
     setEditForm({
       note: selectedOrder.note ?? "",
       totalAmount: selectedOrder.total,
-      shiftId: selectedOrder.shiftId,
+      shiftUserId: selectedOrder.shiftUserId,
     });
     setEditError(null);
     setEditOpen(true);
@@ -231,10 +252,16 @@ export default function OrdersPage() {
     }
     setActionLoading("update");
     try {
+      // Backend OrderDto yêu cầu order_items (bắt buộc) - gửi lại items hiện tại để tránh xóa
       await updateOrder(Number(selectedOrder.orderId), {
         note: editForm.note || undefined,
         totalAmount: editForm.totalAmount,
-        shiftId: editForm.shiftId > 0 ? editForm.shiftId : undefined,
+        shiftUserId: editForm.shiftUserId > 0 ? editForm.shiftUserId : undefined,
+        order_items: selectedOrder.items.map((item) => ({
+          product_id: item.product_id,
+          quantity: item.quantity,
+          unit_price: item.unit_price,
+        })),
       });
       setOrders((prev) =>
         prev.map((o) =>
@@ -243,7 +270,7 @@ export default function OrdersPage() {
                 ...o,
                 note: editForm.note || null,
                 total: editForm.totalAmount,
-                shiftId: editForm.shiftId,
+                shiftUserId: editForm.shiftUserId,
               }
             : o,
         ),
@@ -254,7 +281,7 @@ export default function OrdersPage() {
               ...o,
               note: editForm.note || null,
               total: editForm.totalAmount,
-              shiftId: editForm.shiftId,
+              shiftUserId: editForm.shiftUserId,
             }
           : o,
       );
@@ -308,6 +335,23 @@ export default function OrdersPage() {
             </span>
           </div>
         </header>
+
+        {/* ── Success banner after POS checkout ── */}
+        {successBanner && (
+          <div className="flex-shrink-0 flex items-center justify-between gap-3 px-6 py-2.5 bg-emerald-50 border-b border-emerald-200">
+            <div className="flex items-center gap-2 text-emerald-700 text-sm font-medium">
+              <CheckCircle size={16} />
+              {successBanner}
+            </div>
+            <button
+              type="button"
+              onClick={() => setSuccessBanner(null)}
+              className="text-emerald-400 hover:text-emerald-600 transition"
+            >
+              <X size={16} />
+            </button>
+          </div>
+        )}
 
         {/* ── Status Tabs ── */}
         <div className="flex-shrink-0 flex items-center gap-2 px-6 pt-3 pb-0 bg-slate-50 border-b border-slate-200">
@@ -479,7 +523,7 @@ export default function OrdersPage() {
                       <div className="flex items-center gap-1.5 text-slate-500">
                         <User size={13} />
                         <span className="text-xs">
-                          User #{selectedOrder.userId}
+                          Ca #{selectedOrder.shiftUserId}
                         </span>
                       </div>
                     </div>
@@ -586,15 +630,18 @@ export default function OrdersPage() {
                         ) : (
                           // ── Normal action buttons ──
                           <div className="flex gap-2">
-                            <button
-                              type="button"
-                              onClick={openEdit}
-                              disabled={!!actionLoading}
-                              className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-slate-200 bg-white text-slate-600 text-xs font-medium hover:bg-slate-100 transition disabled:opacity-50"
-                            >
-                              <Pencil size={13} />
-                              Sửa đơn
-                            </button>
+                            {/* Sửa đơn chỉ hiện với SHOPOWNER */}
+                            {isShopOwner && (
+                              <button
+                                type="button"
+                                onClick={openEdit}
+                                disabled={!!actionLoading}
+                                className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-slate-200 bg-white text-slate-600 text-xs font-medium hover:bg-slate-100 transition disabled:opacity-50"
+                              >
+                                <Pencil size={13} />
+                                Sửa đơn
+                              </button>
+                            )}
                             <button
                               type="button"
                               onClick={handleComplete}
@@ -667,16 +714,16 @@ export default function OrdersPage() {
               </div>
               <div>
                 <label className="block text-xs font-medium text-slate-500 mb-1">
-                  Ca làm việc (Shift ID)
+                  Ca làm việc (Shift User ID)
                 </label>
                 <input
                   type="number"
                   min={1}
-                  value={editForm.shiftId}
+                  value={editForm.shiftUserId}
                   onChange={(e) =>
                     setEditForm((f) => ({
                       ...f,
-                      shiftId: Number(e.target.value),
+                      shiftUserId: Number(e.target.value),
                     }))
                   }
                   className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-300 outline-none"
