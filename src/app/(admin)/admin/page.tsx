@@ -12,11 +12,11 @@ import { getCategories, createCategory } from '@/apis/categoryApi'
 type Tab = 'users' | 'tenants' | 'admins' | 'subscriptions' | 'categories'
 
 const TABS: { id: Tab; label: string; icon: string; color: string }[] = [
-  { id: 'users',         label: 'Quản lý User',         icon: '👤', color: 'blue' },
-  { id: 'tenants',       label: 'Quản lý Shopowner',    icon: '🏢', color: 'indigo' },
-  { id: 'admins',        label: 'Quản lý Admin',        icon: '👑', color: 'purple' },
+  { id: 'users', label: 'Quản lý User', icon: '👤', color: 'blue' },
+  { id: 'tenants', label: 'Quản lý Shopowner', icon: '🏢', color: 'indigo' },
+  { id: 'admins', label: 'Quản lý Admin', icon: '👑', color: 'purple' },
   { id: 'subscriptions', label: 'Quản lý Subscription', icon: '📦', color: 'green' },
-  { id: 'categories',    label: 'Quản lý danh mục',     icon: '📂', color: 'teal' },
+  { id: 'categories', label: 'Quản lý danh mục', icon: '📂', color: 'teal' },
 ]
 
 function Badge({ text, color }: { text: string; color: string }) {
@@ -238,7 +238,10 @@ function TenantsTab() {
       setLoading(false);
     }
   }, []);
-
+  const isStoredRoleShopOwner = () => {
+    const role = localStorage.getItem("role");
+    return (role ?? "").toUpperCase() === "SHOPOWNER";
+  };
   useEffect(() => {
     load();
   }, [load]);
@@ -346,8 +349,7 @@ function TenantsTab() {
             </button>
           ) : (
             <p className="text-sm text-gray-500 italic">
-              Chỉ tài khoản SHOPOWNER mới có thể tạo nhân viên / Shopowner cho
-              shop của mình.
+              Chỉ có SHOPOWNER mới có chức năng tạo tài khoản cho nhân viên của Cửa hàng.
             </p>
           )}
           <input
@@ -666,7 +668,7 @@ function AdminsTab() {
     } catch (e: unknown) {
       setFormError(
         getErrorMessage(e) ||
-          "Tạo admin thất bại. Kiểm tra kết nối hoặc thông tin đã nhập.",
+        "Tạo admin thất bại. Kiểm tra kết nối hoặc thông tin đã nhập.",
       );
     } finally {
       setSubmitting(false);
@@ -895,11 +897,10 @@ function AdminsTab() {
                         onClick={() => handleToggle(a.adminId, a.isActive)}
                         className={`text-xs px-3 py-1 rounded-lg transition 
                   disabled:opacity-50 disabled:cursor-not-allowed 
-                  ${
-                    a.isActive
-                      ? "bg-yellow-50 text-yellow-700 hover:bg-yellow-100"
-                      : "bg-green-50 text-green-700 hover:bg-green-100"
-                  }`}
+                  ${a.isActive
+                            ? "bg-yellow-50 text-yellow-700 hover:bg-yellow-100"
+                            : "bg-green-50 text-green-700 hover:bg-green-100"
+                          }`}
                       >
                         {actioningId === a.adminId
                           ? "Đang xử lý..."
@@ -1241,17 +1242,17 @@ function CategoriesTab() {
           </thead>
           <tbody className="divide-y divide-gray-100">
             {loading ? <LoadingRow cols={3} /> :
-             error   ? <ErrorRow cols={3} message={error} onRetry={load} /> :
-             categories.length === 0 ? <EmptyRow cols={3} message="Chưa có danh mục nào. Hãy tạo danh mục để Shopowner sử dụng." /> :
-             categories.map(c => (
-              <tr key={c.id} className="hover:bg-gray-50 transition">
-                <td className="px-4 py-3 text-gray-400 font-mono">#{c.id}</td>
-                <td className="px-4 py-3 font-medium text-gray-900">{c.categoryName}</td>
-                <td className="px-4 py-3">
-                  <Badge text={c.isActive ? 'Hoạt động' : 'Tắt'} color={c.isActive ? 'green' : 'gray'} />
-                </td>
-              </tr>
-            ))}
+              error ? <ErrorRow cols={3} message={error} onRetry={load} /> :
+                categories.length === 0 ? <EmptyRow cols={3} message="Chưa có danh mục nào. Hãy tạo danh mục để Shopowner sử dụng." /> :
+                  categories.map(c => (
+                    <tr key={c.id} className="hover:bg-gray-50 transition">
+                      <td className="px-4 py-3 text-gray-400 font-mono">#{c.id}</td>
+                      <td className="px-4 py-3 font-medium text-gray-900">{c.categoryName}</td>
+                      <td className="px-4 py-3">
+                        <Badge text={c.isActive ? 'Hoạt động' : 'Tắt'} color={c.isActive ? 'green' : 'gray'} />
+                      </td>
+                    </tr>
+                  ))}
           </tbody>
         </table>
       </div>
@@ -1287,23 +1288,30 @@ export default function AdminDashboard() {
       const adminCount = Array.isArray(usersList) ? usersList.filter((u: AppUser) => isAdminRole(u.role)).length : 0
       const categoriesList = results[2].status === 'fulfilled' ? results[2].value : []
       setStats({
-        users:         userCount,
-        tenants:       shopownerStaffCount,
-        admins:        adminCount,
+        users: userCount,
+        tenants: shopownerStaffCount,
+        admins: adminCount,
         subscriptions: results[1].status === 'fulfilled' ? results[1].value.length : 0,
-        categories:    Array.isArray(categoriesList) ? categoriesList.length : 0,
+        categories: Array.isArray(categoriesList) ? categoriesList.length : 0,
       })
     })
   }, [router])
 
   if (!mounted) return null;
 
+  const handleLogout = () => {
+    localStorage.removeItem("accessToken");
+    localStorage.removeItem("role");
+    localStorage.removeItem("username");
+    router.push("/auth?mode=login");
+  };
+
   const STAT_CARDS = [
-    { label: 'Tổng User',         value: stats.users,         icon: '👤', bg: 'bg-blue-50 border-blue-200',   text: 'text-blue-600',   tab: 'users' as Tab },
-    { label: 'Shopowner & Staff', value: stats.tenants,       icon: '🏢', bg: 'bg-indigo-50 border-indigo-200', text: 'text-indigo-600', tab: 'tenants' as Tab },
-    { label: 'Tổng Admin',        value: stats.admins,        icon: '👑', bg: 'bg-purple-50 border-purple-200', text: 'text-purple-600', tab: 'admins' as Tab },
-    { label: 'Gói Subscription', value: stats.subscriptions, icon: '📦', bg: 'bg-green-50 border-green-200',  text: 'text-green-600',  tab: 'subscriptions' as Tab },
-    { label: 'Danh mục',         value: stats.categories,    icon: '📂', bg: 'bg-teal-50 border-teal-200',    text: 'text-teal-600',   tab: 'categories' as Tab },
+    { label: 'Tổng User', value: stats.users, icon: '👤', bg: 'bg-blue-50 border-blue-200', text: 'text-blue-600', tab: 'users' as Tab },
+    { label: 'Shopowner & Staff', value: stats.tenants, icon: '🏢', bg: 'bg-indigo-50 border-indigo-200', text: 'text-indigo-600', tab: 'tenants' as Tab },
+    { label: 'Tổng Admin', value: stats.admins, icon: '👑', bg: 'bg-purple-50 border-purple-200', text: 'text-purple-600', tab: 'admins' as Tab },
+    { label: 'Gói Subscription', value: stats.subscriptions, icon: '📦', bg: 'bg-green-50 border-green-200', text: 'text-green-600', tab: 'subscriptions' as Tab },
+    { label: 'Danh mục', value: stats.categories, icon: '📂', bg: 'bg-teal-50 border-teal-200', text: 'text-teal-600', tab: 'categories' as Tab },
   ]
 
   return (
@@ -1336,11 +1344,10 @@ export default function AdminDashboard() {
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
-              className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium transition-all text-left ${
-                activeTab === tab.id
-                  ? "bg-blue-50 text-blue-600 border border-blue-100"
-                  : "text-gray-600 hover:bg-gray-100"
-              }`}
+              className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium transition-all text-left ${activeTab === tab.id
+                ? "bg-blue-50 text-blue-600 border border-blue-100"
+                : "text-gray-600 hover:bg-gray-100"
+                }`}
             >
               <span>{tab.icon}</span>
               {tab.label}
@@ -1411,11 +1418,10 @@ export default function AdminDashboard() {
                 <button
                   key={tab.id}
                   onClick={() => setActiveTab(tab.id)}
-                  className={`flex items-center gap-2 px-5 py-2.5 rounded-t-xl text-sm font-semibold transition-all whitespace-nowrap ${
-                    activeTab === tab.id
-                      ? "bg-blue-50 text-blue-600 border-b-2 border-blue-500"
-                      : "text-gray-500 hover:text-gray-800 hover:bg-gray-50"
-                  }`}
+                  className={`flex items-center gap-2 px-5 py-2.5 rounded-t-xl text-sm font-semibold transition-all whitespace-nowrap ${activeTab === tab.id
+                    ? "bg-blue-50 text-blue-600 border-b-2 border-blue-500"
+                    : "text-gray-500 hover:text-gray-800 hover:bg-gray-50"
+                    }`}
                 >
                   <span>{tab.icon}</span>
                   {tab.label}
@@ -1425,11 +1431,11 @@ export default function AdminDashboard() {
 
             {/* Tab content */}
             <div className="p-6">
-              {activeTab === 'users'         && <UsersTab />}
-              {activeTab === 'tenants'       && <TenantsTab />}
-              {activeTab === 'admins'        && <AdminsTab />}
+              {activeTab === 'users' && <UsersTab />}
+              {activeTab === 'tenants' && <TenantsTab />}
+              {activeTab === 'admins' && <AdminsTab />}
               {activeTab === 'subscriptions' && <SubscriptionsTab />}
-              {activeTab === 'categories'    && <CategoriesTab />}
+              {activeTab === 'categories' && <CategoriesTab />}
             </div>
           </div>
         </main>

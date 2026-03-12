@@ -49,6 +49,21 @@ function unwrap<T>(raw: unknown): T {
 
 function toNumber(value: unknown): number {
   if (value == null) return 0;
+
+  // Handle Prisma Decimal format: { s: 1, e: 4, d: [29000] }
+  if (typeof value === 'object' && value !== null) {
+    const obj = value as any;
+    if (Array.isArray(obj.d) && obj.d.length > 0) {
+      const sign = obj.s === -1 ? -1 : 1;
+      return sign * (obj.d[0] || 0);
+    }
+  }
+
+  // Handle Prisma Decimal with $numberDecimal
+  if (typeof value === 'object' && value !== null && '$numberDecimal' in (value as object)) {
+    return Number((value as any).$numberDecimal);
+  }
+
   const obj = value as { toNumber?: () => number };
   if (typeof obj?.toNumber === 'function') return obj.toNumber();
   const n = Number(value);

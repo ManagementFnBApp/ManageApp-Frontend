@@ -23,6 +23,8 @@ import {
   ChevronDown,
   User,
   Users,
+  Clock,
+  UserCheck,
 } from 'lucide-react';
 import { handleLogout, getStoredRoleNormalized } from '@/apis/auth';
 import {
@@ -41,10 +43,12 @@ const MAIN_ITEMS_STAFF = [
   { href: '/manager/orders', label: 'Đơn hàng', icon: ClipboardList },
 ];
 
-// Shopowner thấy thêm: Quản lý Menu, Quản lý nhân viên
+// Shopowner thấy thêm: Quản lý Menu, Quản lý nhân viên, Quản lý ca, Quản lý khách hàng
 const MAIN_ITEMS_SHOPOWNER_EXTRA = [
   { href: '/manager/menu', label: 'Quản lý Menu', icon: UtensilsCrossed },
   { href: '/manager/staff', label: 'Quản lý nhân viên', icon: Users },
+  { href: '/manager/shifts', label: 'Quản lý ca', icon: Clock },
+  { href: '/manager/customers', label: 'Quản lý khách hàng', icon: UserCheck },
 ];
 
 const REPORT_ITEMS = [

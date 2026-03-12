@@ -42,11 +42,26 @@ export const createShiftTemplate = async (shift_name: string): Promise<ShiftTemp
 
 // ===== SHIFT ASSIGNMENT APIs =====
 
-/** GET /shifts/users — SHOPOWNER xem toàn bộ lịch ca của shop */
+/**
+ * GET /shifts/users — SHOPOWNER xem toàn bộ lịch ca của shop.
+ * Chỉ SHOPOWNER có quyền gọi endpoint này.
+ */
 export const getShiftAssignments = async (): Promise<ShiftAssignment[]> => {
   const res = await apiClient.get('/shifts/users');
   const list = unwrap<ShiftAssignment[]>(res.data);
   return Array.isArray(list) ? list : [];
+};
+
+/**
+ * Lấy ca làm việc của chính SHOPOWNER đang đăng nhập.
+ * Gọi GET /shifts/users (lấy tất cả ca của shop) rồi lọc theo userId.
+ * Chỉ dùng khi role === 'SHOPOWNER'.
+ */
+export const getMyShiftAssignmentsAsOwner = async (
+  userId: number,
+): Promise<ShiftAssignment[]> => {
+  const allShifts = await getShiftAssignments();
+  return allShifts.filter((s) => s.user_id === userId);
 };
 
 /** POST /shifts/assign — SHOPOWNER gán ca cho nhân viên */

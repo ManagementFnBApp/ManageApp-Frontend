@@ -3,7 +3,10 @@ import { apiClient } from '../configs/axios';
 // ===== TYPES (khớp backend OrderDto, OrderResponseDto) =====
 
 export interface OrderItemPayload {
-  product_id: number;
+  /** ID sản phẩm toàn hệ thống (dùng khi order từ catalog global) */
+  product_id?: number;
+  /** ID sản phẩm của shop (dùng khi order từ /shop-products — ưu tiên) */
+  shop_product_id?: number;
   quantity: number;
   unit_price: number;
 }

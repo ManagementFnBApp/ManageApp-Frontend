@@ -6,12 +6,15 @@ import { ArrowLeft, Trash2, X } from 'lucide-react';
 import { getActivePosProducts } from '@/data/useMenuStore';
 import { saveOrder, saveDraft, getDraft, clearDraft } from '@/data/useOrderStore';
 import { getCategories } from '@/apis/categoryApi';
-import { createOrder, getShiftUsers, getOrders } from '@/apis/orderApi';
+import { createOrder, getOrders } from '@/apis/orderApi';
+import { getMyShiftAssignmentsAsOwner } from '@/apis/shiftApi';
+import { getStoredRoleNormalized } from '@/apis/auth';
 
 type OrderType = "eat-in" | "takeaway";
 
 interface CartItem {
   productId: number;
+  shopProductId: number;
   name: string;
   price: number;
   quantity: number;
@@ -19,6 +22,7 @@ interface CartItem {
 
 interface PosProduct {
   id: number;
+  shopProductId: number;
   name: string;
   price: number;
   categoryId: number;
@@ -99,42 +103,44 @@ export default function PosPage() {
     }
   }, []);
 
-  // Fetch active shift user ID for the current logged-in user
-  // SHOPOWNER: dùng GET /shifts/users (lọc theo userId)
-  // STAFF: GET /shifts/users trả 403 → fallback dùng shiftUserId từ đơn hàng gần nhất
+  // Fetch active shift user ID
+  // - SHOPOWNER: gọi GET /shifts/users rồi lọc theo userId của mình
+  // - STAFF: không có quyền GET /shifts/users → dùng fallback qua đơn hàng gần nhất
   useEffect(() => {
     (async () => {
-      const currentUserId = typeof window !== 'undefined'
-        ? Number(localStorage.getItem('userId'))
-        : 0;
-      if (!currentUserId) return;
+      const role = getStoredRoleNormalized();
+      const userId = Number(
+        typeof window !== 'undefined' ? localStorage.getItem('userId') : '0',
+      );
 
-      try {
-        const shiftUsers = await getShiftUsers();
-        const mine = shiftUsers
-          .filter((su) => su.user_id === currentUserId)
-          .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
-
-        if (mine.length > 0) {
-          setActiveShiftUserId(mine[0].id);
-          setShiftLoadError(null);
-        } else {
-          setShiftLoadError('Bạn chưa được phân ca. Vui lòng vào Quản lý → Ca làm việc để được gán ca.');
-        }
-      } catch {
-        // STAFF không có quyền gọi GET /shifts/users (403)
-        // Fallback: lấy shiftUserId từ đơn hàng gần nhất của user này
+      if (role === 'SHOPOWNER' && userId > 0) {
         try {
-          const orders = await getOrders();
-          if (orders.length > 0) {
-            setActiveShiftUserId(orders[0].shiftUserId);
+          const myShifts = await getMyShiftAssignmentsAsOwner(userId);
+          if (myShifts.length > 0) {
+            setActiveShiftUserId(myShifts[0].id);
             setShiftLoadError(null);
-          } else {
-            setShiftLoadError('Bạn chưa được phân ca. Vui lòng liên hệ quản lý để được gán ca làm việc.');
+            return;
           }
         } catch {
-          setShiftLoadError('Không thể tải thông tin ca làm việc.');
+          // SHOPOWNER shift load thất bại → tiếp tục fallback
         }
+      }
+
+      // STAFF hoặc SHOPOWNER chưa có ca → lấy từ đơn hàng gần nhất
+      try {
+        const orders = await getOrders();
+        if (orders.length > 0) {
+          setActiveShiftUserId(orders[0].shiftUserId);
+          setShiftLoadError(null);
+        } else {
+          setShiftLoadError(
+            'Bạn chưa được phân ca. Vui lòng liên hệ quản lý để được gán ca làm việc.',
+          );
+        }
+      } catch {
+        setShiftLoadError(
+          'Bạn chưa được phân ca. Vui lòng liên hệ quản lý để được gán ca làm việc.',
+        );
       }
     })();
   }, []);
@@ -146,6 +152,7 @@ export default function PosPage() {
       if (draft && draft.items && draft.items.length > 0) {
         const cartItems = draft.items.map(item => ({
           productId: item.productId,
+          shopProductId: item.shopProductId ?? item.productId,
           name: item.name,
           price: item.price,
           quantity: item.quantity,
@@ -189,6 +196,7 @@ export default function PosPage() {
         ...prev,
         {
           productId: product.id,
+          shopProductId: product.shopProductId,
           name: product.name,
           price: product.price,
           quantity: 1,
@@ -268,9 +276,9 @@ export default function PosPage() {
     setCheckoutError(null);
 
     try {
-      // Build order items payload
+      // Build order items payload — dùng shop_product_id (sản phẩm của shop)
       const orderItems = cart.map((item) => ({
-        product_id: item.productId,
+        shop_product_id: item.shopProductId,
         quantity: item.quantity,
         unit_price: item.price,
       }));

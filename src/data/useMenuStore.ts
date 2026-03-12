@@ -1,14 +1,12 @@
 import { useState, useEffect, useCallback } from "react";
 import {
-  getProducts,
-  createProduct,
-  updateProduct,
-  softDeleteProduct,
-  hardDeleteProduct,
+  getShopProducts,
+  createShopProduct,
+  updateShopProduct,
+  deleteShopProduct,
   type Product,
-  type CreateProductPayload,
-  type UpdateProductPayload,
-} from "@/apis/productApi";
+} from "@/apis/shopProductApi";
+import type { CreateProductPayload, UpdateProductPayload } from "@/apis/productApi";
 
 // ── Hook dùng cho Menu Management page (kết nối thẳng BE) ───────────────────
 export function useMenuStore() {
@@ -19,7 +17,7 @@ export function useMenuStore() {
   const fetchProducts = useCallback(async () => {
     setLoading(true);
     try {
-      const data = await getProducts();
+      const data = await getShopProducts();
       setProducts(data);
       setError(null);
     } catch (err: any) {
@@ -41,7 +39,7 @@ export function useMenuStore() {
 
   const addProduct = useCallback(
     async (payload: CreateProductPayload) => {
-      const created = await createProduct(payload);
+      const created = await createShopProduct(payload);
       setProducts((prev) => [created, ...prev]);
       return created;
     },
@@ -50,7 +48,7 @@ export function useMenuStore() {
 
   const editProduct = useCallback(
     async (id: number, changes: UpdateProductPayload) => {
-      const updated = await updateProduct(id, changes);
+      const updated = await updateShopProduct(id, changes);
       setProducts((prev) =>
         prev.map((p) => (p.productId === id ? updated : p)),
       );
@@ -60,7 +58,7 @@ export function useMenuStore() {
   );
 
   const deactivateProduct = useCallback(async (id: number) => {
-    await softDeleteProduct(id);
+    await deleteShopProduct(id);
     setProducts((prev) =>
       prev.map((p) =>
         p.productId === id ? { ...p, isActive: false } : p,
@@ -69,32 +67,27 @@ export function useMenuStore() {
   }, []);
 
   const removeProduct = useCallback(async (id: number) => {
-    await hardDeleteProduct(id);
+    await deleteShopProduct(id);
     setProducts((prev) => prev.filter((p) => p.productId !== id));
   }, []);
 
   const toggleActive = useCallback(async (id: number) => {
-    // Use functional update to avoid stale closure
     setProducts((prevProducts) => {
       const current = prevProducts.find((p) => p.productId === id);
       if (!current) return prevProducts;
 
-      // Optimistically update UI
       const optimisticProducts = prevProducts.map((p) =>
         p.productId === id ? { ...p, isActive: !p.isActive } : p
       );
 
-      // Make API call in background
-      updateProduct(id, { isActive: !current.isActive })
+      updateShopProduct(id, { isActive: !current.isActive })
         .then((updated) => {
-          // Update with real server response
           setProducts((prev) =>
             prev.map((p) => (p.productId === id ? updated : p))
           );
         })
         .catch((err) => {
           console.error('Toggle active failed:', err);
-          // Revert optimistic update on error
           setProducts((prev) =>
             prev.map((p) => (p.productId === id ? current : p))
           );
@@ -121,13 +114,18 @@ export function useMenuStore() {
   };
 }
 
-// ── Helper dùng cho POS page ────────────────────────────────────────────────
+/**
+ * Helper dùng cho POS page.
+ * Lấy sản phẩm active của shop (SHOPOWNER + STAFF đều có quyền).
+ * shopProductId dùng để gửi shop_product_id khi tạo đơn hàng.
+ */
 export async function getActivePosProducts() {
-  const products = await getProducts(true);
+  const products = await getShopProducts(true);
   return products
     .filter((p) => p.isActive)
     .map((p) => ({
       id: p.productId,
+      shopProductId: p.productId,
       name: p.productName,
       price: p.listPrice,
       categoryId: p.categoryId,

@@ -86,12 +86,15 @@ export class ApiClientService {
     const isGetShiftUsersRequest = error.config?.url?.includes('/shifts/users') && (error.config?.method === 'get' || error.config?.method === 'GET');
     // STAFF gọi POST /orders/list → để orders page tự xử lý lỗi, không redirect /403
     const isOrdersListRequest = error.config?.url?.includes('/orders/list') && (error.config?.method === 'post' || error.config?.method === 'POST');
+    // GET /shop-products → SHOPOWNER + STAFF đều có quyền; tự xử lý lỗi tại component
+    const isShopProductsRequest = error.config?.url?.includes('/shop-products');
 
     // Không auto logout trên /users/managed vì có validation ở backend
     if (status === 401 && !isLoginRequest && !isManagedUserRequest) {
       this.errorHandler?.onUnauthorized?.();
-    } else if (status === 403 && !isLoginRequest && !isGetUsersRequest && !isGetShiftUsersRequest && !isOrdersListRequest) {
-      // 403 từ login → không redirect. GET /users → để adminApi xử lý. GET /shifts/users → POS fallback. POST /orders/list → orders page xử lý.
+    } else if (status === 403 && !isLoginRequest && !isGetUsersRequest && !isGetShiftUsersRequest && !isOrdersListRequest && !isShopProductsRequest) {
+      // 403 từ login → không redirect. GET /users → để adminApi xử lý. GET /shifts/users → POS fallback.
+      // POST /orders/list → orders page xử lý. /shop-products → component tự xử lý.
       this.errorHandler?.onForbidden?.();
     }
 
