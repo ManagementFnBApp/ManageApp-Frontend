@@ -79,7 +79,12 @@ function mapProduct(raw: Record<string, unknown>): Product {
     sku: raw.sku != null ? String(raw.sku) : String(raw.image ?? ''),
     barcode: raw.barcode != null ? String(raw.barcode) : null,
     description: raw.description != null ? String(raw.description) : null,
-    measureUnit: raw.measureUnit != null ? String(raw.measureUnit) : null,
+    measureUnit:
+      raw.measureUnit != null
+        ? String(raw.measureUnit)
+        : raw.measure_unit != null
+        ? String(raw.measure_unit)
+        : null,
     importPrice: toNumber(raw.importPrice ?? raw.import_price),
     listPrice: toNumber(raw.listPrice ?? raw.list_price),
     isActive: Boolean(raw.isActive ?? raw.is_active ?? true),
