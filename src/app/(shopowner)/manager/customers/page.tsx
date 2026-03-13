@@ -20,9 +20,10 @@ const formatDate = (d: string) =>
 export default function ManagerCustomersPage() {
   const router = useRouter();
 
-  // Chỉ SHOPOWNER mới được truy cập trang này
+  // Chỉ cho phép SHOPOWNER và STAFF truy cập trang này
   useEffect(() => {
-    if (getStoredRoleNormalized() !== 'SHOPOWNER') {
+    const currentRole = getStoredRoleNormalized();
+    if (currentRole !== 'SHOPOWNER' && currentRole !== 'STAFF') {
       router.replace('/manager');
     }
   }, [router]);
