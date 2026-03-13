@@ -1,6 +1,11 @@
 import { apiClient } from '../configs/axios';
 import type { Product, CreateProductPayload, UpdateProductPayload } from './productApi';
 
+const debugLoggingEnabled =
+  typeof process !== 'undefined' &&
+  process.env != null &&
+  process.env.NODE_ENV !== 'production';
+
 /**
  * API cho /shop-products — SHOPOWNER tạo/quản lý sản phẩm riêng của shop.
  * Backend lấy shop_id từ JWT tự động, không cần gửi trong body.
@@ -132,15 +137,21 @@ export const updateShopProduct = async (
   if (payload.importPrice !== undefined) body.importPrice = Number(payload.importPrice);
   if (payload.isActive !== undefined) body.isActive = Boolean(payload.isActive);
 
-  console.log('🔧 updateShopProduct PATCH /shop-products/' + id);
-  console.log('📦 Request Body:', JSON.stringify(body, null, 2));
+  if (debugLoggingEnabled) {
+    console.log('🔧 updateShopProduct PATCH /shop-products/' + id);
+    console.log('📦 Request Body:', JSON.stringify(body, null, 2));
+  }
 
   try {
     const res = await apiClient.patch(`/shop-products/${id}`, body);
-    console.log('✅ updateShopProduct response:', res.data);
+    if (debugLoggingEnabled) {
+      console.log('✅ updateShopProduct response:', res.data);
+    }
     return mapShopProduct(unwrap<Record<string, unknown>>(res.data) ?? {});
   } catch (err: any) {
-    console.error('❌ updateShopProduct error:', err.response?.data || err.message);
+    if (debugLoggingEnabled) {
+      console.error('❌ updateShopProduct error:', err.response?.data || err.message);
+    }
     throw err;
   }
 };
