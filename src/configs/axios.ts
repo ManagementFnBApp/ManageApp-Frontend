@@ -62,7 +62,17 @@ export class ApiClientService {
             // Backend auth.guard throws TokenExpiredError → 500 (not 401).
             // Intercept here before the request so we can logout cleanly.
             this.errorHandler?.onUnauthorized?.();
-            return Promise.reject({ status: 401, message: 'Token hết hạn. Vui lòng đăng nhập lại.' });
+            const axiosError = new AxiosError(
+              'Token hết hạn. Vui lòng đăng nhập lại.',
+              '401'
+            );
+            const customError: CustomError = {
+              status: 401,
+              message: 'Token hết hạn. Vui lòng đăng nhập lại.',
+              originalError: axiosError,
+            };
+            this.errorHandler?.onError?.(customError);
+            return Promise.reject(customError);
           }
           config.headers.Authorization = `Bearer ${token}`;
         }
