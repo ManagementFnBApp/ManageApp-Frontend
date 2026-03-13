@@ -1,18 +1,19 @@
 import { apiClient } from '../configs/axios';
 
-// ===== TYPES =====
+// ===== TYPES (khớp backend ProductResponseDto, CreateProductDto) =====
 
 export interface Product {
   productId: number;
   categoryId: number;
   productName: string;
-  sku: string;
+  /** URL hoặc path ảnh sản phẩm - backend bắt buộc */
+  image: string;
+  /** Alias hiển thị (map từ image) */
+  sku?: string;
   barcode?: string | null;
   description?: string | null;
   measureUnit?: string | null;
-  /** Giá nhập (import price) - khớp với BE field importPrice */
   importPrice: number;
-  /** Giá bán (list price) - khớp với BE field listPrice */
   listPrice: number;
   isActive: boolean;
   createdAt: string;
@@ -22,13 +23,12 @@ export interface Product {
 export interface CreateProductPayload {
   categoryId: number;
   productName: string;
-  sku: string;
+  /** Backend bắt buộc - URL ảnh hoặc placeholder */
+  image: string;
   barcode?: string;
   description?: string;
   measureUnit?: string;
-  /** Giá nhập kho */
   importPrice: number;
-  /** Giá bán lẻ */
   listPrice: number;
   isActive?: boolean;
 }
@@ -37,88 +37,142 @@ export type UpdateProductPayload = Partial<CreateProductPayload>;
 
 // ===== HELPERS =====
 
+/** Backend có thể trả trực tiếp hoặc bọc trong { data } */
 function unwrap<T>(raw: unknown): T {
-  if (raw && typeof raw === 'object' && 'data' in (raw as object)) {
-    return (raw as { data: T }).data;
+  if (raw == null) return raw as T;
+  if (typeof raw === 'object' && 'data' in (raw as object)) {
+    const inner = (raw as { data: unknown }).data;
+    return inner as T;
   }
   return raw as T;
 }
 
-function toNumber(value: unknown, fallback = 0): number {
+function toNumber(value: unknown): number {
+  if (value == null) return 0;
+
+  // Handle Prisma Decimal format: { s: 1, e: 4, d: [29000] }
+  if (typeof value === 'object' && value !== null) {
+    const obj = value as any;
+    if (Array.isArray(obj.d) && obj.d.length > 0) {
+      const sign = obj.s === -1 ? -1 : 1;
+      return sign * (obj.d[0] || 0);
+    }
+  }
+
+  // Handle Prisma Decimal with $numberDecimal
+  if (typeof value === 'object' && value !== null && '$numberDecimal' in (value as object)) {
+    return Number((value as any).$numberDecimal);
+  }
+
+  const obj = value as { toNumber?: () => number };
+  if (typeof obj?.toNumber === 'function') return obj.toNumber();
   const n = Number(value);
-  return Number.isFinite(n) ? n : fallback;
+  return Number.isNaN(n) ? 0 : n;
 }
 
-function mapBackendProductToFrontend(raw: Record<string, unknown>): Product {
+function mapProduct(raw: Record<string, unknown>): Product {
   return {
-    productId: toNumber(raw.productId ?? raw.product_id ?? raw.id),
-    categoryId: toNumber(raw.categoryId ?? raw.category_id),
+    productId: Number(raw.productId ?? raw.id),
+    categoryId: Number(raw.categoryId ?? raw.category_id),
     productName: String(raw.productName ?? raw.product_name ?? ''),
-    sku: String(raw.sku ?? ''),
+    image: String(raw.image ?? ''),
+    sku: raw.sku != null ? String(raw.sku) : String(raw.image ?? ''),
     barcode: raw.barcode != null ? String(raw.barcode) : null,
     description: raw.description != null ? String(raw.description) : null,
-    measureUnit: raw.measureUnit != null
-      ? String(raw.measureUnit)
-      : raw.measure_unit != null
+    measureUnit:
+      raw.measureUnit != null
+        ? String(raw.measureUnit)
+        : raw.measure_unit != null
         ? String(raw.measure_unit)
         : null,
     importPrice: toNumber(raw.importPrice ?? raw.import_price),
     listPrice: toNumber(raw.listPrice ?? raw.list_price),
-    isActive: Boolean(raw.isActive ?? raw.is_active),
+    isActive: Boolean(raw.isActive ?? raw.is_active ?? true),
     createdAt: String(raw.createdAt ?? raw.created_at ?? ''),
     updatedAt: String(raw.updatedAt ?? raw.updated_at ?? ''),
   };
 }
 
-function normalizeProductList(raw: unknown): Product[] {
-  const unwrapped = unwrap<unknown>(raw);
-  const list = Array.isArray(unwrapped) ? unwrapped : [];
-  return list
-    .filter((item): item is Record<string, unknown> => typeof item === 'object' && item !== null)
-    .map(mapBackendProductToFrontend);
-}
+// ===== PRODUCT APIs ─────────────────────────────────────────────────────────────
+// Backend: GET /products?isActive= | POST /products | GET|PATCH|DELETE /products/:id | DELETE /products/:id/hard
 
-function normalizeSingleProduct(raw: unknown): Product {
-  const unwrapped = unwrap<unknown>(raw);
-  const obj = (typeof unwrapped === 'object' && unwrapped !== null)
-    ? (unwrapped as Record<string, unknown>)
-    : {};
-  return mapBackendProductToFrontend(obj);
-}
-
-// ===== PRODUCT APIs =====
-
+/** GET /products - Không query khi lấy tất cả; gửi isActive=true|false khi lọc (khớp ParseBoolPipe) */
 export const getProducts = async (isActive?: boolean): Promise<Product[]> => {
-  const params = isActive !== undefined ? { isActive } : {};
+  const params: Record<string, string> = {};
+  if (isActive === true) params.isActive = 'true';
+  else if (isActive === false) params.isActive = 'false';
   const res = await apiClient.get('/products', { params });
-  return normalizeProductList(res.data);
+  const list = unwrap<unknown>(res.data);
+  const arr = Array.isArray(list) ? list : [];
+  return arr.map((item) => mapProduct((item as Record<string, unknown>) ?? {}));
 };
 
-export const getActiveProducts = async (): Promise<Product[]> => {
-  return getProducts(true);
-};
-
+/** GET /products/:id */
 export const getProductById = async (id: number): Promise<Product> => {
   const res = await apiClient.get(`/products/${id}`);
-  return normalizeSingleProduct(res.data);
+  const raw = unwrap<Record<string, unknown>>(res.data);
+  return mapProduct(raw ?? {});
 };
 
-export const createProduct = async (payload: CreateProductPayload): Promise<Product> => {
-  const res = await apiClient.post('/products', payload);
-  return normalizeSingleProduct(res.data);
+/** POST /products - Body khớp backend CreateProductDto (camelCase, số là number) */
+export const createProduct = async (
+  payload: CreateProductPayload,
+): Promise<Product> => {
+  const categoryId = Number(payload.categoryId);
+  if (!Number.isInteger(categoryId) || categoryId <= 0) {
+    throw new Error('Danh mục sản phẩm không hợp lệ. Vui lòng chọn danh mục cho cửa hàng trước.');
+  }
+  const image =
+    (payload.image && String(payload.image).trim()) ||
+    `/placeholder-${Date.now()}-${Math.random().toString(36).slice(2)}.png`;
+  const listPrice = Number(payload.listPrice);
+  const importPrice = Number(payload.importPrice);
+  const body: Record<string, unknown> = {
+    categoryId,
+    productName: String(payload.productName).trim(),
+    image,
+    listPrice: Number.isNaN(listPrice) ? 0 : listPrice,
+    importPrice: Number.isNaN(importPrice) ? 0 : importPrice,
+    isActive: payload.isActive ?? true,
+  };
+  if (payload.barcode != null && String(payload.barcode).trim())
+    body.barcode = String(payload.barcode).trim();
+  if (payload.description != null && String(payload.description).trim())
+    body.description = String(payload.description).trim();
+  if (payload.measureUnit != null && String(payload.measureUnit).trim())
+    body.measureUnit = String(payload.measureUnit).trim();
+  const res = await apiClient.post('/products', body);
+  const raw = unwrap<Record<string, unknown>>(res.data);
+  return mapProduct(raw ?? {});
 };
 
-export const updateProduct = async (id: number, payload: UpdateProductPayload): Promise<Product> => {
-  const res = await apiClient.patch(`/products/${id}`, payload);
-  return normalizeSingleProduct(res.data);
+/** PATCH /products/:id - Chỉ gửi field có trong payload, số là number (khớp UpdateProductDto) */
+export const updateProduct = async (
+  id: number,
+  payload: UpdateProductPayload,
+): Promise<Product> => {
+  const body: Record<string, unknown> = {};
+  if (payload.categoryId !== undefined) body.categoryId = Number(payload.categoryId);
+  if (payload.productName !== undefined) body.productName = String(payload.productName).trim();
+  if (payload.image !== undefined) body.image = String(payload.image).trim();
+  if (payload.barcode !== undefined) body.barcode = String(payload.barcode).trim() || undefined;
+  if (payload.description !== undefined) body.description = String(payload.description).trim() || undefined;
+  if (payload.measureUnit !== undefined) body.measureUnit = String(payload.measureUnit).trim() || undefined;
+  if (payload.listPrice !== undefined) body.listPrice = Number(payload.listPrice);
+  if (payload.importPrice !== undefined) body.importPrice = Number(payload.importPrice);
+  if (payload.isActive !== undefined) body.isActive = Boolean(payload.isActive);
+
+  const res = await apiClient.patch(`/products/${id}`, body);
+  const raw = unwrap<Record<string, unknown>>(res.data);
+  return mapProduct(raw ?? {});
 };
 
-export const softDeleteProduct = async (id: number): Promise<{ message: string }> => {
-  const res = await apiClient.delete(`/products/${id}`);
-  return res.data;
+/** DELETE /products/:id - Soft delete (ngừng bán) */
+export const softDeleteProduct = async (id: number): Promise<void> => {
+  await apiClient.delete(`/products/${id}`);
 };
 
-export const hardDeleteProduct = async (id: number): Promise<{ message: string }> => {
-  const res = await apiClient.delete(`/products/${id}/hard`);
-  return res.data;
+/** DELETE /products/:id/hard - Xóa hẳn */
+export const hardDeleteProduct = async (id: number): Promise<void> => {
+  await apiClient.delete(`/products/${id}/hard`);
 };

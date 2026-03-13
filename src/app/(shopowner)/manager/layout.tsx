@@ -1,8 +1,8 @@
-"use client";
+'use client';
 
-import { useState, useEffect } from "react";
-import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { useState, useEffect } from 'react';
+import Link from 'next/link';
+import { usePathname, useRouter } from 'next/navigation';
 import {
   ClipboardList,
   UtensilsCrossed,
@@ -23,79 +23,77 @@ import {
   ChevronDown,
   User,
   Users,
-} from "lucide-react";
-import { handleLogout, getStoredRoleNormalized } from "@/apis/auth";
+  Clock,
+  UserCheck,
+} from 'lucide-react';
+import { handleLogout, getStoredRoleNormalized } from '@/apis/auth';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+} from '@/components/ui/dropdown-menu';
+
+
 
 // Staff chỉ thấy: Tạo đơn hàng, Đơn hàng, Phiếu nhập hàng, Phiếu hủy hàng
 const MAIN_ITEMS_STAFF = [
-  { href: "/manager", label: "Tạo đơn hàng", icon: ShoppingCart },
-  { href: "/manager/orders", label: "Đơn hàng", icon: ClipboardList },
+  { href: '/manager', label: 'Tạo đơn hàng', icon: ShoppingCart },
+  { href: '/manager/orders', label: 'Đơn hàng', icon: ClipboardList },
 ];
 
-// Shopowner thấy thêm: Quản lý Menu, Quản lý nhân viên
+// Shopowner thấy thêm: Quản lý Menu, Quản lý nhân viên, Quản lý ca, Quản lý khách hàng
 const MAIN_ITEMS_SHOPOWNER_EXTRA = [
-  { href: "/manager/menu", label: "Quản lý Menu", icon: UtensilsCrossed },
-  { href: "/manager/staff", label: "Quản lý nhân viên", icon: Users },
+  { href: '/manager/menu', label: 'Quản lý Menu', icon: UtensilsCrossed },
+  { href: '/manager/staff', label: 'Quản lý nhân viên', icon: Users },
+  { href: '/manager/shifts', label: 'Quản lý ca', icon: Clock },
+  { href: '/manager/customers', label: 'Quản lý khách hàng', icon: UserCheck },
 ];
 
 const REPORT_ITEMS = [
-  { href: "/manager/reports/all", label: "Báo cáo cả ngày", icon: BarChart2 },
-  { href: "/manager/reports/morning", label: "Báo cáo buổi sáng", icon: Sun },
-  {
-    href: "/manager/reports/afternoon",
-    label: "Báo cáo buổi chiều",
-    icon: Sunset,
-  },
+  { id: 'report-all', label: 'Báo cáo cả ngày', icon: BarChart2 },
+  { id: 'report-morning', label: 'Báo cáo buổi sáng', icon: Sun },
+  { id: 'report-afternoon', label: 'Báo cáo buổi chiều', icon: Sunset },
 ];
 
 const OTHER_ITEMS = [
-  { href: "/manager/import", label: "Phiếu nhập hàng", icon: PackageOpen },
-  { href: "/manager/cancel", label: "Phiếu hủy hàng", icon: XCircle },
+  { id: 'import', label: 'Phiếu nhập hàng', icon: PackageOpen },
+  { id: 'cancel', label: 'Phiếu hủy hàng', icon: XCircle },
 ];
 
 function getRoleDisplayLabel(role: string): string {
-  const r = (role || "").toUpperCase();
-  if (r === "SHOPOWNER") return "Chủ shop";
-  if (r === "STAFF") return "Nhân viên";
-  return r || "Quản lý";
+  const r = (role || '').toUpperCase();
+  if (r === 'SHOPOWNER') return 'Chủ shop';
+  if (r === 'STAFF') return 'Nhân viên';
+  return r || 'Quản lý';
 }
 
-export default function ManagerLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+export default function ManagerLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
   const [collapsed, setCollapsed] = useState(false);
-  const [managerName, setManagerName] = useState("Manager");
-  const [role, setRole] = useState("");
+  const [managerName, setManagerName] = useState('Manager');
+  const [role, setRole] = useState('');
 
   useEffect(() => {
-    const name = localStorage.getItem("username");
+    const name = localStorage.getItem('username');
     if (name) setManagerName(name);
     setRole(getStoredRoleNormalized());
   }, []);
 
-  const isStaff = role === "STAFF";
-  const mainItems = isStaff
-    ? MAIN_ITEMS_STAFF
-    : [...MAIN_ITEMS_STAFF, ...MAIN_ITEMS_SHOPOWNER_EXTRA];
+  const isStaff = role === 'STAFF';
+  const mainItems = isStaff ? MAIN_ITEMS_STAFF : [...MAIN_ITEMS_STAFF, ...MAIN_ITEMS_SHOPOWNER_EXTRA];
 
-  const handleReportClick = () => {
-    // Chưa có màn report riêng.
-    alert("Tính năng báo cáo đang được phát triển.");
+  const handleReportOrOther = (id: string) => {
+    if (id === 'report-all' || id === 'report-morning' || id === 'report-afternoon' || id === 'import' || id === 'cancel') {
+      // Tính năng đang phát triển - giữ hành vi cũ
+      alert('Tính năng đang được phát triển.');
+    }
   };
 
   const isActive = (href: string) => {
-    if (href === "/manager") return pathname === "/manager";
+    if (href === '/manager') return pathname === '/manager';
     return pathname.startsWith(href);
   };
 
@@ -104,7 +102,7 @@ export default function ManagerLayout({
       {/* ── Sidebar ── */}
       <aside
         className={`flex flex-col bg-white border-r border-slate-200 transition-all duration-300 shrink-0 ${
-          collapsed ? "w-[72px]" : "w-60"
+          collapsed ? 'w-[72px]' : 'w-60'
         }`}
         style={{ borderTopRightRadius: 12, borderBottomRightRadius: 12 }}
       >
@@ -113,30 +111,18 @@ export default function ManagerLayout({
           {!collapsed && (
             <Link href="/manager" className="flex items-center gap-2.5 min-w-0">
               <div className="w-9 h-9 rounded-lg bg-blue-600 flex items-center justify-center shrink-0">
-                <svg
-                  className="w-5 h-5 text-white"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M9 3H5a2 2 0 00-2 2v4m6-6h10a2 2 0 012 2v4M9 3v18m0 0h10a2 2 0 002-2V9M9 21H5a2 2 0 01-2-2V9m0 0h18"
-                  />
+                <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 3H5a2 2 0 00-2 2v4m6-6h10a2 2 0 012 2v4M9 3v18m0 0h10a2 2 0 002-2V9M9 21H5a2 2 0 01-2-2V9m0 0h18" />
                 </svg>
               </div>
-              <span className="font-bold text-slate-800 truncate">
-                ManageApp
-              </span>
+              <span className="font-bold text-slate-800 truncate">ManageApp</span>
             </Link>
           )}
           <button
             type="button"
             onClick={() => setCollapsed((c) => !c)}
             className="p-2 rounded-lg hover:bg-slate-100 text-slate-500 hover:text-slate-700 transition shrink-0"
-            title={collapsed ? "Mở rộng" : "Thu gọn"}
+            title={collapsed ? 'Mở rộng' : 'Thu gọn'}
           >
             {collapsed ? <ChevronRight size={18} /> : <ChevronLeft size={18} />}
           </button>
@@ -145,9 +131,7 @@ export default function ManagerLayout({
         {/* MAIN */}
         <nav className="flex-1 overflow-y-auto py-3">
           {!collapsed && (
-            <p className="px-4 py-1.5 text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
-              Chính
-            </p>
+            <p className="px-4 py-1.5 text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Chính</p>
           )}
           <ul className="space-y-0.5 px-2">
             {mainItems.map(({ href, label, icon: Icon }) => (
@@ -156,8 +140,8 @@ export default function ManagerLayout({
                   href={href}
                   className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition ${
                     isActive(href)
-                      ? "bg-slate-100 text-slate-900"
-                      : "text-slate-600 hover:bg-slate-50 hover:text-slate-800"
+                      ? 'bg-slate-100 text-slate-900'
+                      : 'text-slate-600 hover:bg-slate-50 hover:text-slate-800'
                   }`}
                 >
                   <Icon size={20} className="shrink-0 text-slate-500" />
@@ -171,15 +155,13 @@ export default function ManagerLayout({
             <>
               {!isStaff && (
                 <>
-                  <p className="px-4 py-1.5 mt-4 text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
-                    Báo cáo
-                  </p>
+                  <p className="px-4 py-1.5 mt-4 text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Báo cáo</p>
                   <ul className="space-y-0.5 px-2">
-                    {REPORT_ITEMS.map(({ href, label, icon: Icon }) => (
-                      <li key={href}>
+                    {REPORT_ITEMS.map(({ id, label, icon: Icon }) => (
+                      <li key={id}>
                         <button
                           type="button"
-                          onClick={handleReportClick}
+                          onClick={() => handleReportOrOther(id)}
                           className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-800 transition w-full text-left"
                         >
                           <Icon size={20} className="shrink-0 text-slate-500" />
@@ -190,38 +172,35 @@ export default function ManagerLayout({
                   </ul>
                 </>
               )}
-              <p className="px-4 py-1.5 mt-2 text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
-                Khác
-              </p>
+              <p className="px-4 py-1.5 mt-2 text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Khác</p>
               <ul className="space-y-0.5 px-2">
-                {OTHER_ITEMS.map(({ href, label, icon: Icon }) => (
-                  <li key={href}>
-                    <Link
-                      href={href}
-                      className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition ${
-                        isActive(href)
-                          ? "bg-slate-100 text-slate-900"
-                          : "text-slate-600 hover:bg-slate-50 hover:text-slate-800"
-                      }`}
+                {OTHER_ITEMS.map(({ id, label, icon: Icon }) => (
+                  <li key={id}>
+                    <button
+                      type="button"
+                      onClick={() => handleReportOrOther(id)}
+                      className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-800 transition w-full text-left"
                     >
                       <Icon size={20} className="shrink-0 text-slate-500" />
                       <span>{label}</span>
-                    </Link>
+                    </button>
                   </li>
                 ))}
               </ul>
             </>
           )}
         </nav>
+
+        
+
+        
       </aside>
 
       {/* ── Content area ── */}
       <div className="flex-1 flex flex-col min-w-0">
         {/* Top bar */}
         <header className="flex-shrink-0 flex items-center justify-between px-6 py-3 bg-white border-b border-slate-200">
-          <h1 className="text-base font-semibold text-slate-700">
-            Hệ thống quản lý cửa hàng
-          </h1>
+          <h1 className="text-base font-semibold text-slate-700">Hệ thống quản lý cửa hàng</h1>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <button
@@ -232,12 +211,8 @@ export default function ManagerLayout({
                   {managerName.charAt(0).toUpperCase()}
                 </div>
                 <div className="text-left hidden sm:block">
-                  <p className="text-sm font-semibold text-slate-800 leading-tight">
-                    {managerName}
-                  </p>
-                  <p className="text-[11px] text-slate-400 leading-tight">
-                    {getRoleDisplayLabel(role)}
-                  </p>
+                  <p className="text-sm font-semibold text-slate-800 leading-tight">{managerName}</p>
+                  <p className="text-[11px] text-slate-400 leading-tight">{getRoleDisplayLabel(role)}</p>
                 </div>
                 <ChevronDown size={14} className="text-slate-400" />
               </button>
@@ -250,19 +225,13 @@ export default function ManagerLayout({
               <DropdownMenuSeparator />
               <DropdownMenuItem
                 className="gap-2 cursor-pointer"
-                onClick={() =>
-                  router.push(role === "SHOPOWNER" ? "/" : "/manager")
-                }
+                onClick={() => router.push(role === 'SHOPOWNER' ? '/' : '/manager')}
               >
                 <Home size={14} />
-                {role === "SHOPOWNER" ? "Trang chủ" : "Về trang chính"}
+                {role === 'SHOPOWNER' ? 'Trang chủ' : 'Về trang chính'}
               </DropdownMenuItem>
               <DropdownMenuSeparator />
-              <DropdownMenuItem
-                variant="destructive"
-                className="gap-2 cursor-pointer"
-                onClick={handleLogout}
-              >
+              <DropdownMenuItem variant="destructive" className="gap-2 cursor-pointer" onClick={handleLogout}>
                 <LogOut size={14} />
                 Đăng xuất
               </DropdownMenuItem>
@@ -270,7 +239,9 @@ export default function ManagerLayout({
           </DropdownMenu>
         </header>
 
-        <main className="flex-1 overflow-auto bg-slate-50">{children}</main>
+        <main className="flex-1 overflow-auto bg-slate-50">
+          {children}
+        </main>
       </div>
     </div>
   );

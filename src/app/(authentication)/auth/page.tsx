@@ -65,14 +65,17 @@ export default function AuthPage() {
       setSuccessMessage("Bạn đã đăng nhập thành công!");
 
       const role = (response.role ?? '').toString().toUpperCase();
+      const returnUrl = searchParams?.get('returnUrl');
       let destination = '/';
       if (response.role === 'ADMIN') {
         destination = '/admin';
       } else if (role === ROLE_CODE_SHOP_OWNER || role === ROLE_CODE_STAFF) {
-        // SHOPOWNER và STAFF cùng vào hệ thống quản lý cửa hàng (/manager), sidebar sẽ phân quyền
         destination = '/manager';
       }
-      // role === null hoặc khác → về trang chủ
+      // Nếu có returnUrl (vd: sau thanh toán subscription) và là đường dẫn nội bộ, dùng nó
+      if (returnUrl && typeof returnUrl === 'string' && returnUrl.startsWith('/') && !returnUrl.startsWith('//')) {
+        destination = returnUrl;
+      }
 
       setTimeout(() => router.push(destination), 1200);
     } catch (err: any) {
@@ -170,6 +173,7 @@ export default function AuthPage() {
                   src="/image/image1.jpg"
                   alt="Welcome Background"
                   fill
+                  sizes="(max-width: 1023px) 0px, 50vw"
                   style={{ objectFit: "cover" }}
                   priority
                 />

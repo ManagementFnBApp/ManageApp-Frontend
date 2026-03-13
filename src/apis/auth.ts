@@ -107,7 +107,7 @@ export const login = async (data: LoginDto): Promise<LoginResponse> => {
     localStorage.setItem('role', userRole ?? '');
   }
 
-  const payload = decodeJwt<UserJwtPayload>(authData.token);
+  const payload = decodeJwt<UserJwtPayload & { shop_id?: number }>(authData.token);
   const roleFromJwt = (payload?.role ?? '').toString().toUpperCase();
   const roleFromApi = (authData as { role?: string | null }).role;
   const role = (roleFromApi ?? roleFromJwt).toString().toUpperCase().trim() || null;
@@ -116,6 +116,9 @@ export const login = async (data: LoginDto): Promise<LoginResponse> => {
   localStorage.setItem('userId', String(authData.user_id));
   localStorage.setItem('username', data.username.trim());
   localStorage.setItem('role', role ?? '');
+  if (payload?.shop_id != null) {
+    localStorage.setItem('shopId', String(payload.shop_id));
+  }
 
   return {
     user_id: authData.user_id,
@@ -198,6 +201,7 @@ export const handleLogout = () => {
     localStorage.removeItem('userId');
     localStorage.removeItem('username');
     localStorage.removeItem('role');
+    localStorage.removeItem('shopId');
 
     window.location.href = '/';
   }

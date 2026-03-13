@@ -3,38 +3,21 @@ import Link from "next/link";
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import {
-  handleLogout,
-  ROLE_CODE_ADMIN,
-  getStoredRoleNormalized,
-  isStoredRoleShopOwner,
-} from "@/apis/auth";
-import {
-  getUsers,
-  createUser,
-  updateUser,
-  assignAdminRole,
-  createManagedUser,
-  getSubscriptions,
-  createSubscription,
-  AdminUser,
-  AppUser,
-  SubscriptionPlan,
-  CreateManagedUserDto,
-} from "@/apis/adminApi";
+  getUsers, createUser, updateUser, assignAdminRole, createManagedUser,
+  getSubscriptions, createSubscription,
+  AdminUser, AppUser, SubscriptionPlan, CreateManagedUserDto,
+} from '@/apis/adminApi'
+import { getCategories, createCategory } from '@/apis/categoryApi'
 
-type Tab = "users" | "tenants" | "admins" | "subscriptions";
+type Tab = 'users' | 'tenants' | 'admins' | 'subscriptions' | 'categories'
 
 const TABS: { id: Tab; label: string; icon: string; color: string }[] = [
-  { id: "users", label: "Quản lý User", icon: "👤", color: "blue" },
-  { id: "tenants", label: "Quản lý Shopowner", icon: "🏢", color: "indigo" },
-  { id: "admins", label: "Quản lý Admin", icon: "👑", color: "purple" },
-  {
-    id: "subscriptions",
-    label: "Quản lý Subscription",
-    icon: "📦",
-    color: "green",
-  },
-];
+  { id: 'users', label: 'Quản lý User', icon: '👤', color: 'blue' },
+  { id: 'tenants', label: 'Quản lý Shopowner', icon: '🏢', color: 'indigo' },
+  { id: 'admins', label: 'Quản lý Admin', icon: '👑', color: 'purple' },
+  { id: 'subscriptions', label: 'Quản lý Subscription', icon: '📦', color: 'green' },
+  { id: 'categories', label: 'Quản lý danh mục', icon: '📂', color: 'teal' },
+]
 
 function Badge({ text, color }: { text: string; color: string }) {
   const map: Record<string, string> = {
@@ -255,7 +238,10 @@ function TenantsTab() {
       setLoading(false);
     }
   }, []);
-
+  const isStoredRoleShopOwner = () => {
+    const role = localStorage.getItem("role");
+    return (role ?? "").toUpperCase() === "SHOPOWNER";
+  };
   useEffect(() => {
     load();
   }, [load]);
@@ -363,8 +349,7 @@ function TenantsTab() {
             </button>
           ) : (
             <p className="text-sm text-gray-500 italic">
-              Chỉ tài khoản SHOPOWNER mới có thể tạo nhân viên / Shopowner cho
-              shop của mình.
+              Chỉ có SHOPOWNER mới có chức năng tạo tài khoản cho nhân viên của Cửa hàng.
             </p>
           )}
           <input
@@ -683,7 +668,7 @@ function AdminsTab() {
     } catch (e: unknown) {
       setFormError(
         getErrorMessage(e) ||
-          "Tạo admin thất bại. Kiểm tra kết nối hoặc thông tin đã nhập.",
+        "Tạo admin thất bại. Kiểm tra kết nối hoặc thông tin đã nhập.",
       );
     } finally {
       setSubmitting(false);
@@ -912,11 +897,10 @@ function AdminsTab() {
                         onClick={() => handleToggle(a.adminId, a.isActive)}
                         className={`text-xs px-3 py-1 rounded-lg transition 
                   disabled:opacity-50 disabled:cursor-not-allowed 
-                  ${
-                    a.isActive
-                      ? "bg-yellow-50 text-yellow-700 hover:bg-yellow-100"
-                      : "bg-green-50 text-green-700 hover:bg-green-100"
-                  }`}
+                  ${a.isActive
+                            ? "bg-yellow-50 text-yellow-700 hover:bg-yellow-100"
+                            : "bg-green-50 text-green-700 hover:bg-green-100"
+                          }`}
                       >
                         {actioningId === a.adminId
                           ? "Đang xử lý..."
@@ -1157,19 +1141,134 @@ function SubscriptionsTab() {
 }
 
 // ============================================================
+// TAB: CATEGORIES (Admin tạo danh mục, Shopowner chỉ chọn danh mục cho shop)
+// ============================================================
+function CategoriesTab() {
+  const [categories, setCategories] = useState<{ id: number; categoryName: string; isActive: boolean }[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+  const [showForm, setShowForm] = useState(false)
+  const [submitting, setSubmitting] = useState(false)
+  const [formError, setFormError] = useState('')
+  const [categoryName, setCategoryName] = useState('')
+
+  const load = useCallback(async () => {
+    setLoading(true); setError('')
+    try {
+      const list = await getCategories()
+      setCategories(list.map(c => ({ id: c.id, categoryName: c.categoryName, isActive: c.isActive })))
+    } catch {
+      setError('Không thể tải danh sách danh mục')
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  useEffect(() => { load() }, [load])
+
+  const handleCreate = async (e: React.FormEvent) => {
+    e.preventDefault()
+    const name = categoryName.trim()
+    if (!name) {
+      setFormError('Tên danh mục không được trống')
+      return
+    }
+    setSubmitting(true); setFormError('')
+    try {
+      const created = await createCategory({ categoryName: name, isActive: true })
+      setCategories(prev => [...prev, { id: created.id, categoryName: created.categoryName, isActive: created.isActive ?? true }])
+      setShowForm(false)
+      setCategoryName('')
+    } catch (e: unknown) {
+      setFormError((e as { message?: string })?.message || 'Tạo danh mục thất bại')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-5">
+        <div>
+          <h2 className="text-lg font-bold text-gray-900">Danh sách danh mục</h2>
+          <p className="text-sm text-gray-500">Shopowner sẽ chọn các danh mục này cho cửa hàng của họ. {categories.length} danh mục.</p>
+        </div>
+        <button
+          onClick={() => setShowForm(s => !s)}
+          className="flex items-center gap-2 px-4 py-2 bg-teal-600 text-white rounded-xl text-sm font-semibold hover:bg-teal-700 transition"
+        >
+          <span>+</span> Thêm danh mục
+        </button>
+      </div>
+
+      {showForm && (
+        <form onSubmit={handleCreate} className="mb-6 p-5 bg-teal-50 border border-teal-100 rounded-2xl space-y-3">
+          <h3 className="font-semibold text-teal-800 mb-1">Tạo danh mục mới</h3>
+          {formError && <p className="text-red-500 text-sm">{formError}</p>}
+          <div className="flex flex-wrap items-end gap-3">
+            <div className="min-w-[200px]">
+              <label className="block text-xs font-medium text-gray-600 mb-1">Tên danh mục *</label>
+              <input
+                required
+                type="text"
+                placeholder="VD: Cà phê, Nước ép, Bánh ngọt"
+                value={categoryName}
+                onChange={e => setCategoryName(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-teal-300"
+              />
+            </div>
+            <div className="flex gap-2">
+              <button type="submit" disabled={submitting}
+                className="px-5 py-2 bg-teal-600 text-white rounded-xl text-sm font-semibold hover:bg-teal-700 transition disabled:opacity-50">
+                {submitting ? 'Đang tạo...' : 'Tạo danh mục'}
+              </button>
+              <button type="button" onClick={() => { setShowForm(false); setCategoryName(''); setFormError('') }}
+                className="px-5 py-2 border border-gray-200 text-gray-600 rounded-xl text-sm hover:bg-gray-50 transition">
+                Hủy
+              </button>
+            </div>
+          </div>
+        </form>
+      )}
+
+      <div className="overflow-x-auto rounded-xl border border-gray-200">
+        <table className="w-full text-sm">
+          <thead className="bg-gray-50 text-gray-600 uppercase text-xs">
+            <tr>
+              <th className="px-4 py-3 text-left">ID</th>
+              <th className="px-4 py-3 text-left">Tên danh mục</th>
+              <th className="px-4 py-3 text-left">Trạng thái</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-100">
+            {loading ? <LoadingRow cols={3} /> :
+              error ? <ErrorRow cols={3} message={error} onRetry={load} /> :
+                categories.length === 0 ? <EmptyRow cols={3} message="Chưa có danh mục nào. Hãy tạo danh mục để Shopowner sử dụng." /> :
+                  categories.map(c => (
+                    <tr key={c.id} className="hover:bg-gray-50 transition">
+                      <td className="px-4 py-3 text-gray-400 font-mono">#{c.id}</td>
+                      <td className="px-4 py-3 font-medium text-gray-900">{c.categoryName}</td>
+                      <td className="px-4 py-3">
+                        <Badge text={c.isActive ? 'Hoạt động' : 'Tắt'} color={c.isActive ? 'green' : 'gray'} />
+                      </td>
+                    </tr>
+                  ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  )
+}
+
+// ============================================================
 // MAIN DASHBOARD
 // ============================================================
 export default function AdminDashboard() {
-  const router = useRouter();
-  const [adminEmail, setAdminEmail] = useState("");
-  const [mounted, setMounted] = useState(false);
-  const [activeTab, setActiveTab] = useState<Tab>("users");
-  const [stats, setStats] = useState({
-    users: 0,
-    tenants: 0,
-    admins: 0,
-    subscriptions: 0,
-  });
+  const router = useRouter()
+  const [adminEmail, setAdminEmail] = useState('')
+  const [mounted, setMounted] = useState(false)
+  const [activeTab, setActiveTab] = useState<Tab>('users')
+  const [stats, setStats] = useState({ users: 0, tenants: 0, admins: 0, subscriptions: 0, categories: 0 })
 
   useEffect(() => {
     setMounted(true);
@@ -1181,65 +1280,39 @@ export default function AdminDashboard() {
     }
     setAdminEmail(localStorage.getItem("username") || "");
 
-    // Load counts: User (role USER), Shopowner+Staff (role SHOPOWNER/STAFF), Admin, Subscriptions
-    Promise.allSettled([getUsers(), getSubscriptions()]).then((results) => {
-      const usersList =
-        results[0].status === "fulfilled" ? results[0].value : [];
-      const userCount = Array.isArray(usersList)
-        ? usersList.filter((u: AppUser) => isUserAccount(u)).length
-        : 0;
-      const shopownerStaffCount = Array.isArray(usersList)
-        ? usersList.filter((u: AppUser) => isShopownerOrStaff(u.role)).length
-        : 0;
-      const adminCount = Array.isArray(usersList)
-        ? usersList.filter((u: AppUser) => isAdminRole(u.role)).length
-        : 0;
+    // Load counts: User, Shopowner+Staff, Admin, Subscriptions, Categories
+    Promise.allSettled([getUsers(), getSubscriptions(), getCategories()]).then(results => {
+      const usersList = results[0].status === 'fulfilled' ? results[0].value : []
+      const userCount = Array.isArray(usersList) ? usersList.filter((u: AppUser) => isUserAccount(u)).length : 0
+      const shopownerStaffCount = Array.isArray(usersList) ? usersList.filter((u: AppUser) => isShopownerOrStaff(u.role)).length : 0
+      const adminCount = Array.isArray(usersList) ? usersList.filter((u: AppUser) => isAdminRole(u.role)).length : 0
+      const categoriesList = results[2].status === 'fulfilled' ? results[2].value : []
       setStats({
         users: userCount,
         tenants: shopownerStaffCount,
         admins: adminCount,
-        subscriptions:
-          results[1].status === "fulfilled" ? results[1].value.length : 0,
-      });
-    });
-  }, [router]);
+        subscriptions: results[1].status === 'fulfilled' ? results[1].value.length : 0,
+        categories: Array.isArray(categoriesList) ? categoriesList.length : 0,
+      })
+    })
+  }, [router])
 
   if (!mounted) return null;
 
+  const handleLogout = () => {
+    localStorage.removeItem("accessToken");
+    localStorage.removeItem("role");
+    localStorage.removeItem("username");
+    router.push("/auth?mode=login");
+  };
+
   const STAT_CARDS = [
-    {
-      label: "Tổng User",
-      value: stats.users,
-      icon: "👤",
-      bg: "bg-blue-50 border-blue-200",
-      text: "text-blue-600",
-      tab: "users" as Tab,
-    },
-    {
-      label: "Shopowner & Staff",
-      value: stats.tenants,
-      icon: "🏢",
-      bg: "bg-indigo-50 border-indigo-200",
-      text: "text-indigo-600",
-      tab: "tenants" as Tab,
-    },
-    {
-      label: "Tổng Admin",
-      value: stats.admins,
-      icon: "👑",
-      bg: "bg-purple-50 border-purple-200",
-      text: "text-purple-600",
-      tab: "admins" as Tab,
-    },
-    {
-      label: "Gói Subscription",
-      value: stats.subscriptions,
-      icon: "📦",
-      bg: "bg-green-50 border-green-200",
-      text: "text-green-600",
-      tab: "subscriptions" as Tab,
-    },
-  ];
+    { label: 'Tổng User', value: stats.users, icon: '👤', bg: 'bg-blue-50 border-blue-200', text: 'text-blue-600', tab: 'users' as Tab },
+    { label: 'Shopowner & Staff', value: stats.tenants, icon: '🏢', bg: 'bg-indigo-50 border-indigo-200', text: 'text-indigo-600', tab: 'tenants' as Tab },
+    { label: 'Tổng Admin', value: stats.admins, icon: '👑', bg: 'bg-purple-50 border-purple-200', text: 'text-purple-600', tab: 'admins' as Tab },
+    { label: 'Gói Subscription', value: stats.subscriptions, icon: '📦', bg: 'bg-green-50 border-green-200', text: 'text-green-600', tab: 'subscriptions' as Tab },
+    { label: 'Danh mục', value: stats.categories, icon: '📂', bg: 'bg-teal-50 border-teal-200', text: 'text-teal-600', tab: 'categories' as Tab },
+  ]
 
   return (
     <div className="min-h-screen bg-gray-100 flex">
@@ -1271,11 +1344,10 @@ export default function AdminDashboard() {
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
-              className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium transition-all text-left ${
-                activeTab === tab.id
-                  ? "bg-blue-50 text-blue-600 border border-blue-100"
-                  : "text-gray-600 hover:bg-gray-100"
-              }`}
+              className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium transition-all text-left ${activeTab === tab.id
+                ? "bg-blue-50 text-blue-600 border border-blue-100"
+                : "text-gray-600 hover:bg-gray-100"
+                }`}
             >
               <span>{tab.icon}</span>
               {tab.label}
@@ -1346,11 +1418,10 @@ export default function AdminDashboard() {
                 <button
                   key={tab.id}
                   onClick={() => setActiveTab(tab.id)}
-                  className={`flex items-center gap-2 px-5 py-2.5 rounded-t-xl text-sm font-semibold transition-all whitespace-nowrap ${
-                    activeTab === tab.id
-                      ? "bg-blue-50 text-blue-600 border-b-2 border-blue-500"
-                      : "text-gray-500 hover:text-gray-800 hover:bg-gray-50"
-                  }`}
+                  className={`flex items-center gap-2 px-5 py-2.5 rounded-t-xl text-sm font-semibold transition-all whitespace-nowrap ${activeTab === tab.id
+                    ? "bg-blue-50 text-blue-600 border-b-2 border-blue-500"
+                    : "text-gray-500 hover:text-gray-800 hover:bg-gray-50"
+                    }`}
                 >
                   <span>{tab.icon}</span>
                   {tab.label}
@@ -1360,10 +1431,11 @@ export default function AdminDashboard() {
 
             {/* Tab content */}
             <div className="p-6">
-              {activeTab === "users" && <UsersTab />}
-              {activeTab === "tenants" && <TenantsTab />}
-              {activeTab === "admins" && <AdminsTab />}
-              {activeTab === "subscriptions" && <SubscriptionsTab />}
+              {activeTab === 'users' && <UsersTab />}
+              {activeTab === 'tenants' && <TenantsTab />}
+              {activeTab === 'admins' && <AdminsTab />}
+              {activeTab === 'subscriptions' && <SubscriptionsTab />}
+              {activeTab === 'categories' && <CategoriesTab />}
             </div>
           </div>
         </main>

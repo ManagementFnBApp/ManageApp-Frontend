@@ -1,7 +1,7 @@
-﻿"use client";
+"use client";
 
 import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   ArrowLeft,
   Receipt,
@@ -19,6 +19,7 @@ import {
   updateOrder,
   type OrderResponse,
 } from "@/apis/orderApi";
+import { getStoredRoleNormalized } from "@/apis/auth";
 
 // Map BE response to the shape used by this page
 type OrderItem = {
@@ -34,8 +35,7 @@ type Order = {
   createdAt: string | null;
   total: number;
   status: "PENDING" | "COMPLETED" | "CANCELLED";
-  userId: number;
-  shiftId: number;
+  shiftUserId: number;
   note: string | null;
   items: OrderItem[];
 };
@@ -46,8 +46,7 @@ function toOrder(r: OrderResponse): Order {
     createdAt: r.createdAt ?? null,
     total: r.totalAmount,
     status: r.orderStatus as Order["status"],
-    userId: r.userId,
-    shiftId: r.shiftId,
+    shiftUserId: r.shiftUserId,
     note: r.note,
     items: (r.order_items ?? []) as OrderItem[],
   };
@@ -118,6 +117,11 @@ const formatTime = (iso: string) => {
 
 export default function OrdersPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const newOrderId = searchParams?.get("new") ?? null;
+
+  const [isShopOwner, setIsShopOwner] = useState(false);
+  const [isStaff, setIsStaff] = useState(false);
   const [orders, setOrders] = useState<Order[]>([]);
   const [activeStatus, setActiveStatus] = useState<StatusFilter>("ALL");
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
@@ -126,13 +130,20 @@ export default function OrdersPage() {
   const [error, setError] = useState<string | null>(null);
   const [actionLoading, setActionLoading] = useState<string | null>(null); // 'complete' | 'cancel' | 'update'
   const [confirmCancel, setConfirmCancel] = useState(false);
+  const [successBanner, setSuccessBanner] = useState<string | null>(null);
+
+  useEffect(() => {
+    const role = getStoredRoleNormalized();
+    setIsShopOwner(role === 'SHOPOWNER');
+    setIsStaff(role === 'STAFF');
+  }, []);
 
   // ── Edit modal state ──
   const [editOpen, setEditOpen] = useState(false);
   const [editForm, setEditForm] = useState({
     note: "",
     totalAmount: 0,
-    shiftId: 0,
+    shiftUserId: 0,
   });
   const [editError, setEditError] = useState<string | null>(null);
 
@@ -140,9 +151,29 @@ export default function OrdersPage() {
     setLoading(true);
     setError(null);
     getOrders()
-      .then((data) => setOrders(data.map(toOrder)))
-      .catch((err) => setError(err?.message ?? "Không thể tải đơn hàng"))
+      .then((data) => {
+        const mapped = data.map(toOrder);
+        setOrders(mapped);
+        // Auto-select and highlight the newly created order from POS
+        if (newOrderId) {
+          const found = mapped.find((o) => o.orderId === newOrderId);
+          if (found) {
+            setSelectedOrder(found);
+            setActiveStatus("PENDING");
+            setSuccessBanner(`Đơn hàng #${newOrderId} đã được tạo thành công với trạng thái Đang chờ.`);
+          }
+        }
+      })
+      .catch((err) => {
+        const status = (err as { status?: number })?.status;
+        if (status === 403) {
+          setError('Bạn không có quyền xem đơn hàng. Vui lòng liên hệ SHOPOWNER.');
+        } else {
+          setError(err?.message ?? "Không thể tải đơn hàng");
+        }
+      })
       .finally(() => setLoading(false));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Bỏ chọn khi đổi tab
@@ -217,7 +248,7 @@ export default function OrdersPage() {
     setEditForm({
       note: selectedOrder.note ?? "",
       totalAmount: selectedOrder.total,
-      shiftId: selectedOrder.shiftId,
+      shiftUserId: selectedOrder.shiftUserId,
     });
     setEditError(null);
     setEditOpen(true);
@@ -231,14 +262,15 @@ export default function OrdersPage() {
     }
     setActionLoading("update");
     try {
+      // Backend OrderDto yêu cầu order_items (bắt buộc) - gửi lại items hiện tại để tránh xóa
       await updateOrder(Number(selectedOrder.orderId), {
         note: editForm.note || undefined,
         totalAmount: editForm.totalAmount,
-        shiftId: editForm.shiftId > 0 ? editForm.shiftId : undefined,
-        order_items: selectedOrder.items.map((i) => ({
-          product_id: i.product_id,
-          quantity: i.quantity,
-          unit_price: i.unit_price,
+        shiftUserId: editForm.shiftUserId > 0 ? editForm.shiftUserId : undefined,
+        order_items: selectedOrder.items.map((item) => ({
+          product_id: item.product_id,
+          quantity: item.quantity,
+          unit_price: item.unit_price,
         })),
       });
       setOrders((prev) =>
@@ -248,7 +280,7 @@ export default function OrdersPage() {
                 ...o,
                 note: editForm.note || null,
                 total: editForm.totalAmount,
-                shiftId: editForm.shiftId,
+                shiftUserId: editForm.shiftUserId,
               }
             : o,
         ),
@@ -259,7 +291,7 @@ export default function OrdersPage() {
               ...o,
               note: editForm.note || null,
               total: editForm.totalAmount,
-              shiftId: editForm.shiftId,
+              shiftUserId: editForm.shiftUserId,
             }
           : o,
       );
@@ -313,6 +345,23 @@ export default function OrdersPage() {
             </span>
           </div>
         </header>
+
+        {/* ── Success banner after POS checkout ── */}
+        {successBanner && (
+          <div className="flex-shrink-0 flex items-center justify-between gap-3 px-6 py-2.5 bg-emerald-50 border-b border-emerald-200">
+            <div className="flex items-center gap-2 text-emerald-700 text-sm font-medium">
+              <CheckCircle size={16} />
+              {successBanner}
+            </div>
+            <button
+              type="button"
+              onClick={() => setSuccessBanner(null)}
+              className="text-emerald-400 hover:text-emerald-600 transition"
+            >
+              <X size={16} />
+            </button>
+          </div>
+        )}
 
         {/* ── Status Tabs ── */}
         <div className="flex-shrink-0 flex items-center gap-2 px-6 pt-3 pb-0 bg-slate-50 border-b border-slate-200">
@@ -368,6 +417,12 @@ export default function OrdersPage() {
             <div className="h-full flex flex-col items-center justify-center gap-3 text-slate-300">
               <Receipt size={48} strokeWidth={1.2} />
               <p className="text-sm font-medium">Chưa có đơn hàng nào</p>
+              {isStaff && (
+                <p className="text-xs text-slate-400 text-center max-w-xs">
+                  Chỉ hiển thị đơn hàng do bạn tạo trong ca làm việc hiện tại.
+                  Tạo đơn mới tại trang <strong>Tạo đơn hàng</strong>.
+                </p>
+              )}
             </div>
           ) : (
             <div className="h-full flex gap-5">
@@ -447,155 +502,171 @@ export default function OrdersPage() {
               </div>
 
               {/* ── Cột phải: chi tiết ── */}
-              {/* ───────── RIGHT PANEL ───────── */}
-<div className="w-1/2">
-  {selectedOrder ? (
-    <div className="flex flex-col h-[calc(100vh-180px)] bg-white rounded-2xl border shadow-sm overflow-hidden">
+              <div className="w-1/2">
+                {selectedOrder ? (
+                  <div className="flex flex-col h-[calc(100vh-180px)] bg-white rounded-2xl border shadow-sm overflow-hidden">
+                    {/* Header */}
+                    <div className="px-5 py-3 border-b border-slate-100 flex items-center justify-between">
+                      <span className="font-bold text-slate-800 text-sm">
+                        Đơn #{selectedOrder.orderId}
+                      </span>
+                      <span
+                        className={`text-xs font-semibold px-2.5 py-1 rounded-full ${
+                          STATUS_BADGE[selectedOrder.status]?.className ??
+                          "bg-slate-100 text-slate-500"
+                        }`}
+                      >
+                        {STATUS_BADGE[selectedOrder.status]?.label ??
+                          selectedOrder.status}
+                      </span>
+                    </div>
 
-      {/* HEADER */}
-      <div className="px-5 py-4 flex justify-between items-center border-b">
-        <div>
-          <p className="text-xs text-slate-400">Chi tiết đơn hàng</p>
-          <p className="font-bold text-slate-800 font-mono">
-            #{selectedOrder.orderId}
-          </p>
-        </div>
+                    {/* Meta info */}
+                    <div className="px-5 py-3 bg-slate-50 flex items-center gap-6 border-b border-slate-100">
+                      <div className="flex items-center gap-1.5 text-slate-500">
+                        <Clock size={13} />
+                        <span className="text-xs">
+                          {selectedOrder.createdAt
+                            ? `${formatTime(selectedOrder.createdAt)} · ${formatDate(selectedOrder.createdAt)}`
+                            : "—"}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-1.5 text-slate-500">
+                        <User size={13} />
+                        <span className="text-xs">
+                          Ca #{selectedOrder.shiftUserId}
+                        </span>
+                      </div>
+                    </div>
 
-        <span
-          className={`text-xs font-semibold px-2.5 py-1 rounded-full ${
-            STATUS_BADGE[selectedOrder.status]?.className ??
-            "bg-slate-100 text-slate-500"
-          }`}
-        >
-          {STATUS_BADGE[selectedOrder.status]?.label ??
-            selectedOrder.status}
-        </span>
-      </div>
+                    {/* Items list */}
+                    <div className="flex-1 overflow-y-auto px-5 py-3 flex flex-col gap-2">
+                      {selectedOrder.items.length === 0 ? (
+                        <p className="text-xs text-slate-400 text-center py-6">
+                          Không có món
+                        </p>
+                      ) : (
+                        selectedOrder.items.map((item) => (
+                          <div
+                            key={item.id}
+                            className="flex items-center justify-between py-1.5 border-b border-slate-50"
+                          >
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-medium text-slate-700 truncate">
+                                {item.product?.product_name ?? `#${item.product_id}`}
+                              </p>
+                              <p className="text-xs text-slate-400">
+                                {formatPrice(item.unit_price)} × {item.quantity}
+                              </p>
+                            </div>
+                            <div className="text-right ml-3">
+                              <p className="text-xs text-slate-400">
+                                x{item.quantity}
+                              </p>
+                              <p className="text-sm font-semibold text-slate-700">
+                                {formatPrice(item.unit_price * item.quantity)}
+                              </p>
+                            </div>
+                          </div>
+                        ))
+                      )}
+                      {selectedOrder.note && (
+                        <p className="text-xs text-slate-500 bg-slate-50 rounded-lg px-3 py-2 mt-2">
+                          Ghi chú: {selectedOrder.note}
+                        </p>
+                      )}
+                    </div>
 
-      {/* META */}
-      <div className="px-5 py-3 bg-slate-50 flex gap-6 text-xs text-slate-500 border-b">
-        <div className="flex items-center gap-1">
-          <Clock size={13} />
-          {selectedOrder.createdAt
-            ? `${formatTime(selectedOrder.createdAt)} · ${formatDate(selectedOrder.createdAt)}`
-            : "—"}
-        </div>
+                    {/* Footer */}
+                    <div className="px-5 py-4 bg-slate-50 border-t flex flex-col gap-4">
+                      <div className="flex justify-between items-center">
+                        <span className="font-semibold text-slate-600">
+                          Tổng cộng
+                        </span>
+                        <span className="text-lg font-bold text-rose-600">
+                          {formatPrice(selectedOrder.total)}
+                        </span>
+                      </div>
 
-        <div className="flex items-center gap-1">
-          <User size={13} />
-          User #{selectedOrder.userId}
-        </div>
-      </div>
-
-      {/* BODY */}
-      <div className="flex flex-col flex-1 min-h-0 px-5 py-3 gap-4">
-
-        {/* NOTE */}
-        {selectedOrder.note && (
-          <div>
-            <p className="text-xs font-semibold text-slate-400 uppercase mb-1">
-              Ghi chú
-            </p>
-            <p className="text-sm text-slate-700">
-              {selectedOrder.note}
-            </p>
-          </div>
-        )}
-
-        {/* ITEMS */}
-        <div className="flex flex-col min-h-0">
-          <p className="text-xs font-semibold text-slate-400 uppercase mb-2">
-            Sản phẩm
-          </p>
-
-          <div className="flex flex-col gap-2 overflow-y-auto pr-1 flex-1">
-            {selectedOrder.items.length === 0 ? (
-              <p className="text-sm text-slate-400 italic">
-                Không có sản phẩm
-              </p>
-            ) : (
-              selectedOrder.items.map((item) => (
-                <div
-                  key={item.id}
-                  className="flex justify-between items-center px-3 py-2 bg-slate-50 rounded-lg border"
-                >
-                  <div className="min-w-0">
-                    <p className="text-sm font-medium text-slate-700 truncate">
-                      {item.product.product_name}
-                    </p>
-                    <p className="text-xs text-slate-400">
-                      Đơn giá: {formatPrice(item.unit_price)}
+                      {/* Action buttons — chỉ hiện khi PENDING */}
+                      {selectedOrder.status === "PENDING" &&
+                        (confirmCancel ? (
+                          <div className="flex flex-col gap-2">
+                            <p className="text-xs text-center text-slate-600 font-medium">
+                              Xác nhận huỷ đơn{" "}
+                              <span className="font-bold text-rose-600">
+                                #{selectedOrder.orderId}
+                              </span>
+                              ?
+                            </p>
+                            <div className="flex gap-2">
+                              <button
+                                type="button"
+                                onClick={() => setConfirmCancel(false)}
+                                disabled={!!actionLoading}
+                                className="flex-1 py-2 rounded-lg border border-slate-200 bg-white text-slate-600 text-xs font-semibold hover:bg-slate-100 transition disabled:opacity-50"
+                              >
+                                Không, giữ lại
+                              </button>
+                              <button
+                                type="button"
+                                onClick={handleCancel}
+                                disabled={!!actionLoading}
+                                className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg bg-rose-500 hover:bg-rose-600 text-white text-xs font-semibold transition disabled:opacity-50"
+                              >
+                                <XCircle size={13} />
+                                {actionLoading === "cancel"
+                                  ? "Đang huỷ…"
+                                  : "Xác nhận huỷ"}
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="flex gap-2">
+                            {isShopOwner && (
+                              <button
+                                type="button"
+                                onClick={openEdit}
+                                disabled={!!actionLoading}
+                                className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-slate-200 bg-white text-slate-600 text-xs font-medium hover:bg-slate-100 transition disabled:opacity-50"
+                              >
+                                <Pencil size={13} />
+                                Sửa đơn
+                              </button>
+                            )}
+                            <button
+                              type="button"
+                              onClick={handleComplete}
+                              disabled={!!actionLoading}
+                              className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-semibold transition disabled:opacity-50"
+                            >
+                              <CheckCircle size={13} />
+                              {actionLoading === "complete"
+                                ? "Đang xử lý…"
+                                : "Hoàn thành"}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setConfirmCancel(true)}
+                              disabled={!!actionLoading}
+                              className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-rose-500 hover:bg-rose-600 text-white text-xs font-semibold transition disabled:opacity-50"
+                            >
+                              <XCircle size={13} />
+                              Huỷ đơn
+                            </button>
+                          </div>
+                        ))}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="h-full bg-white/50 rounded-2xl border border-dashed border-slate-200 flex flex-col items-center justify-center gap-3 text-slate-300">
+                    <Receipt size={40} strokeWidth={1.2} />
+                    <p className="text-sm font-medium">
+                      Chọn đơn để xem chi tiết
                     </p>
                   </div>
-
-                  <div className="text-right ml-3">
-                    <p className="text-xs text-slate-400">
-                      x{item.quantity}
-                    </p>
-                    <p className="text-sm font-semibold text-slate-700">
-                      {formatPrice(item.unit_price * item.quantity)}
-                    </p>
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
-        </div>
-      </div>
-
-      {/* FOOTER */}
-      <div className="px-5 py-4 bg-slate-50 border-t flex flex-col gap-4">
-
-        <div className="flex justify-between items-center">
-          <span className="font-semibold text-slate-600">
-            Tổng cộng
-          </span>
-
-          <span className="text-lg font-bold text-rose-600">
-            {formatPrice(selectedOrder.total)}
-          </span>
-        </div>
-
-        {selectedOrder.status === "PENDING" && (
-          <div className="flex gap-3">
-
-            <button
-              onClick={openEdit}
-              className="flex items-center gap-2 px-4 py-3 rounded-lg border bg-white text-slate-600 hover:bg-slate-100"
-            >
-              <Pencil size={16} />
-              Sửa
-            </button>
-
-            <button
-              onClick={handleComplete}
-              className="flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-lg bg-emerald-500 hover:bg-emerald-600 text-white font-semibold"
-            >
-              <CheckCircle size={16} />
-              Hoàn thành
-            </button>
-
-            <button
-              onClick={(handleCancel)}
-              className="flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-lg bg-rose-500 hover:bg-rose-600 text-white font-semibold"
-            >
-              <XCircle size={16} />
-              Huỷ
-            </button>
-
-          </div>
-        )}
-      </div>
-    </div>
-  ) : (
-    <div className="h-full bg-white/50 rounded-2xl border border-dashed flex flex-col items-center justify-center text-slate-300 gap-3">
-      <Receipt size={40} strokeWidth={1.2} />
-      <p className="text-sm font-medium">
-        Chọn đơn để xem chi tiết
-      </p>
-    </div>
-  )}
-</div>
+                )}
+              </div>
             </div>
           )}
         </div>
@@ -635,16 +706,16 @@ export default function OrdersPage() {
               </div>
               <div>
                 <label className="block text-xs font-medium text-slate-500 mb-1">
-                  Ca làm việc (Shift ID)
+                  Ca làm việc (Shift User ID)
                 </label>
                 <input
                   type="number"
                   min={1}
-                  value={editForm.shiftId}
+                  value={editForm.shiftUserId}
                   onChange={(e) =>
                     setEditForm((f) => ({
                       ...f,
-                      shiftId: Number(e.target.value),
+                      shiftUserId: Number(e.target.value),
                     }))
                   }
                   className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-300 outline-none"
