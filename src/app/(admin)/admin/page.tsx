@@ -733,10 +733,10 @@ function AdminsTab() {
       {successMessage && (
         <div
           role="alert"
-          className="fixed top-24 right-6 z-[100] animate-[slideInRight_0.4s_ease-out]"
+          className="fixed top-24 right-6 z-100 animate-[slideInRight_0.4s_ease-out]"
         >
           <div className="flex items-center gap-3 px-5 py-4 rounded-xl shadow-lg bg-green-500 text-white max-w-sm">
-            <span className="flex-shrink-0 w-10 h-10 rounded-full bg-white/20 flex items-center justify-center text-xl">
+            <span className="shrink-0 w-10 h-10 rounded-full bg-white/20 flex items-center justify-center text-xl">
               ✓
             </span>
             <p className="font-medium">{successMessage}</p>
@@ -748,7 +748,7 @@ function AdminsTab() {
           role="alert"
           className="mb-4 flex items-start gap-3 p-4 rounded-xl bg-red-50 border border-red-200 text-red-800"
         >
-          <span className="flex-shrink-0 text-red-500 text-xl">⚠️</span>
+          <span className="shrink-0 text-red-500 text-xl">⚠️</span>
           <div className="flex-1 min-w-0">
             <p className="font-medium">Lỗi thao tác</p>
             <p className="text-sm mt-0.5">{actionError}</p>
@@ -756,7 +756,7 @@ function AdminsTab() {
           <button
             type="button"
             onClick={() => setActionError(null)}
-            className="flex-shrink-0 px-3 py-1.5 rounded-lg bg-red-100 hover:bg-red-200 text-red-700 text-sm font-medium transition"
+            className="shrink-0 px-3 py-1.5 rounded-lg bg-red-100 hover:bg-red-200 text-red-700 text-sm font-medium transition"
           >
             Đóng
           </button>
@@ -789,7 +789,7 @@ function AdminsTab() {
               role="alert"
               className="flex items-start gap-2 p-3 bg-red-50 border border-red-200 rounded-xl text-red-700 text-sm"
             >
-              <span className="flex-shrink-0">⚠️</span>
+              <span className="shrink-0">⚠️</span>
               <p>{formError}</p>
             </div>
           )}
@@ -1244,7 +1244,7 @@ export default function AdminDashboard() {
   return (
     <div className="min-h-screen bg-gray-100 flex">
       {/* Sidebar */}
-      <aside className="w-60 flex-shrink-0 bg-white border-r border-gray-200 flex flex-col min-h-screen fixed left-0 top-0 z-40">
+      <aside className="w-60 shrink-0 bg-white border-r border-gray-200 flex flex-col min-h-screen fixed left-0 top-0 z-40">
         <div className="px-5 py-5 border-b border-gray-100">
           <Link href="/" className="flex items-center gap-2">
             <div className="w-8 h-8 rounded-lg bg-blue-500 flex items-center justify-center">
@@ -1254,9 +1254,9 @@ export default function AdminDashboard() {
           </Link>
         </div>
 
-        <div className="px-4 py-3 mx-3 mt-4 rounded-xl bg-gradient-to-r from-purple-500 to-blue-500 text-white">
+        <div className="px-4 py-3 mx-3 mt-4 rounded-xl bg-linear-to-r from-purple-500 to-blue-500 text-white">
           <div className="flex items-center gap-2">
-            <div className="w-9 h-9 rounded-full bg-white/20 flex items-center justify-center font-bold flex-shrink-0">
+            <div className="w-9 h-9 rounded-full bg-white/20 flex items-center justify-center font-bold shrink-0">
               {adminEmail.charAt(0).toUpperCase()}
             </div>
             <div className="min-w-0">
