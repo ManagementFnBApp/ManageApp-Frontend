@@ -2,11 +2,19 @@ import axios, { AxiosInstance, AxiosError } from 'axios';
 import { BASE_URL } from '../global-configs';
 
 /** Decode JWT payload client-side (no verification) to check expiry */
+function decodeJwtPayload(part: string): any {
+  // JWT uses base64url; normalize to base64 before decoding
+  const base64 = part.replace(/-/g, '+').replace(/_/g, '/');
+  const padded = base64 + '='.repeat((4 - (base64.length % 4)) % 4);
+  const json = atob(padded);
+  return JSON.parse(json);
+}
+
 function isJwtExpired(token: string): boolean {
   try {
     const parts = token.split('.');
     if (parts.length !== 3) return true;
-    const payload = JSON.parse(atob(parts[1]));
+    const payload = decodeJwtPayload(parts[1]);
     if (!payload.exp) return false;
     // exp is seconds since epoch; add 5s buffer
     return Date.now() / 1000 > payload.exp - 5;
