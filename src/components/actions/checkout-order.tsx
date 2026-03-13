@@ -72,7 +72,7 @@ export default function CheckoutOrderPage() {
     try {
       // 1️⃣ Tạo đơn hàng (PENDING) — userId BE lấy từ JWT
       const orderResponse = await createOrder({
-        shiftId: cart.shiftId,
+        shiftUserId: cart.shiftUserId,
         totalAmount: cart.total,
         note: `[${cart.orderType}]`,
         order_items: cart.items.map((item) => ({
