@@ -2,54 +2,13 @@
 
 import Image from "next/image";
 import { useEffect, useState } from "react";
-import { getAllProducts } from "@/apis/test";
+import { getActiveProducts, Product } from "../apis/productApi";
 
-interface Product {
-  productId: number;
-  productName: string;
-  sku: string;
-  basicPrice: number;
-  unitPrice: number;
-  isActive: boolean;
-  categoryId: number;
-}
-
-export default function ProductsPage() {
+export default function ProductsHomePage() {
   const [activeFeature, setActiveFeature] = useState(0);
   const [products, setProducts] = useState<Product[]>([]);
   const [productsLoading, setProductsLoading] = useState(false);
   const [productsError, setProductsError] = useState<string | null>(null);
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    const token = localStorage.getItem("accessToken");
-    if (!token) {
-      setIsLoggedIn(false);
-      return;
-    }
-    setIsLoggedIn(true);
-
-    const fetchProducts = async () => {
-      try {
-        setProductsLoading(true);
-        setProductsError(null);
-        const data = await getAllProducts();
-        setProducts(Array.isArray(data) ? data : []);
-      } catch (err: unknown) {
-        setProductsError(
-          err instanceof Error
-            ? err.message
-            : "Không thể tải danh sách sản phẩm",
-        );
-        setProducts([]);
-      } finally {
-        setProductsLoading(false);
-      }
-    };
-
-    fetchProducts();
-  }, []);
 
   const features = [
     {
@@ -107,6 +66,32 @@ export default function ProductsPage() {
     },
   ];
 
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const fetchProducts = async () => {
+      try {
+        setProductsLoading(true);
+        setProductsError(null);
+
+        const data = await getActiveProducts();
+        setProducts(data);
+      } catch (err: unknown) {
+        setProductsError(
+          err instanceof Error
+            ? err.message
+            : "Không thể tải danh sách sản phẩm",
+        );
+      } finally {
+        setProductsLoading(false);
+      }
+    };
+
+    fetchProducts();
+  }, []);
+
+  const formatCurrency = (value: number) =>
+    new Intl.NumberFormat("vi-VN").format(value) + " đ";
+
   return (
     <div className="min-h-screen bg-gray-50">
       <section className="pt-28 pb-16">
@@ -120,6 +105,7 @@ export default function ProductsPage() {
         </div>
       </section>
 
+      {/* ===== FEATURE SECTION ===== */}
       <section className="pb-24">
         <div className="container mx-auto px-4">
           <div className="flex gap-8">
@@ -206,25 +192,14 @@ export default function ProductsPage() {
         </div>
       </section>
 
+      {/* ===== PRODUCT SECTION ===== */}
       <section className="py-16 px-4 bg-white border-t border-gray-200">
         <div className="container mx-auto max-w-6xl">
-          <h2 className="text-3xl font-bold text-gray-900 mb-2">
+          <h2 className="text-3xl font-bold text-gray-900 mb-6">
             Danh sách sản phẩm
           </h2>
-          {!isLoggedIn ? (
-            <div className="p-10 bg-blue-50 border border-blue-100 rounded-2xl text-center">
-              <div className="text-5xl mb-4">🔐</div>
-              <p className="text-gray-700 font-medium text-lg mb-6">
-                Vui lòng đăng nhập để xem danh sách sản phẩm
-              </p>
-              <a
-                href="/auth?mode=login"
-                className="inline-block px-8 py-3 bg-blue-600 text-white rounded-xl font-semibold hover:bg-blue-700 transition"
-              >
-                Đăng nhập ngay
-              </a>
-            </div>
-          ) : productsLoading ? (
+
+          {productsLoading ? (
             <div className="flex items-center justify-center py-16">
               <div className="animate-spin rounded-full h-12 w-12 border-4 border-blue-500 border-t-transparent" />
             </div>
@@ -241,25 +216,32 @@ export default function ProductsPage() {
               {products.map((p) => (
                 <div
                   key={p.productId}
-                  className="p-4 bg-white border border-gray-200 rounded-xl hover:shadow-lg transition-shadow"
+                  className="bg-white border border-gray-200 rounded-xl overflow-hidden hover:shadow-lg transition"
                 >
-                  <div className="font-semibold text-gray-900">
-                    {p.productName}
+                  {/* PRODUCT IMAGE */}
+                  <div className="relative h-48 w-full bg-gray-100">
+                    <Image
+                      src={p.image || "/image/product-placeholder.png"}
+                      alt={p.productName}
+                      fill
+                      className="object-cover"
+                    />
                   </div>
-                  <div className="text-sm text-gray-500 mt-1">SKU: {p.sku}</div>
-                  <div className="mt-3 flex justify-between items-center">
-                    <span className="text-lg font-bold text-blue-600">
-                      {new Intl.NumberFormat("vi-VN").format(p.unitPrice)} đ
-                    </span>
-                    <span
-                      className={`px-2 py-1 rounded text-xs font-medium ${
-                        p.isActive
-                          ? "bg-green-100 text-green-700"
-                          : "bg-gray-100 text-gray-600"
-                      }`}
-                    >
-                      {p.isActive ? "Đang bán" : "Ngừng bán"}
-                    </span>
+
+                  {/* PRODUCT INFO */}
+                  <div className="p-4 space-y-2">
+                    <div className="flex justify-between gap-2">
+                      <h3 className="font-semibold text-lg text-gray-900">
+                        {p.productName}
+                      </h3>
+                      <span className="px-2 py-2 text-sm font-semibold rounded-full bg-blue-100 text-blue-700 shrink-0 self-start">
+                        {formatCurrency(p.listPrice)}
+                      </span>
+                    </div>
+
+                    {p.description && (
+                      <p className="text-sm text-gray-600">{p.description}</p>
+                    )}
                   </div>
                 </div>
               ))}
