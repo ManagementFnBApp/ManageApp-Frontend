@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { BarChart3, Coins, FileText, Loader2, RefreshCw } from "lucide-react";
 import {
   CartesianGrid,
@@ -13,6 +14,7 @@ import {
   YAxis,
 } from "recharts";
 import { getOrderReport, type OrderReportByDate } from "@/apis/orderApi";
+import { getStoredRoleNormalized } from "@/apis/auth";
 import { Button } from "@/components/ui/button";
 
 type ReportRow = {
@@ -56,12 +58,22 @@ function mapAndSortRows(reportByDate: OrderReportByDate[]): ReportRow[] {
 }
 
 export default function ManagerReportPage() {
+  const router = useRouter();
+  const [canAccess, setCanAccess] = useState<boolean | null>(null);
   const [year, setYear] = useState<number>(CURRENT_YEAR);
   const [month, setMonth] = useState<number>(CURRENT_MONTH);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [rows, setRows] = useState<ReportRow[]>([]);
   const [numberOfOrders, setNumberOfOrders] = useState(0);
+
+  useEffect(() => {
+    const isStaff = getStoredRoleNormalized() === "STAFF";
+    setCanAccess(!isStaff);
+    if (isStaff) {
+      router.replace("/manager");
+    }
+  }, [router]);
 
   const fetchReport = useCallback(async () => {
     setLoading(true);
@@ -82,8 +94,14 @@ export default function ManagerReportPage() {
   }, [year, month]);
 
   useEffect(() => {
-    fetchReport();
-  }, [fetchReport]);
+    if (canAccess) {
+      fetchReport();
+    }
+  }, [canAccess, fetchReport]);
+
+  if (canAccess === false) {
+    return null;
+  }
 
   const totalRevenue = useMemo(
     () => rows.reduce((sum, row) => sum + row.totalAmount, 0),
