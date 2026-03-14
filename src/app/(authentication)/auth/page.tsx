@@ -5,7 +5,7 @@ import { useState, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { login, register, ROLE_CODE_ADMIN, ROLE_CODE_SHOP_OWNER } from "@/apis/auth";
 
-const ROLE_CODE_STAFF = 'STAFF';
+const ROLE_CODE_STAFF = "STAFF";
 
 export default function AuthPage() {
   const searchParams = useSearchParams();
@@ -64,16 +64,21 @@ export default function AuthPage() {
       });
       setSuccessMessage("Bạn đã đăng nhập thành công!");
 
-      const role = (response.role ?? '').toString().toUpperCase();
-      const returnUrl = searchParams?.get('returnUrl');
-      let destination = '/';
-      if (response.role === 'ADMIN') {
-        destination = '/admin';
+      const role = (response.role ?? "").toString().toUpperCase();
+      const returnUrl = searchParams?.get("returnUrl");
+      let destination = "/";
+      if (response.role === "ADMIN") {
+        destination = "/admin";
       } else if (role === ROLE_CODE_SHOP_OWNER || role === ROLE_CODE_STAFF) {
-        destination = '/manager';
+        destination = "/manager";
       }
       // Nếu có returnUrl (vd: sau thanh toán subscription) và là đường dẫn nội bộ, dùng nó
-      if (returnUrl && typeof returnUrl === 'string' && returnUrl.startsWith('/') && !returnUrl.startsWith('//')) {
+      if (
+        returnUrl &&
+        typeof returnUrl === "string" &&
+        returnUrl.startsWith("/") &&
+        !returnUrl.startsWith("//")
+      ) {
         destination = returnUrl;
       }
 
@@ -86,8 +91,13 @@ export default function AuthPage() {
         err?.originalError?.message;
       if (message) {
         setError(message);
-      } else if (err?.originalError?.code === 'ERR_NETWORK' || err?.message?.includes('Network')) {
-        setError("Không thể kết nối đến server. Kiểm tra backend đã chạy và NEXT_PUBLIC_SERVER_API_URL trong .env.");
+      } else if (
+        err?.originalError?.code === "ERR_NETWORK" ||
+        err?.message?.includes("Network")
+      ) {
+        setError(
+          "Không thể kết nối đến server. Kiểm tra backend đã chạy và NEXT_PUBLIC_SERVER_API_URL trong .env.",
+        );
       } else {
         setError("Đăng nhập thất bại. Vui lòng kiểm tra lại username và mật khẩu.");
       }
@@ -157,11 +167,11 @@ export default function AuthPage() {
             <div
               className="relative hidden lg:flex flex-col justify-center items-center p-12 overflow-hidden image-panel"
               style={{
-                position: 'absolute',
+                position: "absolute",
                 top: 0,
-                left: isLogin ? '0%' : '50%',
-                width: '50%',
-                height: '100%',
+                left: isLogin ? "0%" : "50%",
+                width: "50%",
+                height: "100%",
                 transition: "left 0.8s cubic-bezier(0.4, 0, 0.2, 1)",
                 willChange: "left",
                 zIndex: isLogin ? 1 : 2,
@@ -230,7 +240,7 @@ export default function AuthPage() {
             <div
               className="flex items-center justify-center p-8 lg:p-12 bg-white form-panel"
               style={{
-                position: 'relative',
+                position: "relative",
               }}
               data-is-login={isLogin}
             >
