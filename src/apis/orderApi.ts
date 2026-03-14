@@ -53,6 +53,17 @@ export interface OrderResponse {
   order_items?: OrderItemResponse[];
 }
 
+export interface OrderReportByDate {
+  date: string;
+  numberOfOrders: number;
+  totalAmount: number;
+}
+
+export interface OrderReportResponse {
+  numberOfOrders: number;
+  reportByDate: OrderReportByDate[];
+}
+
 // ===== HELPERS =====
 
 function unwrap<T>(raw: unknown): T {
@@ -60,6 +71,32 @@ function unwrap<T>(raw: unknown): T {
     return (raw as { data: T }).data;
   }
   return raw as T;
+}
+
+function isOrderReportByDate(value: unknown): value is OrderReportByDate {
+  if (!value || typeof value !== 'object') {
+    return false;
+  }
+
+  const item = value as Record<string, unknown>;
+  return (
+    typeof item.date === 'string' &&
+    typeof item.numberOfOrders === 'number' &&
+    typeof item.totalAmount === 'number'
+  );
+}
+
+function isOrderReportResponse(value: unknown): value is OrderReportResponse {
+  if (!value || typeof value !== 'object') {
+    return false;
+  }
+
+  const report = value as Record<string, unknown>;
+  return (
+    typeof report.numberOfOrders === 'number' &&
+    Array.isArray(report.reportByDate) &&
+    report.reportByDate.every(isOrderReportByDate)
+  );
 }
 
 // ===== ORDER APIs =====
@@ -106,6 +143,20 @@ export const getOrders = async (
   const res = await apiClient.post('/orders/list', status ? { status } : {});
   const list = unwrap<OrderResponse[]>(res.data);
   return Array.isArray(list) ? list : [];
+};
+
+export const getOrderReport = async (
+  year: number,
+  month: number,
+): Promise<OrderReportResponse> => {
+  const res = await apiClient.post('/orders/report', { year, month });
+  const data = unwrap<unknown>(res.data);
+
+  if (!isOrderReportResponse(data)) {
+    throw new Error('orders/report returned invalid payload');
+  }
+
+  return data;
 };
 
 // ===== SHIFT APIs =====
