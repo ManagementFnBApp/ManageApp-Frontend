@@ -256,7 +256,7 @@ export default function ManagerReportPage() {
                   <Line
                     type="monotone"
                     dataKey="totalAmount"
-                    name="Revenuee"
+                    name="Revenue"
                     stroke="#059669"
                     strokeWidth={3}
                     dot={{ r: 3 }}
