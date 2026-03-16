@@ -15,7 +15,6 @@ export interface Product {
   measureUnit?: string | null;
   importPrice: number;
   listPrice: number;
-  importPrice: number;
   isActive: boolean;
   createdAt: Date;
   updatedAt: Date;
