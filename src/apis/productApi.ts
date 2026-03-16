@@ -40,7 +40,7 @@ export type UpdateProductPayload = Partial<CreateProductPayload>;
 /** Backend có thể trả trực tiếp hoặc bọc trong { data } */
 function unwrap<T>(raw: unknown): T {
   if (raw == null) return raw as T;
-  if (typeof raw === 'object' && 'data' in (raw as object)) {
+  if (typeof raw === "object" && "data" in (raw as object)) {
     const inner = (raw as { data: unknown }).data;
     return inner as T;
   }
@@ -51,7 +51,7 @@ function toNumber(value: unknown): number {
   if (value == null) return 0;
 
   // Handle Prisma Decimal format: { s: 1, e: 4, d: [29000] }
-  if (typeof value === 'object' && value !== null) {
+  if (typeof value === "object" && value !== null) {
     const obj = value as any;
     if (Array.isArray(obj.d) && obj.d.length > 0) {
       const sign = obj.s === -1 ? -1 : 1;
@@ -60,12 +60,16 @@ function toNumber(value: unknown): number {
   }
 
   // Handle Prisma Decimal with $numberDecimal
-  if (typeof value === 'object' && value !== null && '$numberDecimal' in (value as object)) {
+  if (
+    typeof value === "object" &&
+    value !== null &&
+    "$numberDecimal" in (value as object)
+  ) {
     return Number((value as any).$numberDecimal);
   }
 
   const obj = value as { toNumber?: () => number };
-  if (typeof obj?.toNumber === 'function') return obj.toNumber();
+  if (typeof obj?.toNumber === "function") return obj.toNumber();
   const n = Number(value);
   return Number.isNaN(n) ? 0 : n;
 }
@@ -74,22 +78,22 @@ function mapProduct(raw: Record<string, unknown>): Product {
   return {
     productId: Number(raw.productId ?? raw.id),
     categoryId: Number(raw.categoryId ?? raw.category_id),
-    productName: String(raw.productName ?? raw.product_name ?? ''),
-    image: String(raw.image ?? ''),
-    sku: raw.sku != null ? String(raw.sku) : String(raw.image ?? ''),
+    productName: String(raw.productName ?? raw.product_name ?? ""),
+    image: String(raw.image ?? ""),
+    sku: raw.sku != null ? String(raw.sku) : String(raw.image ?? ""),
     barcode: raw.barcode != null ? String(raw.barcode) : null,
     description: raw.description != null ? String(raw.description) : null,
     measureUnit:
       raw.measureUnit != null
         ? String(raw.measureUnit)
         : raw.measure_unit != null
-        ? String(raw.measure_unit)
-        : null,
+          ? String(raw.measure_unit)
+          : null,
     importPrice: toNumber(raw.importPrice ?? raw.import_price),
     listPrice: toNumber(raw.listPrice ?? raw.list_price),
     isActive: Boolean(raw.isActive ?? raw.is_active ?? true),
-    createdAt: String(raw.createdAt ?? raw.created_at ?? ''),
-    updatedAt: String(raw.updatedAt ?? raw.updated_at ?? ''),
+    createdAt: new Date((raw.createdAt ?? raw.created_at ?? "") as string),
+    updatedAt: new Date((raw.updatedAt ?? raw.updated_at ?? "") as string),
   };
 }
 
@@ -99,9 +103,9 @@ function mapProduct(raw: Record<string, unknown>): Product {
 /** GET /products - Không query khi lấy tất cả; gửi isActive=true|false khi lọc (khớp ParseBoolPipe) */
 export const getProducts = async (isActive?: boolean): Promise<Product[]> => {
   const params: Record<string, string> = {};
-  if (isActive === true) params.isActive = 'true';
-  else if (isActive === false) params.isActive = 'false';
-  const res = await apiClient.get('/products', { params });
+  if (isActive === true) params.isActive = "true";
+  else if (isActive === false) params.isActive = "false";
+  const res = await apiClient.get("/products", { params });
   const list = unwrap<unknown>(res.data);
   const arr = Array.isArray(list) ? list : [];
   return arr.map((item) => mapProduct((item as Record<string, unknown>) ?? {}));
@@ -120,7 +124,9 @@ export const createProduct = async (
 ): Promise<Product> => {
   const categoryId = Number(payload.categoryId);
   if (!Number.isInteger(categoryId) || categoryId <= 0) {
-    throw new Error('Danh mục sản phẩm không hợp lệ. Vui lòng chọn danh mục cho cửa hàng trước.');
+    throw new Error(
+      "Danh mục sản phẩm không hợp lệ. Vui lòng chọn danh mục cho cửa hàng trước.",
+    );
   }
   const image =
     (payload.image && String(payload.image).trim()) ||
@@ -141,7 +147,7 @@ export const createProduct = async (
     body.description = String(payload.description).trim();
   if (payload.measureUnit != null && String(payload.measureUnit).trim())
     body.measureUnit = String(payload.measureUnit).trim();
-  const res = await apiClient.post('/products', body);
+  const res = await apiClient.post("/products", body);
   const raw = unwrap<Record<string, unknown>>(res.data);
   return mapProduct(raw ?? {});
 };
@@ -152,14 +158,21 @@ export const updateProduct = async (
   payload: UpdateProductPayload,
 ): Promise<Product> => {
   const body: Record<string, unknown> = {};
-  if (payload.categoryId !== undefined) body.categoryId = Number(payload.categoryId);
-  if (payload.productName !== undefined) body.productName = String(payload.productName).trim();
+  if (payload.categoryId !== undefined)
+    body.categoryId = Number(payload.categoryId);
+  if (payload.productName !== undefined)
+    body.productName = String(payload.productName).trim();
   if (payload.image !== undefined) body.image = String(payload.image).trim();
-  if (payload.barcode !== undefined) body.barcode = String(payload.barcode).trim() || undefined;
-  if (payload.description !== undefined) body.description = String(payload.description).trim() || undefined;
-  if (payload.measureUnit !== undefined) body.measureUnit = String(payload.measureUnit).trim() || undefined;
-  if (payload.listPrice !== undefined) body.listPrice = Number(payload.listPrice);
-  if (payload.importPrice !== undefined) body.importPrice = Number(payload.importPrice);
+  if (payload.barcode !== undefined)
+    body.barcode = String(payload.barcode).trim() || undefined;
+  if (payload.description !== undefined)
+    body.description = String(payload.description).trim() || undefined;
+  if (payload.measureUnit !== undefined)
+    body.measureUnit = String(payload.measureUnit).trim() || undefined;
+  if (payload.listPrice !== undefined)
+    body.listPrice = Number(payload.listPrice);
+  if (payload.importPrice !== undefined)
+    body.importPrice = Number(payload.importPrice);
   if (payload.isActive !== undefined) body.isActive = Boolean(payload.isActive);
 
   const res = await apiClient.patch(`/products/${id}`, body);
