@@ -1,52 +1,55 @@
-'use client'
+"use client";
 
-import Link from 'next/link'
+import Link from "next/link";
 
 export default function SolutionsPage() {
   const solutions = [
     {
-      icon: '🏪',
-      color: 'bg-blue-100',
-      title: 'Bán lẻ',
-      desc: 'Giải pháp quản lý cửa hàng, kho hàng, nhân viên và khách hàng.',
-      items: ['Quản lý tồn kho', 'POS bán hàng', 'Quản lý nhân viên'],
+      icon: "🏪",
+      color: "bg-blue-100",
+      title: "Bán lẻ",
+      desc: "Giải pháp quản lý cửa hàng, kho hàng, nhân viên và khách hàng.",
+      items: ["Quản lý tồn kho", "POS bán hàng", "Quản lý nhân viên"],
     },
     {
-      icon: '🍽️',
-      color: 'bg-orange-100',
-      title: 'Nhà hàng - F&B',
-      desc: 'Quản lý nhà hàng, cafe với hệ thống order, bếp và thanh toán thông minh.',
-      items: ['Quản lý bàn', 'Order online', 'Kết nối bếp'],
+      icon: "🍽️",
+      color: "bg-orange-100",
+      title: "Nhà hàng - F&B",
+      desc: "Quản lý nhà hàng, cafe với hệ thống order, bếp và thanh toán thông minh.",
+      items: ["Quản lý bàn", "Order online", "Kết nối bếp"],
     },
     {
-      icon: '👗',
-      color: 'bg-purple-100',
-      title: 'Thời trang',
-      desc: 'Quản lý size, màu sắc, mùa vụ và đa kênh bán hàng.',
-      items: ['Quản lý thuộc tính', 'Đa kênh bán', 'CRM khách hàng'],
+      icon: "👗",
+      color: "bg-purple-100",
+      title: "Thời trang",
+      desc: "Quản lý size, màu sắc, mùa vụ và đa kênh bán hàng.",
+      items: ["Quản lý thuộc tính", "Đa kênh bán", "CRM khách hàng"],
     },
     {
-      icon: '💆',
-      color: 'bg-pink-100',
-      title: 'Spa - Salon',
-      desc: 'Đặt lịch, quản lý dịch vụ, liệu trình và chăm sóc khách hàng.',
-      items: ['Đặt lịch online', 'Quản lý liệu trình', 'Chăm sóc khách'],
+      icon: "💆",
+      color: "bg-pink-100",
+      title: "Spa - Salon",
+      desc: "Đặt lịch, quản lý dịch vụ, liệu trình và chăm sóc khách hàng.",
+      items: ["Đặt lịch online", "Quản lý liệu trình", "Chăm sóc khách"],
     },
     {
-      icon: '💊',
-      color: 'bg-green-100',
-      title: 'Nhà thuốc',
-      desc: 'Quản lý thuốc, hạn dùng, công thức và tuân thủ quy định ngành dược.',
-      items: ['Quản lý hạn dùng', 'Công thức bào chế', 'Báo cáo cơ quan'],
+      icon: "💊",
+      color: "bg-green-100",
+      title: "Nhà thuốc",
+      desc: "Quản lý thuốc, hạn dùng, công thức và tuân thủ quy định ngành dược.",
+      items: ["Quản lý hạn dùng", "Công thức bào chế", "Báo cáo cơ quan"],
     },
-  ]
+  ];
 
   return (
     <div className="pt-20">
-      <section className="bg-gradient-to-br from-blue-50 to-white py-20 px-4 text-center">
-        <h1 className="text-5xl font-bold text-gray-900 mb-6">Giải pháp toàn diện</h1>
+      <section className="bg-linear-to-br from-blue-50 to-white py-20 px-4 text-center">
+        <h1 className="text-5xl font-bold text-gray-900 mb-6">
+          Giải pháp toàn diện
+        </h1>
         <p className="text-xl text-gray-600 max-w-3xl mx-auto">
-          ManageApp cung cấp giải pháp quản lý bán hàng toàn diện cho mọi quy mô doanh nghiệp
+          LumioViet cung cấp giải pháp quản lý bán hàng toàn diện cho mọi quy mô
+          doanh nghiệp
         </p>
       </section>
 
@@ -63,7 +66,9 @@ export default function SolutionsPage() {
                 >
                   <span className="text-3xl">{s.icon}</span>
                 </div>
-                <h3 className="text-2xl font-bold mb-4 text-gray-900">{s.title}</h3>
+                <h3 className="text-2xl font-bold mb-4 text-gray-900">
+                  {s.title}
+                </h3>
                 <p className="text-gray-600 mb-6">{s.desc}</p>
                 <ul className="space-y-2 text-gray-600 mb-6">
                   {s.items.map((item, j) => (
@@ -82,12 +87,16 @@ export default function SolutionsPage() {
               </div>
             ))}
 
-            <div className="bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl shadow-lg p-8 text-white">
+            <div className="bg-linear-to-br from-blue-500 to-blue-600 rounded-xl shadow-lg p-8 text-white">
               <div className="w-16 h-16 bg-white bg-opacity-20 rounded-full flex items-center justify-center mb-6">
                 <span className="text-3xl">🎯</span>
               </div>
-              <h3 className="text-2xl font-bold mb-4">Và nhiều ngành hàng khác</h3>
-              <p className="mb-6 opacity-90">Siêu thị, mỹ phẩm, điện máy, xe máy...</p>
+              <h3 className="text-2xl font-bold mb-4">
+                Và nhiều ngành hàng khác
+              </h3>
+              <p className="mb-6 opacity-90">
+                Siêu thị, mỹ phẩm, điện máy, xe máy...
+              </p>
               <Link
                 href="/contact"
                 className="inline-block px-6 py-3 bg-white text-blue-600 font-semibold rounded-lg hover:bg-gray-100 transition-colors"
@@ -109,6 +118,5 @@ export default function SolutionsPage() {
         </Link>
       </section>
     </div>
-  )
+  );
 }
-

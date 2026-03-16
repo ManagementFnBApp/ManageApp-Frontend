@@ -1,4 +1,4 @@
-import { apiClient } from '../configs/axios';
+import { apiClient } from "../configs/axios";
 
 // ===== TYPES (khớp backend ProductResponseDto, CreateProductDto) =====
 
@@ -16,8 +16,8 @@ export interface Product {
   importPrice: number;
   listPrice: number;
   isActive: boolean;
-  createdAt: string;
-  updatedAt: string;
+  createdAt: Date;
+  updatedAt: Date;
 }
 
 export interface CreateProductPayload {
@@ -35,7 +35,7 @@ export interface CreateProductPayload {
 
 export type UpdateProductPayload = Partial<CreateProductPayload>;
 
-// ===== HELPERS =====
+// ================= HELPERS =================
 
 /** Backend có thể trả trực tiếp hoặc bọc trong { data } */
 function unwrap<T>(raw: unknown): T {

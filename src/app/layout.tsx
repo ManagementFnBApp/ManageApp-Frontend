@@ -9,7 +9,7 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "Manage App - Hệ thống quản lý ứng dụng",
+  title: "LumioViet - Hệ thống quản lý ứng dụng",
   description: "Hệ thống quản lý ứng dụng chuyên nghiệp",
 };
 
