@@ -8,8 +8,6 @@ export interface Product {
   productName: string;
   /** URL hoặc path ảnh sản phẩm - backend bắt buộc */
   image: string;
-  /** Alias hiển thị (map từ image) */
-  sku?: string;
   barcode?: string | null;
   description?: string | null;
   measureUnit?: string | null;
@@ -47,6 +45,14 @@ function unwrap<T>(raw: unknown): T {
   return raw as T;
 }
 
+function toDate(value: unknown): Date {
+  if (value == null) {
+    return new Date(0);
+  }
+  const d = new Date(String(value));
+  return Number.isNaN(d.getTime()) ? new Date(0) : d;
+}
+
 function toNumber(value: unknown): number {
   if (value == null) return 0;
 
@@ -80,7 +86,6 @@ function mapProduct(raw: Record<string, unknown>): Product {
     categoryId: Number(raw.categoryId ?? raw.category_id),
     productName: String(raw.productName ?? raw.product_name ?? ""),
     image: String(raw.image ?? ""),
-    sku: raw.sku != null ? String(raw.sku) : String(raw.image ?? ""),
     barcode: raw.barcode != null ? String(raw.barcode) : null,
     description: raw.description != null ? String(raw.description) : null,
     measureUnit:
@@ -92,8 +97,8 @@ function mapProduct(raw: Record<string, unknown>): Product {
     importPrice: toNumber(raw.importPrice ?? raw.import_price),
     listPrice: toNumber(raw.listPrice ?? raw.list_price),
     isActive: Boolean(raw.isActive ?? raw.is_active ?? true),
-    createdAt: new Date((raw.createdAt ?? raw.created_at ?? "") as string),
-    updatedAt: new Date((raw.updatedAt ?? raw.updated_at ?? "") as string),
+    createdAt: toDate(raw.createdAt ?? raw.created_at),
+    updatedAt: toDate(raw.updatedAt ?? raw.updated_at),
   };
 }
 

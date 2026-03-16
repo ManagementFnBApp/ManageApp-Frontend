@@ -20,8 +20,8 @@ export default function MenuManagePage() {
 
   // Chỉ SHOPOWNER mới được truy cập trang này
   useEffect(() => {
-    if (getStoredRoleNormalized() !== 'SHOPOWNER') {
-      router.replace('/manager');
+    if (getStoredRoleNormalized() !== "SHOPOWNER") {
+      router.replace("/manager");
     }
   }, [router]);
 
@@ -39,7 +39,9 @@ export default function MenuManagePage() {
   // ── Danh mục cửa hàng đã chọn (dùng cho form sản phẩm) ──
   const [shopCategories, setShopCategories] = useState<Category[]>([]);
   const [shopCategoriesLoading, setShopCategoriesLoading] = useState(true);
-  const [shopCategoriesError, setShopCategoriesError] = useState<string | null>(null);
+  const [shopCategoriesError, setShopCategoriesError] = useState<string | null>(
+    null,
+  );
 
   const fetchShopCategories = useCallback(async () => {
     setShopCategoriesLoading(true);
@@ -65,7 +67,9 @@ export default function MenuManagePage() {
   const [showPickCategoryModal, setShowPickCategoryModal] = useState(false);
   const [pickCategoryLoading, setPickCategoryLoading] = useState(false);
   const [pickCategorySubmitting, setPickCategorySubmitting] = useState(false);
-  const [pickCategoryError, setPickCategoryError] = useState<string | null>(null);
+  const [pickCategoryError, setPickCategoryError] = useState<string | null>(
+    null,
+  );
 
   const openPickCategoryModal = useCallback(async () => {
     setShowPickCategoryModal(true);
@@ -73,7 +77,12 @@ export default function MenuManagePage() {
     setPickCategoryLoading(true);
     try {
       const res = await getCategories();
-      setAllCategories(res.map((c: { id: number; categoryName: string }) => ({ id: c.id, name: c.categoryName })));
+      setAllCategories(
+        res.map((c: { id: number; categoryName: string }) => ({
+          id: c.id,
+          name: c.categoryName,
+        })),
+      );
     } catch (err) {
       setPickCategoryError("Không thể tải danh sách danh mục");
       setAllCategories([]);
@@ -91,12 +100,14 @@ export default function MenuManagePage() {
         await addShopCategories(categoryIds);
         await fetchShopCategories();
       } catch (err) {
-        setPickCategoryError((err as { message?: string })?.message ?? "Thêm danh mục thất bại");
+        setPickCategoryError(
+          (err as { message?: string })?.message ?? "Thêm danh mục thất bại",
+        );
       } finally {
         setPickCategorySubmitting(false);
       }
     },
-    [fetchShopCategories]
+    [fetchShopCategories],
   );
 
   const EMPTY_FORM: CreateProductPayload = {
@@ -140,7 +151,7 @@ export default function MenuManagePage() {
     const matchSearch =
       !search.trim() ||
       p.productName.toLowerCase().includes(search.toLowerCase()) ||
-      (p.image || p.sku || "").toLowerCase().includes(search.toLowerCase());
+      (p.image || "").toLowerCase().includes(search.toLowerCase());
     const matchActive =
       filterActive === "all" ||
       (filterActive === "active" && p.isActive) ||
@@ -151,7 +162,9 @@ export default function MenuManagePage() {
   // ── Open modals ──
   const openAdd = () => {
     if (shopCategories.length === 0) {
-      setFormError("Chưa chọn danh mục cho cửa hàng. Hãy bấm \"Chọn thêm danh mục\" để chọn từ danh sách Admin đã tạo.");
+      setFormError(
+        'Chưa chọn danh mục cho cửa hàng. Hãy bấm "Chọn thêm danh mục" để chọn từ danh sách Admin đã tạo.',
+      );
       return;
     }
     setForm({ ...EMPTY_FORM, categoryId: shopCategories[0].id });
@@ -164,7 +177,7 @@ export default function MenuManagePage() {
     setForm({
       categoryId: product.categoryId,
       productName: product.productName,
-      image: product.image || product.sku || "",
+      image: product.image || "",
       barcode: product.barcode ?? "",
       description: product.description ?? "",
       measureUnit: product.measureUnit ?? "ly",
@@ -210,8 +223,13 @@ export default function MenuManagePage() {
     }
     if (modalMode === "add") {
       const validCategoryId = Number(form.categoryId);
-      if (!validCategoryId || !shopCategories.some((c) => c.id === validCategoryId)) {
-        setFormError("Vui lòng chọn danh mục thuộc cửa hàng (đã chọn ở bước \"Chọn thêm danh mục\").");
+      if (
+        !validCategoryId ||
+        !shopCategories.some((c) => c.id === validCategoryId)
+      ) {
+        setFormError(
+          'Vui lòng chọn danh mục thuộc cửa hàng (đã chọn ở bước "Chọn thêm danh mục").',
+        );
         return;
       }
     }
@@ -296,7 +314,7 @@ export default function MenuManagePage() {
     <div className="min-h-screen bg-[#f0f0f0] flex flex-col">
       {/* ── Toast ── */}
       {toast && (
-        <div className="fixed top-5 right-5 z-[60] flex items-center gap-3 bg-emerald-500 rounded-2xl shadow-xl px-5 py-4 min-w-[300px] max-w-sm">
+        <div className="fixed top-5 right-5 z-60 flex items-center gap-3 bg-emerald-500 rounded-2xl shadow-xl px-5 py-4 min-w-75 max-w-sm">
           <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center shrink-0">
             <svg
               className="w-5 h-5 text-white"
@@ -368,10 +386,11 @@ export default function MenuManagePage() {
             type="button"
             onClick={openAdd}
             disabled={shopCategories.length === 0 || shopCategoriesLoading}
-            className={`flex items-center gap-2 px-4 py-2 font-semibold rounded-xl shadow transition ${shopCategories.length === 0 || shopCategoriesLoading
-              ? "bg-gray-300 text-gray-400 cursor-not-allowed pointer-events-none"
-              : "bg-lime-400 hover:bg-lime-500 text-white"
-              }`}
+            className={`flex items-center gap-2 px-4 py-2 font-semibold rounded-xl shadow transition ${
+              shopCategories.length === 0 || shopCategoriesLoading
+                ? "bg-gray-300 text-gray-400 cursor-not-allowed pointer-events-none"
+                : "bg-lime-400 hover:bg-lime-500 text-white"
+            }`}
           >
             <svg
               className="w-4 h-4"
@@ -424,11 +443,15 @@ export default function MenuManagePage() {
       {/* ── Danh mục cửa hàng (đã chọn) + Chọn thêm ── */}
       <div className="px-8 py-4 bg-white border-b border-gray-100">
         <div className="flex flex-wrap items-center gap-3">
-          <span className="text-sm font-semibold text-gray-700">Danh mục cửa hàng:</span>
+          <span className="text-sm font-semibold text-gray-700">
+            Danh mục cửa hàng:
+          </span>
           {shopCategoriesLoading ? (
             <span className="text-sm text-gray-400">Đang tải...</span>
           ) : shopCategories.length === 0 ? (
-            <span className="text-sm text-amber-600">Chưa chọn danh mục. Hãy chọn từ danh sách Admin đã tạo.</span>
+            <span className="text-sm text-amber-600">
+              Chưa chọn danh mục. Hãy chọn từ danh sách Admin đã tạo.
+            </span>
           ) : (
             <div className="flex flex-wrap gap-2">
               {shopCategories.map((c) => (
@@ -446,8 +469,18 @@ export default function MenuManagePage() {
             onClick={openPickCategoryModal}
             className="ml-auto flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium bg-purple-500 hover:bg-purple-600 text-white transition"
           >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+            <svg
+              className="w-4 h-4"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M12 4v16m8-8H4"
+              />
             </svg>
             Chọn thêm danh mục
           </button>
@@ -457,7 +490,8 @@ export default function MenuManagePage() {
       {/* ── No shop categories hint ── */}
       {shopCategories.length === 0 && !shopCategoriesLoading && (
         <div className="px-8 py-3 bg-amber-50 border-b border-amber-200 text-amber-700 text-sm font-medium">
-          Chưa chọn danh mục cho cửa hàng. Bấm &quot;Chọn thêm danh mục&quot; để chọn từ danh sách Admin đã tạo. Sau đó bạn mới có thể thêm sản phẩm.
+          Chưa chọn danh mục cho cửa hàng. Bấm &quot;Chọn thêm danh mục&quot; để
+          chọn từ danh sách Admin đã tạo. Sau đó bạn mới có thể thêm sản phẩm.
         </div>
       )}
 
@@ -542,7 +576,7 @@ export default function MenuManagePage() {
                         {p.productName}
                       </p>
                       {p.description && (
-                        <p className="text-xs text-gray-400 truncate max-w-[200px]">
+                        <p className="text-xs text-gray-400 truncate max-w-50">
                           {p.description}
                         </p>
                       )}
@@ -550,8 +584,8 @@ export default function MenuManagePage() {
                     <td className="px-5 py-3 text-gray-600">
                       {getCategoryName(p.categoryId)}
                     </td>
-                    <td className="px-5 py-3 font-mono text-gray-500 truncate max-w-[120px]">
-                      {p.image || p.sku || "—"}
+                    <td className="px-5 py-3 font-mono text-gray-500 truncate max-w-30">
+                      {p.image || "—"}
                     </td>
                     <td className="px-5 py-3 text-right text-gray-600">
                       {formatPrice(p.importPrice)}
@@ -571,10 +605,11 @@ export default function MenuManagePage() {
                             setFormError(getApiErrorMessage(err));
                           }
                         }}
-                        className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-semibold transition ${p.isActive
-                          ? "bg-green-100 text-green-700 hover:bg-green-200"
-                          : "bg-gray-100 text-gray-500 hover:bg-gray-200"
-                          }`}
+                        className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-semibold transition ${
+                          p.isActive
+                            ? "bg-green-100 text-green-700 hover:bg-green-200"
+                            : "bg-gray-100 text-gray-500 hover:bg-gray-200"
+                        }`}
                       >
                         <span
                           className={`w-1.5 h-1.5 rounded-full ${p.isActive ? "bg-green-500" : "bg-gray-400"}`}
@@ -726,7 +761,9 @@ export default function MenuManagePage() {
                   <input
                     type="text"
                     value={form.image}
-                    onChange={(e) => setForm({ ...form, image: e.target.value })}
+                    onChange={(e) =>
+                      setForm({ ...form, image: e.target.value })
+                    }
                     placeholder="Để trống dùng ảnh mặc định. VD: /images/cafe.jpg"
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-lime-400 focus:border-lime-400 outline-none"
                   />
@@ -867,8 +904,10 @@ export default function MenuManagePage() {
               </div>
             </div>
             <p className="text-sm text-gray-700 bg-gray-50 rounded-lg px-3 py-2 mb-5">
-              <span className="font-semibold">{toggleConfirmTarget.productName}</span>{" "}
-              — Ảnh: {toggleConfirmTarget.image || toggleConfirmTarget.sku || "—"}
+              <span className="font-semibold">
+                {toggleConfirmTarget.productName}
+              </span>{" "}
+              — Ảnh: {toggleConfirmTarget.image || "—"}
             </p>
             <div className="flex gap-3">
               <button
@@ -919,7 +958,7 @@ export default function MenuManagePage() {
               <span className="font-semibold">
                 {hardDeleteTarget.productName}
               </span>{" "}
-              — Ảnh: {hardDeleteTarget.image || hardDeleteTarget.sku || "—"}
+              — Ảnh: {hardDeleteTarget.image || "—"}
             </p>
             <div className="flex gap-3">
               <button
@@ -944,14 +983,26 @@ export default function MenuManagePage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg mx-4 overflow-hidden max-h-[85vh] flex flex-col">
             <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
-              <h2 className="text-lg font-bold text-gray-800">Chọn danh mục cho cửa hàng</h2>
+              <h2 className="text-lg font-bold text-gray-800">
+                Chọn danh mục cho cửa hàng
+              </h2>
               <button
                 type="button"
                 onClick={() => setShowPickCategoryModal(false)}
                 className="text-gray-400 hover:text-gray-700 transition p-1"
               >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                <svg
+                  className="w-5 h-5"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M6 18L18 6M6 6l12 12"
+                  />
                 </svg>
               </button>
             </div>
@@ -969,17 +1020,23 @@ export default function MenuManagePage() {
                   <div className="w-10 h-10 border-4 border-purple-400 border-t-transparent rounded-full animate-spin" />
                 </div>
               ) : allCategories.length === 0 ? (
-                <p className="py-8 text-center text-gray-500 text-sm">Chưa có danh mục nào. Admin cần tạo danh mục trước.</p>
+                <p className="py-8 text-center text-gray-500 text-sm">
+                  Chưa có danh mục nào. Admin cần tạo danh mục trước.
+                </p>
               ) : (
                 <ul className="space-y-2">
                   {allCategories.map((c) => {
-                    const alreadyAdded = shopCategories.some((sc) => sc.id === c.id);
+                    const alreadyAdded = shopCategories.some(
+                      (sc) => sc.id === c.id,
+                    );
                     return (
                       <li
                         key={c.id}
                         className="flex items-center justify-between py-2.5 px-3 rounded-xl border border-gray-100 hover:bg-gray-50 transition"
                       >
-                        <span className="font-medium text-gray-800">{c.name}</span>
+                        <span className="font-medium text-gray-800">
+                          {c.name}
+                        </span>
                         {alreadyAdded ? (
                           <span className="text-xs font-medium text-lime-600 bg-lime-100 px-2.5 py-1 rounded-full">
                             Đã thêm
@@ -1003,7 +1060,6 @@ export default function MenuManagePage() {
           </div>
         </div>
       )}
-
     </div>
   );
 }
