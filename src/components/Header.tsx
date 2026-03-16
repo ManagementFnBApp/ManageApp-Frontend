@@ -75,7 +75,7 @@ export default function Header() {
         <div className="flex items-center">
           {/* Logo */}
           <Link href="/" className="flex items-center space-x-2">
-            <img src="icon.svg" alt="Icon" width="24" height="24"></img>
+            <img src="/icon.svg" alt="Icon" width="24" height="24"></img>
             <span className="font-bold text-lg text-gray-800">LumioViet</span>
           </Link>
 

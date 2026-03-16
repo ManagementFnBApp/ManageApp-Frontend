@@ -24,7 +24,7 @@ export default function Footer() {
           {/* Company Info */}
           <div>
             <div className="flex items-center space-x-2 mb-4">
-              <img src="icon.svg" alt="Icon" width="24" height="24"></img>
+              <img src="/icon.svg" alt="Icon" width="24" height="24"></img>
               <span className="text-xl font-bold text-white">LumioViet</span>
             </div>
             <p className="text-sm text-white">
