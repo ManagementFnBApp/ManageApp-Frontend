@@ -23,6 +23,8 @@ import {
   ChevronDown,
   User,
   Users,
+  Clock,
+  UserCheck,
 } from "lucide-react";
 import { handleLogout, getStoredRoleNormalized } from "@/apis/auth";
 import {
@@ -39,25 +41,28 @@ const MAIN_ITEMS_STAFF = [
   { href: "/manager/orders", label: "Đơn hàng", icon: ClipboardList },
 ];
 
-// Shopowner thấy thêm: Quản lý Menu, Quản lý nhân viên
+// Shopowner thấy thêm: Quản lý Menu, Quản lý nhân viên, Quản lý ca, Quản lý khách hàng
 const MAIN_ITEMS_SHOPOWNER_EXTRA = [
   { href: "/manager/menu", label: "Quản lý Menu", icon: UtensilsCrossed },
   { href: "/manager/staff", label: "Quản lý nhân viên", icon: Users },
+  { href: "/manager/shifts", label: "Quản lý ca", icon: Clock },
+  { href: "/manager/customers", label: "Quản lý khách hàng", icon: UserCheck },
 ];
 
 const REPORT_ITEMS = [
-  { href: "/manager/reports/all", label: "Báo cáo cả ngày", icon: BarChart2 },
-  { href: "/manager/reports/morning", label: "Báo cáo buổi sáng", icon: Sun },
   {
-    href: "/manager/reports/afternoon",
-    label: "Báo cáo buổi chiều",
-    icon: Sunset,
+    id: "report-monthly",
+    href: "/manager/report",
+    label: "Báo cáo tháng",
+    icon: BarChart2,
   },
+  { id: "report-morning", label: "Báo cáo buổi sáng", icon: Sun },
+  { id: "report-afternoon", label: "Báo cáo buổi chiều", icon: Sunset },
 ];
 
 const OTHER_ITEMS = [
-  { href: "/manager/import", label: "Phiếu nhập hàng", icon: PackageOpen },
-  { href: "/manager/cancel", label: "Phiếu hủy hàng", icon: XCircle },
+  { id: "import", label: "Phiếu nhập hàng", icon: PackageOpen },
+  { id: "cancel", label: "Phiếu hủy hàng", icon: XCircle },
 ];
 
 function getRoleDisplayLabel(role: string): string {
@@ -89,9 +94,16 @@ export default function ManagerLayout({
     ? MAIN_ITEMS_STAFF
     : [...MAIN_ITEMS_STAFF, ...MAIN_ITEMS_SHOPOWNER_EXTRA];
 
-  const handleReportClick = () => {
-    // Chưa có màn report riêng.
-    alert("Tính năng báo cáo đang được phát triển.");
+  const handleReportOrOther = (id: string) => {
+    if (
+      id === "report-morning" ||
+      id === "report-afternoon" ||
+      id === "import" ||
+      id === "cancel"
+    ) {
+      // Tính năng đang phát triển - giữ hành vi cũ
+      alert("Tính năng đang được phát triển.");
+    }
   };
 
   const isActive = (href: string) => {
@@ -175,16 +187,36 @@ export default function ManagerLayout({
                     Báo cáo
                   </p>
                   <ul className="space-y-0.5 px-2">
-                    {REPORT_ITEMS.map(({ href, label, icon: Icon }) => (
-                      <li key={href}>
-                        <button
-                          type="button"
-                          onClick={handleReportClick}
-                          className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-800 transition w-full text-left"
-                        >
-                          <Icon size={20} className="shrink-0 text-slate-500" />
-                          <span>{label}</span>
-                        </button>
+                    {REPORT_ITEMS.map(({ id, href, label, icon: Icon }) => (
+                      <li key={id}>
+                        {href ? (
+                          <Link
+                            href={href}
+                            className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition ${
+                              isActive(href)
+                                ? "bg-slate-100 text-slate-900"
+                                : "text-slate-600 hover:bg-slate-50 hover:text-slate-800"
+                            }`}
+                          >
+                            <Icon
+                              size={20}
+                              className="shrink-0 text-slate-500"
+                            />
+                            <span>{label}</span>
+                          </Link>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => handleReportOrOther(id)}
+                            className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-800 transition w-full text-left"
+                          >
+                            <Icon
+                              size={20}
+                              className="shrink-0 text-slate-500"
+                            />
+                            <span>{label}</span>
+                          </button>
+                        )}
                       </li>
                     ))}
                   </ul>
@@ -194,19 +226,16 @@ export default function ManagerLayout({
                 Khác
               </p>
               <ul className="space-y-0.5 px-2">
-                {OTHER_ITEMS.map(({ href, label, icon: Icon }) => (
-                  <li key={href}>
-                    <Link
-                      href={href}
-                      className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition ${
-                        isActive(href)
-                          ? "bg-slate-100 text-slate-900"
-                          : "text-slate-600 hover:bg-slate-50 hover:text-slate-800"
-                      }`}
+                {OTHER_ITEMS.map(({ id, label, icon: Icon }) => (
+                  <li key={id}>
+                    <button
+                      type="button"
+                      onClick={() => handleReportOrOther(id)}
+                      className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-800 transition w-full text-left"
                     >
                       <Icon size={20} className="shrink-0 text-slate-500" />
                       <span>{label}</span>
-                    </Link>
+                    </button>
                   </li>
                 ))}
               </ul>

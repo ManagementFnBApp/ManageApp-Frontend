@@ -1,5 +1,7 @@
 export interface OrderItem {
   productId: number;
+  /** ID sản phẩm của shop — dùng khi gửi shop_product_id lên backend */
+  shopProductId?: number;
   name: string;
   price: number;
   quantity: number;
