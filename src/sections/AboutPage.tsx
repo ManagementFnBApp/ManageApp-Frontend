@@ -54,7 +54,7 @@ export default function AboutPage() {
         {/* Hero Content */}
         <div className="relative z-10 max-w-5xl mx-auto text-center">
           <h1 className="text-5xl md:text-6xl font-extrabold text-gray-900 mb-8 leading-tight">
-            Về ManageApp
+            Về LumioViet
           </h1>
           <p className="text-xl text-gray-700 leading-relaxed">
             Sứ mệnh của chúng tôi là hỗ trợ các doanh nghiệp khởi nghiệp F&B tại

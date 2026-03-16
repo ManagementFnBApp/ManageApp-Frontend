@@ -8,7 +8,7 @@ export default function CustomersPage() {
       company: "Cửa hàng thời trang ABC",
       avatar: "👨‍💼",
       content:
-        "ManageApp giúp tôi quản lý 5 cửa hàng một cách dễ dàng. Doanh thu tăng 40% sau 6 tháng sử dụng.",
+        "LumioViet giúp tôi quản lý 5 cửa hàng một cách dễ dàng. Doanh thu tăng 40% sau 6 tháng sử dụng.",
       rating: 5,
     },
     {
@@ -56,7 +56,7 @@ export default function CustomersPage() {
           Khách hàng tin tưởng
         </h1>
         <p className="text-xl text-gray-600 max-w-3xl mx-auto mb-8">
-          Hơn 300.000+ doanh nghiệp đã lựa chọn ManageApp
+          Hơn 300.000+ doanh nghiệp đã lựa chọn LumioViet
         </p>
         <div className="flex justify-center gap-12">
           {[

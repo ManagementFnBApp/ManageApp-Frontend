@@ -24,10 +24,8 @@ export default function Footer() {
           {/* Company Info */}
           <div>
             <div className="flex items-center space-x-2 mb-4">
-              <div className="w-10 h-10 bg-blue-600 rounded-lg flex items-center justify-center">
-                <span className="text-white font-bold text-xl">MA</span>
-              </div>
-              <span className="text-xl font-bold text-white">Manage App</span>
+              <img src="icon.svg" alt="Icon" width="24" height="24"></img>
+              <span className="text-xl font-bold text-white">LumioViet</span>
             </div>
             <p className="text-sm text-white">
               Hệ thống quản lý ứng dụng chuyên nghiệp, giúp doanh nghiệp phát
@@ -95,7 +93,7 @@ export default function Footer() {
         </div>
 
         <div className="border-t border-white border-opacity-30 mt-8 pt-8 text-center text-sm text-white">
-          <p>&copy; {currentYear} Manage App. All rights reserved.</p>
+          <p>&copy; {currentYear} LumioViet. All rights reserved.</p>
         </div>
       </div>
     </footer>

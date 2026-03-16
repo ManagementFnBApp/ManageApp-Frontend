@@ -1248,9 +1248,9 @@ export default function AdminDashboard() {
         <div className="px-5 py-5 border-b border-gray-100">
           <Link href="/" className="flex items-center gap-2">
             <div className="w-8 h-8 rounded-lg bg-blue-500 flex items-center justify-center">
-              <span className="text-white font-bold text-xs">MA</span>
+              <img src="icon.svg" alt="Icon" width="24" height="24"></img>
             </div>
-            <span className="font-bold text-gray-800 text-sm">ManageApp</span>
+            <span className="font-bold text-gray-800 text-sm">LumioViet</span>
           </Link>
         </div>
 

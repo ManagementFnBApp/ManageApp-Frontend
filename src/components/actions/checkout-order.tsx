@@ -91,7 +91,9 @@ export default function CheckoutOrderPage() {
       setOrderRef(String(orderResponse.id));
       setStep("success");
     } catch (err: unknown) {
-      const msg = (err as { message?: string })?.message || "Có lỗi xảy ra. Vui lòng thử lại.";
+      const msg =
+        (err as { message?: string })?.message ||
+        "Có lỗi xảy ra. Vui lòng thử lại.";
       setErrorMsg(msg);
       setStep("error");
     }
@@ -147,7 +149,7 @@ export default function CheckoutOrderPage() {
 
   if (step === "success") {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-green-50 to-white px-4 pt-20">
+      <div className="min-h-screen flex items-center justify-center bg-linear-to-br from-green-50 to-white px-4 pt-20">
         <div className="bg-white rounded-3xl shadow-2xl p-10 max-w-md w-full text-center">
           <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-6">
             <svg
@@ -252,7 +254,7 @@ export default function CheckoutOrderPage() {
   // ── FORM STATE ─────────────────────────────────────────────────────────────
   // Mirrors the layout of /checkout but scoped to POS product orders.
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-slate-100 py-16 px-4">
+    <div className="min-h-screen bg-linear-to-br from-slate-50 via-blue-50 to-slate-100 py-16 px-4">
       <div className="container mx-auto max-w-5xl">
         {/* Back button */}
         <Link
@@ -336,7 +338,7 @@ export default function CheckoutOrderPage() {
 
               {/* Security note */}
               <div className="mt-6 bg-green-50 rounded-xl p-4 flex items-start gap-3">
-                <span className="text-green-600 text-xl flex-shrink-0">🔒</span>
+                <span className="text-green-600 text-xl shrink-0">🔒</span>
                 <p className="text-green-700 text-xs leading-relaxed">
                   Giao dịch được ghi nhận và lưu trữ an toàn.
                 </p>
@@ -371,9 +373,7 @@ export default function CheckoutOrderPage() {
                           : "border-gray-200 hover:border-gray-300 bg-white"
                       }`}
                     >
-                      <span className="text-2xl flex-shrink-0">
-                        {method.icon}
-                      </span>
+                      <span className="text-2xl shrink-0">{method.icon}</span>
                       <span
                         className={`text-sm font-medium ${
                           selectedMethod === method.id
@@ -384,7 +384,7 @@ export default function CheckoutOrderPage() {
                         {method.label}
                       </span>
                       {selectedMethod === method.id && (
-                        <div className="ml-auto w-5 h-5 bg-blue-500 rounded-full flex items-center justify-center flex-shrink-0">
+                        <div className="ml-auto w-5 h-5 bg-blue-500 rounded-full flex items-center justify-center shrink-0">
                           <svg
                             className="w-3 h-3 text-white"
                             fill="currentColor"
@@ -422,7 +422,7 @@ export default function CheckoutOrderPage() {
                       <strong>Số tài khoản:</strong> 1234 5678 9012
                     </p>
                     <p>
-                      <strong>Chủ TK:</strong> MANAGE APP CO., LTD
+                      <strong>Chủ TK:</strong> LUMIOVIET CO., LTD
                     </p>
                   </div>
                 )}

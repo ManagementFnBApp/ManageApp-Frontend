@@ -1,6 +1,6 @@
 export default function NewsPage() {
   const featured = {
-    title: "ManageApp ra mắt tính năng AI dự đoán xu hướng bán hàng",
+    title: "LumioViet ra mắt tính năng AI dự đoán xu hướng bán hàng",
     excerpt:
       "Công nghệ AI mới giúp doanh nghiệp dự đoán chính xác nhu cầu khách hàng",
     date: "27/01/2026",
@@ -10,7 +10,7 @@ export default function NewsPage() {
   };
   const news = [
     {
-      title: "ManageApp đạt 300.000 khách hàng trên toàn quốc",
+      title: "LumioViet đạt 300.000 khách hàng trên toàn quốc",
       excerpt: "Chúng tôi tự hào thông báo đã phục vụ hơn 300.000 doanh nghiệp",
       date: "25/01/2026",
       category: "Công ty",
@@ -38,7 +38,7 @@ export default function NewsPage() {
       image: "📦",
     },
     {
-      title: "ManageApp Mobile App đạt 4.8⭐ trên cả iOS và Android",
+      title: "LumioViet Mobile App đạt 4.8⭐ trên cả iOS và Android",
       excerpt:
         "Ứng dụng di động nhận được đánh giá cao từ cộng đồng người dùng",
       date: "08/01/2026",

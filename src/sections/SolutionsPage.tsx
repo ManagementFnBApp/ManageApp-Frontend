@@ -48,7 +48,7 @@ export default function SolutionsPage() {
           Giải pháp toàn diện
         </h1>
         <p className="text-xl text-gray-600 max-w-3xl mx-auto">
-          ManageApp cung cấp giải pháp quản lý bán hàng toàn diện cho mọi quy mô
+          LumioViet cung cấp giải pháp quản lý bán hàng toàn diện cho mọi quy mô
           doanh nghiệp
         </p>
       </section>

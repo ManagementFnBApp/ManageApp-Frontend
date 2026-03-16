@@ -104,7 +104,7 @@ export default function ManagerLayout({
       {/* ── Sidebar ── */}
       <aside
         className={`flex flex-col bg-white border-r border-slate-200 transition-all duration-300 shrink-0 ${
-          collapsed ? "w-[72px]" : "w-60"
+          collapsed ? "w-18" : "w-60"
         }`}
         style={{ borderTopRightRadius: 12, borderBottomRightRadius: 12 }}
       >
@@ -128,7 +128,7 @@ export default function ManagerLayout({
                 </svg>
               </div>
               <span className="font-bold text-slate-800 truncate">
-                ManageApp
+                LumioViet
               </span>
             </Link>
           )}
@@ -218,7 +218,7 @@ export default function ManagerLayout({
       {/* ── Content area ── */}
       <div className="flex-1 flex flex-col min-w-0">
         {/* Top bar */}
-        <header className="flex-shrink-0 flex items-center justify-between px-6 py-3 bg-white border-b border-slate-200">
+        <header className="shrink-0 flex items-center justify-between px-6 py-3 bg-white border-b border-slate-200">
           <h1 className="text-base font-semibold text-slate-700">
             Hệ thống quản lý cửa hàng
           </h1>
