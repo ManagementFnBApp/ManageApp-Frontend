@@ -1,7 +1,9 @@
 'use client';
 
 import { useState, useCallback, useEffect } from 'react';
-import { createManagedUser, getUsers, CreateManagedUserDto, AppUser } from '@/apis/adminApi';
+import { useRouter } from 'next/navigation';
+import { createManagedUser, getManagedUsers, getUsersForStaffPage, updateUser, CreateManagedUserDto, AppUser } from '@/apis/adminApi';
+import { getStoredRoleNormalized } from '@/apis/auth';
 import { UserPlus } from 'lucide-react';
 
 type FormState = CreateManagedUserDto & { confirmPassword: string };
@@ -30,6 +32,15 @@ function formatDate(d: string | undefined) {
 }
 
 export default function ManagerStaffPage() {
+  const router = useRouter();
+
+  // Chỉ SHOPOWNER mới được truy cập trang này
+  useEffect(() => {
+    if (getStoredRoleNormalized() !== 'SHOPOWNER') {
+      router.replace('/manager');
+    }
+  }, [router]);
+
   const [staffList, setStaffList] = useState<AppUser[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
@@ -40,47 +51,81 @@ export default function ManagerStaffPage() {
   const [success, setSuccess] = useState('');
   const [currentUser, setCurrentUser] = useState<AppUser | null>(null);
   const [userCheckError, setUserCheckError] = useState('');
+  const [togglingId, setTogglingId] = useState<number | null>(null);
 
   const load = useCallback(async () => {
     const uid =
       typeof window !== 'undefined' ? Number(localStorage.getItem('userId') || 0) : 0;
+    const role = typeof window !== 'undefined' ? getStoredRoleNormalized() : '';
+    const shopId =
+      typeof window !== 'undefined' ? localStorage.getItem('shopId') : null;
+
     setLoading(true);
     setLoadError('');
+    setUserCheckError('');
+
     try {
-      const users = await getUsers();
-      const myStaff = users.filter(
-        (u) => u.owner_manager_id != null && u.owner_manager_id === uid
-      );
-      const self = users.find((u) => u.user_id === uid);
-      setCurrentUser(self || null);
+      const { users, isAdmin } = await getUsersForStaffPage();
 
-      // Kiểm tra điều kiện
-      if (self) {
-        console.log('Current SHOPOWNER info:', {
-          user_id: self.user_id,
-          username: self.username,
-          email: self.email,
-          role: self.role,
-          shop_id: self.shop_id,
-          is_active: self.is_active,
-        });
-
-        if (self.role !== 'SHOPOWNER') {
-          setUserCheckError(`Bạn không phải SHOPOWNER (hiện tại: ${self.role}). Chỉ SHOPOWNER được tạo nhân viên.`);
-        } else if (!self.shop_id) {
-          setUserCheckError('Bạn chưa có shop. Vui lòng đăng ký subscription trước khi tạo nhân viên.');
-        } else {
-          setUserCheckError('');
+      if (isAdmin) {
+        const myStaff = users.filter(
+          (u) => u.owner_manager_id != null && u.owner_manager_id === uid
+        );
+        const self = users.find((u) => u.user_id === uid);
+        setCurrentUser(self || null);
+        setStaffList(myStaff);
+        if (self) {
+          if ((self.role ?? '').toUpperCase() !== 'SHOPOWNER') {
+            setUserCheckError(
+              `Chỉ SHOPOWNER được tạo nhân viên qua trang này (hiện tại: ${self.role ?? '—'}).`
+            );
+          } else if (!self.shop_id) {
+            setUserCheckError(
+              'Bạn chưa có shop. Vui lòng đăng ký subscription trước khi tạo nhân viên.'
+            );
+          }
         }
       } else {
-        console.warn('Current user not found in users list');
+        // SHOPOWNER: dùng GET /users/managed để lấy danh sách nhân viên của mình
+        setCurrentUser({
+          user_id: uid,
+          email: '',
+          username: '',
+          is_active: true,
+          role: role || null,
+          shop_id: shopId ? Number(shopId) : null,
+          owner_manager_id: null,
+          role_id: null,
+          created_at: '',
+          updated_at: '',
+        });
+        if (role !== 'SHOPOWNER') {
+          setUserCheckError(
+            'Trang này dành cho SHOPOWNER. Backend chỉ cho phép ADMIN xem danh sách user; SHOPOWNER có thể tạo tài khoản nhân viên qua nút "Tạo tài khoản".'
+          );
+          setStaffList([]);
+        } else if (!shopId) {
+          setUserCheckError(
+            'Bạn chưa có shop. Vui lòng đăng ký subscription trước khi tạo nhân viên.'
+          );
+          setStaffList([]);
+        } else {
+          // SHOPOWNER hợp lệ: lấy danh sách nhân viên qua GET /users/managed
+          try {
+            const managed = await getManagedUsers();
+            setStaffList(managed);
+          } catch (err) {
+            console.error('Error loading managed users:', err);
+            setStaffList([]);
+          }
+        }
       }
-
-      setStaffList(myStaff);
     } catch (err) {
       console.error('Error loading staff:', err);
-      setLoadError('Không thể tải danh sách nhân viên.');
-      setUserCheckError('');
+      setLoadError(
+        'Không thể tải dữ liệu. Kiểm tra kết nối và đăng nhập với quyền phù hợp.'
+      );
+      setStaffList([]);
     } finally {
       setLoading(false);
     }
@@ -123,7 +168,6 @@ export default function ManagerStaffPage() {
     setFormError('');
 
     try {
-      console.log('Submitting create managed user...', form);
       const result = await createManagedUser({
         email: form.email.trim(),
         username: form.username.trim(),
@@ -132,10 +176,9 @@ export default function ManagerStaffPage() {
       });
 
       closeModal();
-      await load();
+      setStaffList((prev) => [result, ...prev]);
       setSuccess('Tài khoản đã tạo. Thông tin đăng nhập đã được gửi đến email của người dùng.');
       setTimeout(() => setSuccess(''), 5000);
-      console.log('Created user:', result);
     } catch (e: unknown) {
       const err = e as any;
       const errorMsg = getErrorMessage(e);
@@ -157,6 +200,26 @@ export default function ManagerStaffPage() {
       }
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const handleToggleActive = async (user: AppUser) => {
+    setTogglingId(user.user_id);
+    try {
+      const updated = await updateUser(user.user_id, { is_active: !user.is_active });
+      setStaffList((prev) => prev.map((u) => (u.user_id === user.user_id ? updated : u)));
+      setSuccess(
+        updated.is_active
+          ? `Đã kích hoạt tài khoản "${updated.username}".`
+          : `Đã vô hiệu hóa tài khoản "${updated.username}".`
+      );
+      setTimeout(() => setSuccess(''), 4000);
+    } catch (e: unknown) {
+      const msg = getErrorMessage(e);
+      setLoadError(`Cập nhật thất bại: ${msg}`);
+      setTimeout(() => setLoadError(''), 4000);
+    } finally {
+      setTogglingId(null);
     }
   };
 
@@ -220,10 +283,10 @@ export default function ManagerStaffPage() {
                   <th className="px-4 py-3 text-left">ID</th>
                   <th className="px-4 py-3 text-left">Username</th>
                   <th className="px-4 py-3 text-left">Email</th>
-
                   <th className="px-4 py-3 text-left">Vai trò</th>
                   <th className="px-4 py-3 text-left">Trạng thái</th>
                   <th className="px-4 py-3 text-left">Ngày tạo</th>
+                  <th className="px-4 py-3 text-center">Thao tác</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -232,7 +295,6 @@ export default function ManagerStaffPage() {
                     <td className="px-4 py-3 text-slate-500 font-mono">#{u.user_id}</td>
                     <td className="px-4 py-3 font-medium text-slate-800">{u.username}</td>
                     <td className="px-4 py-3 text-slate-600">{u.email}</td>
-
                     <td className="px-4 py-3">
                       <span
                         className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${(u.role ?? '').toUpperCase() === 'SHOPOWNER'
@@ -252,6 +314,24 @@ export default function ManagerStaffPage() {
                       </span>
                     </td>
                     <td className="px-4 py-3 text-slate-500">{formatDate(u.created_at)}</td>
+                    <td className="px-4 py-3 text-center">
+                      <button
+                        type="button"
+                        disabled={togglingId === u.user_id}
+                        onClick={() => handleToggleActive(u)}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-medium transition disabled:opacity-50 ${
+                          u.is_active
+                            ? 'bg-red-50 text-red-600 hover:bg-red-100 border border-red-200'
+                            : 'bg-green-50 text-green-700 hover:bg-green-100 border border-green-200'
+                        }`}
+                      >
+                        {togglingId === u.user_id
+                          ? '...'
+                          : u.is_active
+                            ? 'Vô hiệu hóa'
+                            : 'Kích hoạt'}
+                      </button>
+                    </td>
                   </tr>
                 ))}
               </tbody>

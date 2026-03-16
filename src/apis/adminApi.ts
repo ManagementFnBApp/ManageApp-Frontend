@@ -121,9 +121,44 @@ function unwrap<T>(raw: unknown): T {
 
 // ===== USER APIs (backend chỉ có /users, không có /admins) =====
 
+/** ADMIN: Lấy tất cả user (GET /users) - backend chỉ cho phép role ADMIN */
 export const getUsers = async (): Promise<AppUser[]> => {
   const res = await apiClient.get('/users');
   return unwrap<AppUser[]>(res.data);
+};
+
+/**
+ * SHOPOWNER lấy danh sách user do mình quản lý - GET /users/managed.
+ * Backend trả users có owner_manager_id = current user id.
+ */
+export const getManagedUsers = async (): Promise<AppUser[]> => {
+  const res = await apiClient.get('/users/managed');
+  const list = unwrap<AppUser[]>(res.data);
+  return Array.isArray(list) ? list : [];
+};
+
+/**
+ * Trang Quản lý nhân viên: backend có GET /users (ADMIN only) và GET /users/managed (mọi user đã đăng nhập).
+ * - ADMIN: gọi GET /users thành công → trả danh sách, lọc owner_manager_id ở FE.
+ * - SHOPOWNER: gọi GET /users → 403 → trả { users: [], isAdmin: false }, dùng getManagedUsers() để lấy danh sách.
+ */
+export const getUsersForStaffPage = async (): Promise<{
+  users: AppUser[];
+  isAdmin: boolean;
+}> => {
+  try {
+    const res = await apiClient.get('/users');
+    const list = unwrap<AppUser[]>(res.data);
+    const users = Array.isArray(list) ? list : [];
+    return { users, isAdmin: true };
+  } catch (e: unknown) {
+    const err = e as { status?: number; response?: { status?: number } };
+    const status = err?.status ?? err?.response?.status;
+    if (status === 403) {
+      return { users: [], isAdmin: false };
+    }
+    throw e;
+  }
 };
 
 /** Tạo user - POST /users. Backend nhận snake_case. */

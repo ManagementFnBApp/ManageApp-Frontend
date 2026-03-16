@@ -70,12 +70,19 @@ function normalizeSubscriptionItem(raw: Record<string, unknown>): SubscriptionPl
   };
 }
 
+function unwrap<T>(raw: unknown): T {
+  if (raw && typeof raw === 'object' && 'data' in (raw as object)) {
+    return (raw as { data: T }).data;
+  }
+  return raw as T;
+}
+
 /** Lấy tất cả gói subscription đang active (Public - không cần login) */
 export const getSubscriptions = async (): Promise<SubscriptionPlan[]> => {
-  const response = await apiClient.get<Record<string, unknown>[]>('/subscriptions');
-  return Array.isArray(response.data)
-    ? response.data.map(normalizeSubscriptionItem)
-    : [];
+  const response = await apiClient.get('/subscriptions');
+  const list = unwrap<Record<string, unknown>[]>(response.data);
+  const arr = Array.isArray(list) ? list : [];
+  return arr.map(normalizeSubscriptionItem);
 };
 
 /**
@@ -86,11 +93,12 @@ export const registerShopSubscription = async (
   subscriptionId: number,
   shopName?: string,
 ): Promise<ShopSubscription> => {
-  const response = await apiClient.post<ShopSubscription>('/subscriptions/shops', {
+  const response = await apiClient.post('/subscriptions/shops', {
     subscription_id: subscriptionId,
     shop_name: shopName ?? 'My Shop',
   });
-  return response.data;
+  const raw = unwrap<Record<string, unknown>>(response.data);
+  return raw as unknown as ShopSubscription;
 };
 
 /**
@@ -102,12 +110,13 @@ export const createSubscriptionPayment = async (
   method: string,
   amount: number,
 ): Promise<SubscriptionPayment> => {
-  const response = await apiClient.post<SubscriptionPayment>('/subscriptions/payments', {
+  const response = await apiClient.post('/subscriptions/payments', {
     sub_shop_id: subShopId,
     method,
     amount,
   });
-  return response.data;
+  const raw = unwrap<Record<string, unknown>>(response.data);
+  return raw as unknown as SubscriptionPayment;
 };
 
 /**
@@ -115,10 +124,11 @@ export const createSubscriptionPayment = async (
  * Backend: PUT /subscriptions/payments/:id/status - kích hoạt shop và gán role SHOPOWNER
  */
 export const confirmPayment = async (paymentId: number): Promise<SubscriptionPayment> => {
-  const response = await apiClient.put<SubscriptionPayment>(
+  const response = await apiClient.put(
     `/subscriptions/payments/${paymentId}/status`,
   );
-  return response.data;
+  const raw = unwrap<Record<string, unknown>>(response.data);
+  return raw as unknown as SubscriptionPayment;
 };
 
 // ===== ALIASES =====

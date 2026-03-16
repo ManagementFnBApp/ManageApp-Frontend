@@ -3,13 +3,10 @@
 import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import type { Product, CreateProductPayload } from "@/apis/productApi";
-import {
-  getCategories,
-  getShopCategories,
-  addShopCategories,
-  type Category as ApiCategory,
-} from "@/apis/categoryApi";
+import { getCategories } from "@/apis/categoryApi";
+import { getShopCategories, addShopCategories } from "@/apis/shopCategoryApi";
 import { useMenuStore } from "@/data/useMenuStore";
+import { getStoredRoleNormalized } from "@/apis/auth";
 
 type Category = { id: number; name: string };
 type ModalMode = "add" | "edit" | null;
@@ -20,6 +17,14 @@ const formatPrice = (n: number) =>
 
 export default function MenuManagePage() {
   const router = useRouter();
+
+  // Chỉ SHOPOWNER mới được truy cập trang này
+  useEffect(() => {
+    if (getStoredRoleNormalized() !== 'SHOPOWNER') {
+      router.replace('/manager');
+    }
+  }, [router]);
+
   const {
     products,
     loading,
@@ -31,59 +36,78 @@ export default function MenuManagePage() {
     toggleActive,
   } = useMenuStore();
 
-  // ── Categories từ API ──
-  const [categories, setCategories] = useState<Category[]>([]);
-  const [categoriesLoading, setCategoriesLoading] = useState(true);
-  const [categoriesError, setCategoriesError] = useState<string | null>(null);
-  const [showCategoryModal, setShowCategoryModal] = useState(false);
-  const [categoryFormError, setCategoryFormError] = useState<string | null>(
-    null,
-  );
-  const [categorySubmitting, setCategorySubmitting] = useState(false);
-  // Tất cả category tổng (admin tạo) — dùng để hiển thị danh sách chọn trong modal
-  const [allCategories, setAllCategories] = useState<ApiCategory[]>([]);
-  // Category ids đang được chọn trong modal
-  const [selectedCategoryIds, setSelectedCategoryIds] = useState<Set<number>>(
-    new Set(),
-  );
+  // ── Danh mục cửa hàng đã chọn (dùng cho form sản phẩm) ──
+  const [shopCategories, setShopCategories] = useState<Category[]>([]);
+  const [shopCategoriesLoading, setShopCategoriesLoading] = useState(true);
+  const [shopCategoriesError, setShopCategoriesError] = useState<string | null>(null);
 
-  const fetchCategories = useCallback(async () => {
-    setCategoriesLoading(true);
+  const fetchShopCategories = useCallback(async () => {
+    setShopCategoriesLoading(true);
     try {
-      // Chỉ lấy categories đã gắn với shop này
-      const res = await getShopCategories();
-      setCategories(res.map((c) => ({ id: c.id, name: c.categoryName })));
-      setCategoriesError(null);
+      const list = await getShopCategories();
+      setShopCategories(list);
+      setShopCategoriesError(null);
     } catch (err) {
-      console.error("Failed to fetch categories:", err);
-      setCategoriesError("Không thể tải danh mục");
-      setCategories([]);
+      console.error("Failed to fetch shop categories:", err);
+      setShopCategoriesError("Không thể tải danh mục cửa hàng");
+      setShopCategories([]);
     } finally {
-      setCategoriesLoading(false);
+      setShopCategoriesLoading(false);
     }
   }, []);
 
-  // Load tất cả category tổng khi mở modal để user chọn
   useEffect(() => {
-    if (!showCategoryModal) return;
-    getCategories()
-      .then((cats) => setAllCategories(cats))
-      .catch(() => {});
-  }, [showCategoryModal]);
+    fetchShopCategories();
+  }, [fetchShopCategories]);
 
-  useEffect(() => {
-    fetchCategories();
-  }, [fetchCategories]);
+  // ── Modal "Chọn thêm danh mục" (danh sách Admin tạo) ──
+  const [allCategories, setAllCategories] = useState<Category[]>([]);
+  const [showPickCategoryModal, setShowPickCategoryModal] = useState(false);
+  const [pickCategoryLoading, setPickCategoryLoading] = useState(false);
+  const [pickCategorySubmitting, setPickCategorySubmitting] = useState(false);
+  const [pickCategoryError, setPickCategoryError] = useState<string | null>(null);
+
+  const openPickCategoryModal = useCallback(async () => {
+    setShowPickCategoryModal(true);
+    setPickCategoryError(null);
+    setPickCategoryLoading(true);
+    try {
+      const res = await getCategories();
+      setAllCategories(res.map((c: { id: number; categoryName: string }) => ({ id: c.id, name: c.categoryName })));
+    } catch (err) {
+      setPickCategoryError("Không thể tải danh sách danh mục");
+      setAllCategories([]);
+    } finally {
+      setPickCategoryLoading(false);
+    }
+  }, []);
+
+  const addCategoriesToShop = useCallback(
+    async (categoryIds: number[]) => {
+      if (categoryIds.length === 0) return;
+      setPickCategorySubmitting(true);
+      setPickCategoryError(null);
+      try {
+        await addShopCategories(categoryIds);
+        await fetchShopCategories();
+      } catch (err) {
+        setPickCategoryError((err as { message?: string })?.message ?? "Thêm danh mục thất bại");
+      } finally {
+        setPickCategorySubmitting(false);
+      }
+    },
+    [fetchShopCategories]
+  );
 
   const EMPTY_FORM: CreateProductPayload = {
-    categoryId: categories[0]?.id ?? 0,
+    categoryId: shopCategories[0]?.id ?? 0,
     productName: "",
-    sku: "",
+    image: "",
     barcode: "",
     description: "",
     measureUnit: "ly",
-    importPrice: 0, // giá nhập kho
-    listPrice: 0, // giá bán lẻ
+    importPrice: 0,
+    listPrice: 0,
     isActive: true,
   };
 
@@ -116,7 +140,7 @@ export default function MenuManagePage() {
     const matchSearch =
       !search.trim() ||
       p.productName.toLowerCase().includes(search.toLowerCase()) ||
-      p.sku.toLowerCase().includes(search.toLowerCase());
+      (p.image || p.sku || "").toLowerCase().includes(search.toLowerCase());
     const matchActive =
       filterActive === "all" ||
       (filterActive === "active" && p.isActive) ||
@@ -124,36 +148,13 @@ export default function MenuManagePage() {
     return matchSearch && matchActive;
   });
 
-  // ── Thêm category vào shop (chọn từ danh sách tổng) ──
-  const handleAddCategoriesToShop = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (selectedCategoryIds.size === 0) {
-      setCategoryFormError("Chọn ít nhất 1 danh mục");
-      return;
-    }
-    setCategorySubmitting(true);
-    setCategoryFormError(null);
-    try {
-      await addShopCategories(Array.from(selectedCategoryIds));
-      await fetchCategories(); // refresh danh sách shop categories
-      setShowCategoryModal(false);
-      setSelectedCategoryIds(new Set());
-      showToast("create");
-    } catch (err: unknown) {
-      const error = err as any;
-      setCategoryFormError(error?.message ?? "Không thể thêm danh mục");
-    } finally {
-      setCategorySubmitting(false);
-    }
-  };
-
   // ── Open modals ──
   const openAdd = () => {
-    if (categories.length === 0) {
-      setFormError("Bạn cần tạo danh mục trước khi thêm sản phẩm mới.");
+    if (shopCategories.length === 0) {
+      setFormError("Chưa chọn danh mục cho cửa hàng. Hãy bấm \"Chọn thêm danh mục\" để chọn từ danh sách Admin đã tạo.");
       return;
     }
-    setForm({ ...EMPTY_FORM, categoryId: categories[0].id });
+    setForm({ ...EMPTY_FORM, categoryId: shopCategories[0].id });
     setFormError(null);
     setEditTarget(null);
     setModalMode("add");
@@ -163,7 +164,7 @@ export default function MenuManagePage() {
     setForm({
       categoryId: product.categoryId,
       productName: product.productName,
-      sku: product.sku,
+      image: product.image || product.sku || "",
       barcode: product.barcode ?? "",
       description: product.description ?? "",
       measureUnit: product.measureUnit ?? "ly",
@@ -182,89 +183,114 @@ export default function MenuManagePage() {
   };
 
   // ── Submit form ──
+  const getApiErrorMessage = (err: unknown): string => {
+    const e = err as {
+      message?: string | string[];
+      originalError?: { response?: { data?: { message?: string | string[] } } };
+      response?: { data?: { message?: string | string[] } };
+    };
+    const msg =
+      e?.response?.data?.message ??
+      e?.originalError?.response?.data?.message ??
+      e?.message;
+    if (Array.isArray(msg)) return msg.join(", ");
+    if (typeof msg === "string" && msg.trim()) return msg;
+    return "Có lỗi xảy ra. Thử lại hoặc kiểm tra backend (port 2999) đã chạy.";
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.productName.trim()) {
       setFormError("Tên sản phẩm không được trống.");
       return;
     }
-    if (!form.sku.trim()) {
-      setFormError("SKU không được trống.");
-      return;
-    }
     if (form.listPrice <= 0) {
       setFormError("Giá bán phải lớn hơn 0.");
       return;
     }
+    if (modalMode === "add") {
+      const validCategoryId = Number(form.categoryId);
+      if (!validCategoryId || !shopCategories.some((c) => c.id === validCategoryId)) {
+        setFormError("Vui lòng chọn danh mục thuộc cửa hàng (đã chọn ở bước \"Chọn thêm danh mục\").");
+        return;
+      }
+    }
 
     setSubmitting(true);
     setFormError(null);
+    const importPrice = Number(form.importPrice);
+    const listPrice = Number(form.listPrice);
     try {
       if (modalMode === "add") {
         await addProduct({
-          categoryId: form.categoryId,
-          productName: form.productName,
-          sku: form.sku,
-          barcode: form.barcode || undefined,
-          description: form.description || undefined,
-          measureUnit: form.measureUnit || undefined,
-          importPrice: form.importPrice,
-          listPrice: form.listPrice,
+          categoryId: Number(form.categoryId),
+          productName: form.productName.trim(),
+          image: form.image?.trim() || "",
+          barcode: form.barcode?.trim() || undefined,
+          description: form.description?.trim() || undefined,
+          measureUnit: form.measureUnit?.trim() || undefined,
+          importPrice: Number.isNaN(importPrice) ? 0 : importPrice,
+          listPrice: Number.isNaN(listPrice) ? 0 : listPrice,
           isActive: form.isActive ?? true,
         });
         closeModal();
         showToast("create");
+        refresh();
       } else if (editTarget) {
         await editProduct(editTarget.productId, {
-          categoryId: form.categoryId,
-          productName: form.productName,
-          sku: form.sku,
-          barcode: form.barcode || undefined,
-          description: form.description || undefined,
-          measureUnit: form.measureUnit || undefined,
-          importPrice: form.importPrice,
-          listPrice: form.listPrice,
+          categoryId: Number(form.categoryId),
+          productName: form.productName.trim(),
+          image: form.image?.trim() || editTarget.image || "",
+          barcode: form.barcode?.trim() || undefined,
+          description: form.description?.trim() || undefined,
+          measureUnit: form.measureUnit?.trim() || undefined,
+          importPrice: Number.isNaN(importPrice) ? 0 : importPrice,
+          listPrice: Number.isNaN(listPrice) ? 0 : listPrice,
           isActive: form.isActive,
         });
         closeModal();
         showToast("edit");
+        refresh();
       }
     } catch (err: unknown) {
-      setFormError(
-        (err as { message?: string })?.message ?? "Có lỗi xảy ra, thử lại.",
-      );
+      setFormError(getApiErrorMessage(err));
     } finally {
       setSubmitting(false);
     }
   };
 
-  // ── Toggle active with confirm ──
-  const handleToggleClick = (product: Product) => {
-    // Nếu đang bật → tắt: cần confirm
-    // Nếu đang tắt → bật: toggle trực tiếp
-    if (product.isActive) {
-      setToggleConfirmTarget(product);
-    } else {
-      confirmToggle(product);
+  // ── Soft delete (ngừng bán) ──
+  const confirmSoftDelete = async () => {
+    if (!toggleConfirmTarget) return;
+    try {
+      await toggleActive(toggleConfirmTarget.productId);
+      setToggleConfirmTarget(null);
+      setFormError(null);
+      showToast("soft-delete");
+      refresh();
+    } catch (err: unknown) {
+      setFormError(getApiErrorMessage(err));
+      setToggleConfirmTarget(null);
     }
   };
 
-  const confirmToggle = async (product: Product) => {
-    await toggleActive(product.productId);
-    setToggleConfirmTarget(null);
-    showToast(product.isActive ? "soft-delete" : "edit");
-  };
-
-  // ── Hard delete ──
+  // ── Hard delete (xóa hẳn) ──
   const confirmHardDelete = async () => {
     if (!hardDeleteTarget) return;
-    await removeProduct(hardDeleteTarget.productId);
-    setHardDeleteTarget(null);
-    showToast("hard-delete");
+    try {
+      await removeProduct(hardDeleteTarget.productId);
+      setHardDeleteTarget(null);
+      setFormError(null);
+      showToast("hard-delete");
+      refresh();
+    } catch (err: unknown) {
+      setFormError(getApiErrorMessage(err));
+      setHardDeleteTarget(null);
+    }
   };
 
   const getCategoryName = (id: number) =>
-    categories.find((c) => c.id === id)?.name ?? `Cat #${id}`;
+    shopCategories.find((c) => c.id === id)?.name ?? `Cat #${id}`;
 
   return (
     <div className="min-h-screen bg-[#f0f0f0] flex flex-col">
@@ -340,33 +366,12 @@ export default function MenuManagePage() {
         <div className="flex items-center gap-3">
           <button
             type="button"
-            onClick={() => setShowCategoryModal(true)}
-            className="flex items-center gap-2 px-4 py-2 bg-purple-400 hover:bg-purple-500 text-white font-semibold rounded-xl shadow transition"
-          >
-            <svg
-              className="w-4 h-4"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M12 4v16m8-8H4"
-              />
-            </svg>
-            Thêm danh mục
-          </button>
-          <button
-            type="button"
             onClick={openAdd}
-            disabled={categories.length === 0 || categoriesLoading}
-            className={`flex items-center gap-2 px-4 py-2 font-semibold rounded-xl shadow transition ${
-              categories.length === 0 || categoriesLoading
-                ? "bg-gray-300 text-gray-400 cursor-not-allowed"
-                : "bg-lime-400 hover:bg-lime-500 text-white"
-            }`}
+            disabled={shopCategories.length === 0 || shopCategoriesLoading}
+            className={`flex items-center gap-2 px-4 py-2 font-semibold rounded-xl shadow transition ${shopCategories.length === 0 || shopCategoriesLoading
+              ? "bg-gray-300 text-gray-400 cursor-not-allowed pointer-events-none"
+              : "bg-lime-400 hover:bg-lime-500 text-white"
+              }`}
           >
             <svg
               className="w-4 h-4"
@@ -400,15 +405,15 @@ export default function MenuManagePage() {
         </div>
       )}
 
-      {/* ── Categories error banner ── */}
-      {categoriesError && (
+      {/* ── Shop categories error banner ── */}
+      {shopCategoriesError && (
         <div className="px-8 py-2.5 bg-amber-50 border-b border-amber-200 flex items-center gap-3">
           <span className="text-amber-700 text-sm font-medium">
-            {categoriesError}
+            {shopCategoriesError}
           </span>
           <button
             type="button"
-            onClick={fetchCategories}
+            onClick={fetchShopCategories}
             className="ml-auto text-xs underline text-amber-600 hover:text-amber-800 transition"
           >
             Thử lại
@@ -416,10 +421,43 @@ export default function MenuManagePage() {
         </div>
       )}
 
-      {/* ── No categories warning ── */}
-      {categories.length === 0 && !categoriesLoading && (
+      {/* ── Danh mục cửa hàng (đã chọn) + Chọn thêm ── */}
+      <div className="px-8 py-4 bg-white border-b border-gray-100">
+        <div className="flex flex-wrap items-center gap-3">
+          <span className="text-sm font-semibold text-gray-700">Danh mục cửa hàng:</span>
+          {shopCategoriesLoading ? (
+            <span className="text-sm text-gray-400">Đang tải...</span>
+          ) : shopCategories.length === 0 ? (
+            <span className="text-sm text-amber-600">Chưa chọn danh mục. Hãy chọn từ danh sách Admin đã tạo.</span>
+          ) : (
+            <div className="flex flex-wrap gap-2">
+              {shopCategories.map((c) => (
+                <span
+                  key={c.id}
+                  className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-lime-100 text-lime-800"
+                >
+                  {c.name}
+                </span>
+              ))}
+            </div>
+          )}
+          <button
+            type="button"
+            onClick={openPickCategoryModal}
+            className="ml-auto flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium bg-purple-500 hover:bg-purple-600 text-white transition"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+            </svg>
+            Chọn thêm danh mục
+          </button>
+        </div>
+      </div>
+
+      {/* ── No shop categories hint ── */}
+      {shopCategories.length === 0 && !shopCategoriesLoading && (
         <div className="px-8 py-3 bg-amber-50 border-b border-amber-200 text-amber-700 text-sm font-medium">
-          Bạn cần tạo danh mục trước khi thêm sản phẩm mới.
+          Chưa chọn danh mục cho cửa hàng. Bấm &quot;Chọn thêm danh mục&quot; để chọn từ danh sách Admin đã tạo. Sau đó bạn mới có thể thêm sản phẩm.
         </div>
       )}
 
@@ -429,7 +467,7 @@ export default function MenuManagePage() {
           type="text"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          placeholder="Tìm theo tên, SKU..."
+          placeholder="Tìm theo tên, ảnh..."
           className="px-4 py-2 border border-gray-300 rounded-xl text-sm focus:ring-2 focus:ring-lime-400 focus:border-lime-400 outline-none w-64"
         />
         <div className="flex rounded-xl overflow-hidden border border-gray-200 text-sm">
@@ -488,7 +526,7 @@ export default function MenuManagePage() {
                   <th className="px-5 py-3 text-left">#</th>
                   <th className="px-5 py-3 text-left">Sản phẩm</th>
                   <th className="px-5 py-3 text-left">Danh mục</th>
-                  <th className="px-5 py-3 text-left">SKU</th>
+                  <th className="px-5 py-3 text-left">Ảnh / Mã</th>
                   <th className="px-5 py-3 text-right">Giá vốn</th>
                   <th className="px-5 py-3 text-right">Giá bán</th>
                   <th className="px-5 py-3 text-center">Trạng thái</th>
@@ -512,8 +550,8 @@ export default function MenuManagePage() {
                     <td className="px-5 py-3 text-gray-600">
                       {getCategoryName(p.categoryId)}
                     </td>
-                    <td className="px-5 py-3 font-mono text-gray-500">
-                      {p.sku}
+                    <td className="px-5 py-3 font-mono text-gray-500 truncate max-w-[120px]">
+                      {p.image || p.sku || "—"}
                     </td>
                     <td className="px-5 py-3 text-right text-gray-600">
                       {formatPrice(p.importPrice)}
@@ -524,12 +562,19 @@ export default function MenuManagePage() {
                     <td className="px-5 py-3 text-center">
                       <button
                         type="button"
-                        onClick={() => handleToggleClick(p)}
-                        className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-semibold transition ${
-                          p.isActive
-                            ? "bg-green-100 text-green-700 hover:bg-green-200"
-                            : "bg-gray-100 text-gray-500 hover:bg-gray-200"
-                        }`}
+                        onClick={async () => {
+                          try {
+                            await toggleActive(p.productId);
+                            showToast("edit");
+                            refresh();
+                          } catch (err: unknown) {
+                            setFormError(getApiErrorMessage(err));
+                          }
+                        }}
+                        className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-semibold transition ${p.isActive
+                          ? "bg-green-100 text-green-700 hover:bg-green-200"
+                          : "bg-gray-100 text-gray-500 hover:bg-gray-200"
+                          }`}
                       >
                         <span
                           className={`w-1.5 h-1.5 rounded-full ${p.isActive ? "bg-green-500" : "bg-gray-400"}`}
@@ -650,7 +695,7 @@ export default function MenuManagePage() {
                     }
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-lime-400 focus:border-lime-400 outline-none bg-white"
                   >
-                    {categories.map((c) => (
+                    {shopCategories.map((c) => (
                       <option key={c.id} value={c.id}>
                         {c.name}
                       </option>
@@ -676,14 +721,14 @@ export default function MenuManagePage() {
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-semibold text-gray-600 mb-1">
-                    SKU *
+                    URL ảnh sản phẩm (tùy chọn)
                   </label>
                   <input
                     type="text"
-                    value={form.sku}
-                    onChange={(e) => setForm({ ...form, sku: e.target.value })}
-                    placeholder="VD: CF-001"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-lime-400 focus:border-lime-400 outline-none font-mono"
+                    value={form.image}
+                    onChange={(e) => setForm({ ...form, image: e.target.value })}
+                    placeholder="Để trống dùng ảnh mặc định. VD: /images/cafe.jpg"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-lime-400 focus:border-lime-400 outline-none"
                   />
                 </div>
                 <div>
@@ -822,10 +867,8 @@ export default function MenuManagePage() {
               </div>
             </div>
             <p className="text-sm text-gray-700 bg-gray-50 rounded-lg px-3 py-2 mb-5">
-              <span className="font-semibold">
-                {toggleConfirmTarget.productName}
-              </span>{" "}
-              — SKU: {toggleConfirmTarget.sku}
+              <span className="font-semibold">{toggleConfirmTarget.productName}</span>{" "}
+              — Ảnh: {toggleConfirmTarget.image || toggleConfirmTarget.sku || "—"}
             </p>
             <div className="flex gap-3">
               <button
@@ -835,7 +878,7 @@ export default function MenuManagePage() {
                 Hủy
               </button>
               <button
-                onClick={() => confirmToggle(toggleConfirmTarget)}
+                onClick={confirmSoftDelete}
                 className="flex-1 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-semibold text-sm transition"
               >
                 Ngừng bán
@@ -876,7 +919,7 @@ export default function MenuManagePage() {
               <span className="font-semibold">
                 {hardDeleteTarget.productName}
               </span>{" "}
-              — SKU: {hardDeleteTarget.sku}
+              — Ảnh: {hardDeleteTarget.image || hardDeleteTarget.sku || "—"}
             </p>
             <div className="flex gap-3">
               <button
@@ -896,134 +939,71 @@ export default function MenuManagePage() {
         </div>
       )}
 
-      {/* ══ ADD SHOP CATEGORY MODAL ══ */}
-      {showCategoryModal && (
+      {/* ══ Modal: Chọn thêm danh mục cho cửa hàng (từ danh sách Admin) ══ */}
+      {showPickCategoryModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 overflow-hidden">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg mx-4 overflow-hidden max-h-[85vh] flex flex-col">
             <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
-              <div>
-                <h2 className="text-lg font-bold text-gray-800">
-                  Thêm danh mục vào shop
-                </h2>
-                <p className="text-xs text-gray-400 mt-0.5">
-                  Chọn từ danh sách do Admin tạo
-                </p>
-              </div>
+              <h2 className="text-lg font-bold text-gray-800">Chọn danh mục cho cửa hàng</h2>
               <button
                 type="button"
-                onClick={() => {
-                  setShowCategoryModal(false);
-                  setSelectedCategoryIds(new Set());
-                  setCategoryFormError(null);
-                }}
-                className="text-gray-400 hover:text-gray-700 transition"
+                onClick={() => setShowPickCategoryModal(false)}
+                className="text-gray-400 hover:text-gray-700 transition p-1"
               >
-                <svg
-                  className="w-5 h-5"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M6 18L18 6M6 6l12 12"
-                  />
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                 </svg>
               </button>
             </div>
-
-            <form
-              onSubmit={handleAddCategoriesToShop}
-              className="px-6 py-5 space-y-4"
-            >
-              {categoryFormError && (
-                <p className="text-sm text-red-500 bg-red-50 px-3 py-2 rounded-lg">
-                  {categoryFormError}
-                </p>
-              )}
-
-              <div className="max-h-60 overflow-y-auto space-y-2 pr-1">
-                {allCategories.length === 0 ? (
-                  <p className="text-sm text-gray-400 text-center py-4">
-                    Đang tải...
-                  </p>
-                ) : (
-                  allCategories.map((cat) => {
-                    const alreadyAdded = categories.some(
-                      (c) => c.id === cat.id,
-                    );
-                    const checked = selectedCategoryIds.has(cat.id);
+            <p className="px-6 pb-3 text-sm text-gray-500">
+              Danh sách do Admin tạo. Chọn danh mục bạn muốn thêm vào cửa hàng.
+            </p>
+            {pickCategoryError && (
+              <div className="mx-6 mb-3 px-3 py-2 rounded-lg bg-red-50 text-red-600 text-sm">
+                {pickCategoryError}
+              </div>
+            )}
+            <div className="flex-1 overflow-y-auto px-6 pb-6">
+              {pickCategoryLoading ? (
+                <div className="py-12 flex justify-center">
+                  <div className="w-10 h-10 border-4 border-purple-400 border-t-transparent rounded-full animate-spin" />
+                </div>
+              ) : allCategories.length === 0 ? (
+                <p className="py-8 text-center text-gray-500 text-sm">Chưa có danh mục nào. Admin cần tạo danh mục trước.</p>
+              ) : (
+                <ul className="space-y-2">
+                  {allCategories.map((c) => {
+                    const alreadyAdded = shopCategories.some((sc) => sc.id === c.id);
                     return (
-                      <label
-                        key={cat.id}
-                        className={`flex items-center gap-3 px-3 py-2 rounded-lg cursor-pointer transition ${
-                          alreadyAdded
-                            ? "bg-gray-50 opacity-50 cursor-not-allowed"
-                            : checked
-                              ? "bg-purple-50 border border-purple-200"
-                              : "hover:bg-gray-50 border border-transparent"
-                        }`}
+                      <li
+                        key={c.id}
+                        className="flex items-center justify-between py-2.5 px-3 rounded-xl border border-gray-100 hover:bg-gray-50 transition"
                       >
-                        <input
-                          type="checkbox"
-                          disabled={alreadyAdded}
-                          checked={alreadyAdded || checked}
-                          onChange={() => {
-                            if (alreadyAdded) return;
-                            setSelectedCategoryIds((prev) => {
-                              const next = new Set(prev);
-                              next.has(cat.id)
-                                ? next.delete(cat.id)
-                                : next.add(cat.id);
-                              return next;
-                            });
-                          }}
-                          className="accent-purple-500"
-                        />
-                        <span className="text-sm text-gray-700">
-                          {cat.categoryName}
-                        </span>
-                        {alreadyAdded && (
-                          <span className="ml-auto text-xs text-gray-400">
-                            Đã có
+                        <span className="font-medium text-gray-800">{c.name}</span>
+                        {alreadyAdded ? (
+                          <span className="text-xs font-medium text-lime-600 bg-lime-100 px-2.5 py-1 rounded-full">
+                            Đã thêm
                           </span>
+                        ) : (
+                          <button
+                            type="button"
+                            disabled={pickCategorySubmitting}
+                            onClick={() => addCategoriesToShop([c.id])}
+                            className="text-sm font-medium text-purple-600 hover:text-purple-700 hover:bg-purple-50 px-3 py-1.5 rounded-lg transition disabled:opacity-50"
+                          >
+                            Thêm vào cửa hàng
+                          </button>
                         )}
-                      </label>
+                      </li>
                     );
-                  })
-                )}
-              </div>
-
-              <div className="flex gap-3 pt-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowCategoryModal(false);
-                    setSelectedCategoryIds(new Set());
-                    setCategoryFormError(null);
-                  }}
-                  className="flex-1 py-2.5 rounded-xl border border-gray-300 text-sm font-medium text-gray-700 hover:bg-gray-50 transition"
-                >
-                  Hủy
-                </button>
-                <button
-                  type="submit"
-                  disabled={
-                    categorySubmitting || selectedCategoryIds.size === 0
-                  }
-                  className="flex-1 py-2.5 rounded-xl bg-purple-400 hover:bg-purple-500 text-white font-semibold text-sm transition disabled:opacity-60"
-                >
-                  {categorySubmitting
-                    ? "Đang thêm..."
-                    : `Thêm (${selectedCategoryIds.size})`}
-                </button>
-              </div>
-            </form>
+                  })}
+                </ul>
+              )}
+            </div>
           </div>
         </div>
       )}
+
     </div>
   );
 }

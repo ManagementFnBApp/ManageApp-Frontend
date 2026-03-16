@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import Image from "next/image";
 import { useState } from "react";
@@ -65,6 +65,7 @@ export default function ResetPasswordPage() {
                   src="/image/image1.jpg"
                   alt="Reset Password Background"
                   fill
+                  sizes="(max-width: 1023px) 0px, 50vw"
                   style={{ objectFit: "cover" }}
                   priority
                 />
