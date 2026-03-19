@@ -25,7 +25,9 @@ export default function Footer() {
           <div>
             <div className="flex items-center space-x-2 mb-4">
               <img src="/icon.svg" alt="Icon" width="24" height="24"></img>
-              <span className="text-xl font-bold text-white">LumioViet</span>
+              <span className="text-xl font-bold text-white mt-1">
+                LumioViet
+              </span>
             </div>
             <p className="text-sm text-white">
               Hệ thống quản lý ứng dụng chuyên nghiệp, giúp doanh nghiệp phát

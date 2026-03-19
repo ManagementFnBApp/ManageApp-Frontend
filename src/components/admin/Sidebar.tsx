@@ -1,7 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import type { AdminTabId, AdminTabConfig } from "@/features/admin/AdminTabs.types";
+import type {
+  AdminTabId,
+  AdminTabConfig,
+} from "@/features/admin/AdminTabs.types";
 
 interface AdminSidebarProps {
   adminEmail: string;
@@ -19,19 +22,19 @@ export function AdminSidebar({
   onLogout,
 }: AdminSidebarProps) {
   return (
-    <aside className="w-60 flex-shrink-0 bg-white border-r border-gray-200 flex flex-col min-h-screen fixed left-0 top-0 z-40">
+    <aside className="w-60 shrink-0 bg-white border-r border-gray-200 flex flex-col min-h-screen fixed left-0 top-0 z-40">
       <div className="px-5 py-5 border-b border-gray-100">
-        <Link href="/" className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-lg bg-blue-500 flex items-center justify-center">
-            <span className="text-white font-bold text-xs">MA</span>
-          </div>
-          <span className="font-bold text-gray-800 text-sm">ManageApp</span>
+        <Link href="/" className="flex items-center gap-3">
+          <img src="/icon.svg" alt="Icon" width="24" height="24"></img>
+          <span className="font-bold text-gray-800 text-xl mt-1">
+            LumioViet
+          </span>
         </Link>
       </div>
 
-      <div className="px-4 py-3 mx-3 mt-4 rounded-xl bg-gradient-to-r from-purple-500 to-blue-500 text-white">
+      <div className="px-4 py-3 mx-3 mt-4 rounded-xl bg-linear-to-r from-purple-500 to-blue-500 text-white">
         <div className="flex items-center gap-2">
-          <div className="w-9 h-9 rounded-full bg-white/20 flex items-center justify-center font-bold flex-shrink-0">
+          <div className="w-9 h-9 rounded-full bg-white/20 flex items-center justify-center font-bold shrink-0">
             {adminEmail.charAt(0).toUpperCase()}
           </div>
           <div className="min-w-0">
