@@ -293,11 +293,11 @@ export function TenantsTab() {
           </thead>
           <tbody className="divide-y divide-gray-100">
             {loading ? (
-              <LoadingRow cols={9} />
+              <LoadingRow cols={8} />
             ) : error ? (
-              <ErrorRow cols={9} message={error} onRetry={load} />
+              <ErrorRow cols={8} message={error} onRetry={load} />
             ) : filtered.length === 0 ? (
-              <EmptyRow cols={9} message="Chưa có shopowner hoặc staff nào" />
+              <EmptyRow cols={8} message="Chưa có shopowner hoặc staff nào" />
             ) : (
               filtered.map((u) => (
                 <tr key={u.user_id} className="hover:bg-gray-50 transition">
@@ -308,9 +308,6 @@ export function TenantsTab() {
                     {u.username}
                   </td>
                   <td className="px-4 py-3 text-gray-600">{u.email}</td>
-                  <td className="px-4 py-3 text-gray-600">
-                    {u.profile?.full_name ?? "—"}
-                  </td>
                   <td className="px-4 py-3">
                     {u.role ? (
                       <Badge
