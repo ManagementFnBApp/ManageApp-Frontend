@@ -106,10 +106,15 @@ export default function PosPage() {
           new Map(
             products
               .filter((p) => p.categoryId)
-              .map((p) => [
-                String(p.categoryId),
-                p.categoryName?.trim() || `Danh mục ${p.categoryId}`,
-              ]),
+              .map((p) => {
+                const categoryName = (p as any).categoryName;
+                return [
+                  String(p.categoryId),
+                  (typeof categoryName === "string" && categoryName.trim().length > 0)
+                    ? categoryName.trim()
+                    : `Danh mục ${p.categoryId}`,
+                ];
+              }),
           ).entries(),
         )
           .map(([id, label]) => ({ id, label }))
