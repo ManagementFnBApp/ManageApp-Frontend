@@ -130,6 +130,7 @@ export default function MenuManagePage() {
   const [modalMode, setModalMode] = useState<ModalMode>(null);
   const [editTarget, setEditTarget] = useState<Product | null>(null);
   const [form, setForm] = useState<CreateProductPayload>(EMPTY_FORM);
+  const [imageFile, setImageFile] = useState<File | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
@@ -168,6 +169,7 @@ export default function MenuManagePage() {
       return;
     }
     setForm({ ...EMPTY_FORM, categoryId: shopCategories[0].id });
+    setImageFile(null);
     setFormError(null);
     setEditTarget(null);
     setModalMode("add");
@@ -186,6 +188,7 @@ export default function MenuManagePage() {
       isActive: product.isActive,
     });
     setFormError(null);
+    setImageFile(null);
     setEditTarget(product);
     setModalMode("edit");
   };
@@ -193,6 +196,7 @@ export default function MenuManagePage() {
   const closeModal = () => {
     setModalMode(null);
     setEditTarget(null);
+    setImageFile(null);
   };
 
   // ── Submit form ──
@@ -206,8 +210,29 @@ export default function MenuManagePage() {
       e?.response?.data?.message ??
       e?.originalError?.response?.data?.message ??
       e?.message;
-    if (Array.isArray(msg)) return msg.join(", ");
-    if (typeof msg === "string" && msg.trim()) return msg;
+
+    const normalizeOne = (raw: string): string => {
+      const m = raw.trim();
+      const lower = m.toLowerCase();
+
+      if (lower === "image should not be empty") {
+        return "Ảnh sản phẩm không được để trống.";
+      }
+      if (lower === "image must be a string") {
+        return "Ảnh sản phẩm không đúng định dạng mà backend yêu cầu.";
+      }
+      if (lower === "isactive must be a boolean value") {
+        return "Trạng thái bán (isActive) không hợp lệ.";
+      }
+      return m;
+    };
+
+    if (Array.isArray(msg)) {
+      return msg.map((item) => `- ${normalizeOne(String(item))}`).join("\n");
+    }
+    if (typeof msg === "string" && msg.trim()) {
+      return normalizeOne(msg);
+    }
     return "Có lỗi xảy ra. Thử lại hoặc kiểm tra backend (port 2999) đã chạy.";
   };
 
@@ -215,6 +240,10 @@ export default function MenuManagePage() {
     e.preventDefault();
     if (!form.productName.trim()) {
       setFormError("Tên sản phẩm không được trống.");
+      return;
+    }
+    if (!String(form.barcode ?? "").trim()) {
+      setFormError("Barcode không được trống.");
       return;
     }
     if (form.listPrice <= 0) {
@@ -232,6 +261,10 @@ export default function MenuManagePage() {
         );
         return;
       }
+      if (!imageFile) {
+        setFormError("Vui lòng chọn ảnh sản phẩm.");
+        return;
+      }
     }
 
     setSubmitting(true);
@@ -243,8 +276,8 @@ export default function MenuManagePage() {
         await addProduct({
           categoryId: Number(form.categoryId),
           productName: form.productName.trim(),
-          image: form.image?.trim() || "",
-          barcode: form.barcode?.trim() || undefined,
+          image: imageFile as File,
+          barcode: String(form.barcode ?? "").trim(),
           description: form.description?.trim() || undefined,
           measureUnit: form.measureUnit?.trim() || undefined,
           importPrice: Number.isNaN(importPrice) ? 0 : importPrice,
@@ -255,16 +288,16 @@ export default function MenuManagePage() {
         showToast("create");
         refresh();
       } else if (editTarget) {
+        // Tránh gửi categoryId/isActive trong update để tránh backend truyền thẳng vào Prisma bị lỗi.
+        // Status vẫn dùng nút toggle ở table.
         await editProduct(editTarget.productId, {
-          categoryId: Number(form.categoryId),
           productName: form.productName.trim(),
-          image: form.image?.trim() || editTarget.image || "",
-          barcode: form.barcode?.trim() || undefined,
+          ...(imageFile ? { image: imageFile } : {}),
+          barcode: String(form.barcode ?? "").trim(),
           description: form.description?.trim() || undefined,
           measureUnit: form.measureUnit?.trim() || undefined,
           importPrice: Number.isNaN(importPrice) ? 0 : importPrice,
           listPrice: Number.isNaN(listPrice) ? 0 : listPrice,
-          isActive: form.isActive,
         });
         closeModal();
         showToast("edit");
@@ -585,7 +618,22 @@ export default function MenuManagePage() {
                       {getCategoryName(p.categoryId)}
                     </td>
                     <td className="px-5 py-3 font-mono text-gray-500 truncate max-w-30">
-                      {p.image || "—"}
+                      {p.image ? (
+                        <div className="flex items-center">
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img
+                            src={p.image}
+                            alt={p.productName}
+                            className="w-10 h-10 rounded-lg object-cover border border-gray-200 bg-gray-50 shrink-0"
+                            onError={(e) => {
+                              (e.currentTarget as HTMLImageElement).style.display =
+                                "none";
+                            }}
+                          />
+                        </div>
+                      ) : (
+                        "—"
+                      )}
                     </td>
                     <td className="px-5 py-3 text-right text-gray-600">
                       {formatPrice(p.importPrice)}
@@ -728,6 +776,7 @@ export default function MenuManagePage() {
                     onChange={(e) =>
                       setForm({ ...form, categoryId: Number(e.target.value) })
                     }
+                    disabled={modalMode === "edit"}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-lime-400 focus:border-lime-400 outline-none bg-white"
                   >
                     {shopCategories.map((c) => (
@@ -756,21 +805,23 @@ export default function MenuManagePage() {
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-semibold text-gray-600 mb-1">
-                    URL ảnh sản phẩm (tùy chọn)
+                    Ảnh sản phẩm {modalMode === "add" ? "*" : "(tùy chọn)"}
                   </label>
                   <input
-                    type="text"
-                    value={form.image}
-                    onChange={(e) =>
-                      setForm({ ...form, image: e.target.value })
-                    }
-                    placeholder="Để trống dùng ảnh mặc định. VD: /images/cafe.jpg"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-lime-400 focus:border-lime-400 outline-none"
+                    type="file"
+                    accept="image/*"
+                    onChange={(e) => setImageFile(e.target.files?.[0] ?? null)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white"
                   />
+                  {modalMode === "edit" && (
+                    <p className="mt-1 text-xs text-gray-400">
+                      Nếu không chọn ảnh mới, hệ thống sẽ giữ ảnh hiện tại.
+                    </p>
+                  )}
                 </div>
                 <div>
                   <label className="block text-xs font-semibold text-gray-600 mb-1">
-                    Barcode
+                    Barcode *
                   </label>
                   <input
                     type="text"
@@ -778,7 +829,7 @@ export default function MenuManagePage() {
                     onChange={(e) =>
                       setForm({ ...form, barcode: e.target.value })
                     }
-                    placeholder="Tùy chọn"
+                    placeholder="Ví dụ: CF-SUA-DA-001"
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-lime-400 focus:border-lime-400 outline-none"
                   />
                 </div>
@@ -830,23 +881,25 @@ export default function MenuManagePage() {
                 />
               </div>
 
-              <div className="flex items-center gap-3">
-                <button
-                  type="button"
-                  onClick={() => setForm({ ...form, isActive: !form.isActive })}
-                  className={`relative w-11 h-6 rounded-full transition-colors ${form.isActive ? "bg-lime-400" : "bg-gray-300"}`}
-                >
-                  <span
-                    className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${form.isActive ? "translate-x-5" : "translate-x-0"}`}
-                  />
-                </button>
-                <span className="text-sm text-gray-700">
-                  {form.isActive ? "Đang bán" : "Ngừng bán"}
-                </span>
-              </div>
+              {modalMode === "add" && (
+                <div className="flex items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setForm({ ...form, isActive: !form.isActive })}
+                    className={`relative w-11 h-6 rounded-full transition-colors ${form.isActive ? "bg-lime-400" : "bg-gray-300"}`}
+                  >
+                    <span
+                      className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${form.isActive ? "translate-x-5" : "translate-x-0"}`}
+                    />
+                  </button>
+                  <span className="text-sm text-gray-700">
+                    {form.isActive ? "Đang bán" : "Ngừng bán"}
+                  </span>
+                </div>
+              )}
 
               {formError && (
-                <p className="text-sm text-red-500 bg-red-50 px-3 py-2 rounded-lg">
+                <p className="text-sm text-red-500 bg-red-50 px-3 py-2 rounded-lg whitespace-pre-line">
                   {formError}
                 </p>
               )}

@@ -5,8 +5,9 @@ import {
   updateShopProduct,
   deleteShopProduct,
   type Product,
+  type CreateShopProductPayload,
+  type UpdateShopProductPayload,
 } from "@/apis/shopProductApi";
-import type { CreateProductPayload, UpdateProductPayload } from "@/apis/productApi";
 
 // ── Hook dùng cho Menu Management page (kết nối thẳng BE) ───────────────────
 export function useMenuStore() {
@@ -38,7 +39,7 @@ export function useMenuStore() {
   }, [fetchProducts]);
 
   const addProduct = useCallback(
-    async (payload: CreateProductPayload) => {
+    async (payload: CreateShopProductPayload) => {
       const created = await createShopProduct(payload);
       setProducts((prev) => [created, ...prev]);
       return created;
@@ -47,7 +48,7 @@ export function useMenuStore() {
   );
 
   const editProduct = useCallback(
-    async (id: number, changes: UpdateProductPayload) => {
+    async (id: number, changes: UpdateShopProductPayload) => {
       const updated = await updateShopProduct(id, changes);
       setProducts((prev) =>
         prev.map((p) => (p.productId === id ? updated : p)),

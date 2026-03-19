@@ -1,9 +1,20 @@
 import { apiClient } from "../configs/axios";
-import type {
-  Product,
-  CreateProductPayload,
-  UpdateProductPayload,
-} from "./productApi";
+import type { Product } from "./productApi";
+
+// Payload riêng cho shop-products (backend dùng FileInterceptor('image'))
+export type CreateShopProductPayload = {
+  categoryId: number;
+  productName: string;
+  image: File | string;
+  barcode?: string;
+  description?: string;
+  measureUnit?: string;
+  importPrice: number;
+  listPrice: number;
+  isActive?: boolean;
+};
+
+export type UpdateShopProductPayload = Partial<CreateShopProductPayload>;
 
 const debugLoggingEnabled =
   typeof process !== "undefined" &&
@@ -68,11 +79,13 @@ function toNumber(value: unknown): number {
  * Dùng cùng shape với productApi.Product để useMenuStore tương thích.
  */
 function mapShopProduct(raw: Record<string, unknown>): Product {
+  const imageRaw = String(raw.image ?? "");
+  const image = imageRaw.replaceAll("\\", "/");
   return {
     productId: Number(raw.id ?? raw.productId),
     categoryId: Number(raw.category_id ?? raw.categoryId),
     productName: String(raw.product_name ?? raw.productName ?? ""),
-    image: String(raw.image ?? ""),
+    image,
     barcode: raw.barcode != null ? String(raw.barcode) : null,
     description: raw.description != null ? String(raw.description) : null,
     measureUnit: raw.measure_unit != null ? String(raw.measure_unit) : null,
@@ -103,12 +116,55 @@ export const getShopProducts = async (
   return products;
 };
 
+// ===== POS helper (needs category_name + image) =====
+
+export type PosShopProduct = {
+  id: number;
+  shopProductId: number;
+  name: string;
+  price: number;
+  categoryId: number;
+  categoryName: string;
+  image: string;
+  isActive: boolean;
+};
+
+/**
+ * GET /shop-products (raw) → dùng cho POS.
+ * Backend response có category_name + image (URL).
+ */
+export const getPosShopProducts = async (
+  isActive?: boolean,
+): Promise<PosShopProduct[]> => {
+  const res = await apiClient.get("/shop-products");
+  const raw = unwrap<unknown>(res.data);
+  const arr = Array.isArray(raw) ? raw : [];
+  const mapped = arr.map((item) => {
+    const r = (item as Record<string, unknown>) ?? {};
+    const imageRaw = String(r.image ?? "");
+    return {
+      id: Number(r.id ?? r.productId),
+      shopProductId: Number(r.id ?? r.productId),
+      name: String(r.product_name ?? r.productName ?? ""),
+      price: toNumber(r.list_price ?? r.listPrice),
+      categoryId: Number(r.category_id ?? r.categoryId),
+      categoryName: String(r.category_name ?? r.categoryName ?? ""),
+      image: imageRaw.replaceAll("\\", "/"),
+      isActive: Boolean(r.is_active ?? r.isActive ?? true),
+    } satisfies PosShopProduct;
+  });
+  if (isActive !== undefined) {
+    return mapped.filter((p) => p.isActive === isActive);
+  }
+  return mapped;
+};
+
 /**
  * POST /shop-products
  * SHOPOWNER: tạo sản phẩm mới cho shop. Backend tự gắn shop_id từ JWT.
  */
 export const createShopProduct = async (
-  payload: CreateProductPayload,
+  payload: CreateShopProductPayload,
 ): Promise<Product> => {
   const categoryId = Number(payload.categoryId);
   if (!Number.isInteger(categoryId) || categoryId <= 0) {
@@ -116,11 +172,48 @@ export const createShopProduct = async (
       "Danh mục sản phẩm không hợp lệ. Vui lòng chọn danh mục trước.",
     );
   }
-  const image =
-    (payload.image && String(payload.image).trim()) ||
-    `/placeholder-${Date.now()}-${Math.random().toString(36).slice(2)}.png`;
   const listPrice = Number(payload.listPrice);
   const importPrice = Number(payload.importPrice);
+
+  // multipart (khuyến nghị) khi có File ảnh
+  if (payload.image instanceof File) {
+    const form = new FormData();
+    /**
+     * Backend hiện tại vừa:
+     * - nhận file qua FileInterceptor('image')
+     * - validate DTO yêu cầu `image` là string (không rỗng)
+     *
+     * Để tương thích mà không sửa backend: gửi 2 part cùng field name `image`
+     * - part text: tên file (để pass validation)
+     * - part file: file thật (để multer lấy vào req.file)
+     *
+     * Lưu ý: append text trước để đảm bảo req.body.image có giá trị.
+     */
+    form.append("image", payload.image.name);
+    form.append("image", payload.image);
+    form.append("categoryId", String(categoryId));
+    form.append("productName", String(payload.productName).trim());
+    form.append("listPrice", String(Number.isNaN(listPrice) ? 0 : listPrice));
+    form.append("importPrice", String(Number.isNaN(importPrice) ? 0 : importPrice));
+    // deploy DTO: barcode là string (thường bị validate nếu thiếu) → luôn gửi
+    form.append("barcode", payload.barcode != null ? String(payload.barcode).trim() : "");
+    if (payload.description != null) form.append("description", String(payload.description));
+    if (payload.measureUnit != null) form.append("measureUnit", String(payload.measureUnit));
+    // Gửi isActive trong multipart, dùng cùng logic default như nhánh JSON.
+    // Giá trị boolean được stringify thành "true"/"false" để backend có thể parse.
+    const isActive = payload.isActive ?? true;
+    form.append("isActive", String(isActive));
+
+    const res = await apiClient.post("/shop-products", form, {
+      headers: { "Content-Type": "multipart/form-data" },
+    });
+    return mapShopProduct(unwrap<Record<string, unknown>>(res.data) ?? {});
+  }
+
+  // fallback JSON nếu chỉ có string URL/path
+  const image =
+    (typeof payload.image === "string" && payload.image.trim()) ||
+    `/placeholder-${Date.now()}-${Math.random().toString(36).slice(2)}.png`;
 
   const body: Record<string, unknown> = {
     categoryId,
@@ -129,9 +222,8 @@ export const createShopProduct = async (
     listPrice: Number.isNaN(listPrice) ? 0 : listPrice,
     importPrice: Number.isNaN(importPrice) ? 0 : importPrice,
     isActive: payload.isActive ?? true,
+    barcode: payload.barcode != null ? String(payload.barcode).trim() : "",
   };
-  if (payload.barcode != null && String(payload.barcode).trim())
-    body.barcode = String(payload.barcode).trim();
   if (payload.description != null && String(payload.description).trim())
     body.description = String(payload.description).trim();
   if (payload.measureUnit != null && String(payload.measureUnit).trim())
@@ -147,25 +239,35 @@ export const createShopProduct = async (
  */
 export const updateShopProduct = async (
   id: number,
-  payload: UpdateProductPayload,
+  payload: UpdateShopProductPayload,
 ): Promise<Product> => {
+  // multipart khi đổi ảnh
+  if (payload.image instanceof File) {
+    const form = new FormData();
+    form.append("image", payload.image);
+    if (payload.productName !== undefined) form.append("productName", String(payload.productName).trim());
+    if (payload.barcode !== undefined) form.append("barcode", String(payload.barcode).trim());
+    if (payload.description !== undefined) form.append("description", String(payload.description ?? ""));
+    if (payload.measureUnit !== undefined) form.append("measureUnit", String(payload.measureUnit ?? ""));
+    if (payload.listPrice !== undefined) form.append("listPrice", String(Number(payload.listPrice)));
+    if (payload.importPrice !== undefined) form.append("importPrice", String(Number(payload.importPrice)));
+    if (payload.isActive !== undefined) form.append("isActive", String(Boolean(payload.isActive)));
+
+    const res = await apiClient.patch(`/shop-products/${id}`, form, {
+      headers: { "Content-Type": "multipart/form-data" },
+    });
+    return mapShopProduct(unwrap<Record<string, unknown>>(res.data) ?? {});
+  }
+
   const body: Record<string, unknown> = {};
-  if (payload.categoryId !== undefined)
-    body.categoryId = Number(payload.categoryId);
-  if (payload.productName !== undefined)
-    body.productName = String(payload.productName).trim();
-  if (payload.image !== undefined)
-    body.image = String(payload.image).trim() || null;
-  if (payload.barcode !== undefined)
-    body.barcode = String(payload.barcode).trim() || null;
-  if (payload.description !== undefined)
-    body.description = String(payload.description).trim() || null;
-  if (payload.measureUnit !== undefined)
-    body.measureUnit = String(payload.measureUnit).trim() || null;
-  if (payload.listPrice !== undefined)
-    body.listPrice = Number(payload.listPrice);
-  if (payload.importPrice !== undefined)
-    body.importPrice = Number(payload.importPrice);
+  if (payload.categoryId !== undefined) body.categoryId = Number(payload.categoryId);
+  if (payload.productName !== undefined) body.productName = String(payload.productName).trim();
+  if (payload.image !== undefined) body.image = String(payload.image).trim() || null;
+  if (payload.barcode !== undefined) body.barcode = String(payload.barcode).trim() || null;
+  if (payload.description !== undefined) body.description = String(payload.description).trim() || null;
+  if (payload.measureUnit !== undefined) body.measureUnit = String(payload.measureUnit).trim() || null;
+  if (payload.listPrice !== undefined) body.listPrice = Number(payload.listPrice);
+  if (payload.importPrice !== undefined) body.importPrice = Number(payload.importPrice);
   if (payload.isActive !== undefined) body.isActive = Boolean(payload.isActive);
 
   if (debugLoggingEnabled) {

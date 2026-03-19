@@ -64,6 +64,13 @@ export const getMyShiftAssignmentsAsOwner = async (
   return allShifts.filter((s) => s.user_id === userId);
 };
 
+export const getMyShiftAssignmentsAsStaff = async (
+  userId: number,
+): Promise<ShiftAssignment[]> => {
+  const res = await apiClient.get(`/shifts/users/staff/${userId}`);
+  const list = unwrap<ShiftAssignment[]>(res.data);
+  return Array.isArray(list) ? list : [];
+};
 /** POST /shifts/assign — SHOPOWNER gán ca cho nhân viên */
 export const assignShift = async (dto: {
   shift_id: number;

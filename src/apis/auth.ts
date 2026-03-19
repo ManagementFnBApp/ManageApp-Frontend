@@ -213,3 +213,38 @@ export const updateLocalRole = (role: string) => {
     localStorage.setItem('role', role);
   }
 };
+
+/**
+ * Refresh user info từ JWT token hiện tại trong localStorage
+ * Gọi hàm này sau khi payment success để cập nhật role SHOPOWNER mà không cần re-login
+ */
+export const refreshUserInfoFromToken = (): { role: string | null; shop_id?: number } | null => {
+  if (typeof window === 'undefined') return null;
+
+  const token = localStorage.getItem('accessToken');
+  if (!token) return null;
+
+  try {
+    const payload = decodeJwt<UserJwtPayload & { shop_id?: number }>(token);
+    if (!payload) return null;
+
+    // Cập nhật role từ JWT
+    const roleFromJwt = (payload?.role ?? '').toString().toUpperCase();
+    if (roleFromJwt) {
+      localStorage.setItem('role', roleFromJwt);
+    }
+
+    // Cập nhật shop_id nếu có
+    if (payload?.shop_id != null) {
+      localStorage.setItem('shopId', String(payload.shop_id));
+    }
+
+    return {
+      role: roleFromJwt || null,
+      shop_id: payload?.shop_id,
+    };
+  } catch (error) {
+    console.error('Failed to refresh user info from token:', error);
+    return null;
+  }
+};
