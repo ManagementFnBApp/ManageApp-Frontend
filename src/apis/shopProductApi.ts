@@ -199,8 +199,10 @@ export const createShopProduct = async (
     form.append("barcode", payload.barcode != null ? String(payload.barcode).trim() : "");
     if (payload.description != null) form.append("description", String(payload.description));
     if (payload.measureUnit != null) form.append("measureUnit", String(payload.measureUnit));
-    // Không gửi isActive trong multipart để tránh backend validate boolean fail
-    // (form-data luôn là string; backend hiện lấy default is_active ở DB/service).
+    // Gửi isActive trong multipart, dùng cùng logic default như nhánh JSON.
+    // Giá trị boolean được stringify thành "true"/"false" để backend có thể parse.
+    const isActive = payload.isActive ?? true;
+    form.append("isActive", String(isActive));
 
     const res = await apiClient.post("/shop-products", form, {
       headers: { "Content-Type": "multipart/form-data" },
