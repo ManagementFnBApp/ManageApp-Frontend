@@ -28,6 +28,7 @@ import {
 } from "@/apis/shiftApi";
 import { getManagedUsers, type AppUser } from "@/apis/adminApi";
 import { getStoredRoleNormalized } from "@/apis/auth";
+import React from "react";
 
 // ───────────────────────────────────────────────────────────────────
 // Helpers
@@ -47,6 +48,42 @@ function formatDate(iso: string) {
     month: "2-digit",
     year: "numeric",
   });
+}
+
+function isSameDate(iso1: string, iso2: string) {
+  const normalize = (v: string): string | null => {
+    const s = String(v ?? '').trim();
+    if (!s) return null;
+    if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+    const d = new Date(s);
+    if (Number.isNaN(d.getTime())) return null;
+    const yyyy = d.getUTCFullYear();
+    const mm = String(d.getUTCMonth() + 1).padStart(2, '0');
+    const dd = String(d.getUTCDate()).padStart(2, '0');
+    return `${yyyy}-${mm}-${dd}`;
+  };
+
+  return normalize(iso1) !== null && normalize(iso1) === normalize(iso2);
+}
+
+function startOfDay(d: Date) {
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate());
+}
+
+function addDays(d: Date, offset: number) {
+  const nd = new Date(d);
+  nd.setDate(nd.getDate() + offset);
+  return nd;
+}
+
+function dateKeyLocal(d: Date) {
+  // Trả về `YYYY-MM-DD` theo giờ VN để khớp với backend
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Ho_Chi_Minh",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(d);
 }
 
 // ───────────────────────────────────────────────────────────────────
@@ -70,6 +107,10 @@ export default function ShiftsPage() {
   const [formShiftId, setFormShiftId] = useState<number | "">("");
   const [formUserId, setFormUserId] = useState<number | "">("");
   const [formNotes, setFormNotes] = useState("");
+  const [formDate, setFormDate] = useState<string>(() => {
+    const d = new Date();
+    return d.toISOString().slice(0, 10);
+  });
   const [assigning, setAssigning] = useState(false);
   const [assignError, setAssignError] = useState<string | null>(null);
 
@@ -149,17 +190,26 @@ export default function ShiftsPage() {
   // ───────────────────────────────────────────────────────────────────
 
   const handleAssign = async () => {
-    if (!formShiftId || !formUserId) {
-      setAssignError("Vui lòng chọn ca và người dùng.");
+    if (!formShiftId || !formUserId || !formDate) {
+      setAssignError("Vui lòng chọn ca, người dùng và ngày.");
       return;
     }
     setAssigning(true);
     setAssignError(null);
     try {
+      const selectedDate = new Date(formDate);
+      const today = startOfDay(new Date());
+      if (selectedDate < today) {
+        setAssignError("Không thể gán ca cho ngày trong quá khứ.");
+        setAssigning(false);
+        return;
+      }
+
       const result = await assignShift({
         shift_id: Number(formShiftId),
         user_id: Number(formUserId),
         notes: formNotes.trim() || undefined,
+        date: formDate,
       });
       setAssignments((prev) => [result, ...prev]);
       setFormShiftId("");
@@ -230,10 +280,30 @@ export default function ShiftsPage() {
     ...users.map((u) => ({ id: u.user_id, label: u.username })),
   ];
 
+  // ISO ngày dạng `YYYY-MM-DD` theo UTC (khớp backend)
+  const todayIso = new Date().toISOString().slice(0, 10);
+
   const filtered = assignments.filter((a) => {
+    // Chỉ hiển thị ca được gán trong ngày hôm nay
+    // Backend trả `date` là ngày làm việc của assignment
+    if (!isSameDate(a.date ?? a.created_at, todayIso)) return false;
+
     if (filterUser !== "" && a.user_id !== Number(filterUser)) return false;
     if (filterShift !== "" && a.shift_id !== Number(filterShift)) return false;
     return true;
+  });
+
+  // Timetable data: 7 ngày, từ hôm nay đến +6 (tính theo giờ local của trình duyệt)
+  const baseDay = startOfDay(new Date());
+  const visibleDays = Array.from({ length: 7 }, (_, i) => addDays(baseDay, i));
+
+  const timetableMap = new Map<string, ShiftAssignment[]>();
+  assignments.forEach((a) => {
+    const dayKey = String(a.date ?? a.created_at).slice(0, 10);
+    const key = `${dayKey}|${a.shift_id}`;
+    const list = timetableMap.get(key) ?? [];
+    list.push(a);
+    timetableMap.set(key, list);
   });
 
   // Count by shift
@@ -358,139 +428,219 @@ export default function ShiftsPage() {
               <span className="ml-auto text-xs text-slate-400">{filtered.length} kết quả</span>
             </div>
 
-            {/* Table */}
-            <div className="flex-1 min-h-0 overflow-y-auto">
-              {filtered.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-20 gap-3 text-slate-300">
+            {/* Timetable view */}
+            <div className="flex-1 min-h-0 overflow-y-auto px-4 py-4">
+              <div className="mb-3 flex items-center justify-between gap-2">
+                <div>
+                  <p className="text-sm font-semibold text-slate-800">Lịch ca 7 ngày tới</p>
+                  <p className="text-[11px] text-slate-400">
+                    Mỗi ô là 1 ca trong 1 ngày. Bấm vào ô để xem nhanh nhân viên.
+                  </p>
+                </div>
+                <span className="text-[11px] text-slate-400">
+                  Hôm nay: {new Date().toLocaleDateString("vi-VN")}
+                </span>
+              </div>
+
+              {templates.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-16 gap-3 text-slate-300">
                   <CalendarClock size={40} strokeWidth={1.2} />
-                  <p className="text-sm font-medium">Chưa có phân ca nào</p>
-                  <p className="text-xs">Dùng form bên phải để gán ca làm việc</p>
+                  <p className="text-sm font-medium">Chưa có ca mẫu nào</p>
+                  <p className="text-xs">Tạo ca mẫu ở panel bên phải trước.</p>
                 </div>
               ) : (
-                <table className="w-full text-sm">
-                  <thead className="sticky top-0 bg-slate-50 border-b border-slate-200 z-10">
-                    <tr>
-                      <th className="text-left px-4 py-3 text-xs font-semibold text-blue-600 uppercase tracking-wider">
-                        Mã ca (ID)
-                        <span className="ml-1 text-[10px] text-slate-400 normal-case font-normal">← báo cho STAFF</span>
-                      </th>
-                      <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Nhân viên</th>
-                      <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Ca</th>
-                      <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Ghi chú</th>
-                      <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Ngày tạo</th>
-                      <th className="text-center px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider w-24">Thao tác</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100">
-                    {filtered.map((a) => (
-                      <tr
-                        key={a.id}
-                        className="bg-white hover:bg-slate-50 transition-colors"
-                      >
-                        {/* Mã ca nổi bật — SHOPOWNER báo cho STAFF */}
-                        <td className="px-4 py-3">
-                          <div className="flex items-center gap-2">
-                            <span className="text-base font-bold text-blue-600 font-mono">#{a.id}</span>
-                            <button
-                              type="button"
-                              onClick={() => handleCopyId(a.id)}
-                              title="Copy mã ca"
-                              className="p-1 rounded hover:bg-blue-50 text-slate-400 hover:text-blue-500 transition"
-                            >
-                              {copiedId === a.id ? <CheckCheck size={13} className="text-emerald-500" /> : <Copy size={13} />}
-                            </button>
-                          </div>
-                        </td>
+                <div className="border border-slate-200 rounded-xl overflow-hidden bg-white">
+                  <div className="grid" style={{ gridTemplateColumns: `120px repeat(${visibleDays.length}, minmax(120px, 1fr))` }}>
+                    {/* Header row */}
+                    <div className="bg-slate-50 border-b border-slate-200 px-3 py-2 text-xs font-semibold text-slate-500 flex items-center">
+                      Ca / Ngày
+                    </div>
+                    {visibleDays.map((d, idx) => {
+                      const isToday = isSameDate(dateKeyLocal(d), todayIso);
+                      return (
+                        <div
+                          key={d.toISOString()}
+                          className={`border-b border-l border-slate-200 px-3 py-2 text-xs text-center ${isToday ? "bg-blue-50 text-blue-700 font-semibold" : "bg-slate-50 text-slate-600"}`}
+                        >
+                          <div>{d.toLocaleDateString("vi-VN", { day: "2-digit", month: "2-digit" })}</div>
+                          <div className="text-[10px]">{["CN","T2","T3","T4","T5","T6","T7"][d.getDay()]}</div>
+                        </div>
+                      );
+                    })}
 
-                        {/* Nhân viên */}
-                        <td className="px-4 py-3">
-                          <div className="flex items-center gap-2">
-                            <div className="w-7 h-7 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-semibold text-xs shrink-0">
-                              {a.username.charAt(0).toUpperCase()}
-                            </div>
-                            <div>
-                              <p className="font-medium text-slate-800 text-sm">{a.username}</p>
-                              {selfUser && a.user_id === selfUser.id && (
-                                <span className="text-[10px] text-blue-500 font-medium">Chủ shop</span>
+                    {/* Rows per shift template */}
+                    {templates.map((t) => (
+                      <React.Fragment key={t.id}>
+                        <div
+                          className="border-t border-slate-200 px-3 py-2 text-xs font-semibold text-slate-700 bg-slate-50 flex items-center"
+                        >
+                          <Clock size={12} className="mr-1 text-indigo-500" />
+                          {t.shift_name}
+                        </div>
+                        {visibleDays.map((d) => {
+                          const dayKey = dateKeyLocal(d);
+                          const key = `${dayKey}|${t.id}`;
+                          const cellAssignments = timetableMap.get(key) ?? [];
+                          const count = cellAssignments.length;
+                          return (
+                            <button
+                              key={key}
+                              type="button"
+                              className="border-t border-l border-slate-200 px-2 py-2 text-[11px] text-left hover:bg-blue-50 transition flex flex-col gap-1"
+                            >
+                              {count === 0 ? (
+                                <span className="text-slate-300 italic">Chưa phân</span>
+                              ) : (
+                                <>
+                                  <span className="text-slate-500 font-medium">
+                                    {count} người
+                                  </span>
+                                  <div className="flex flex-wrap gap-1">
+                                    {cellAssignments.slice(0, 3).map((a) => (
+                                      <span
+                                        key={a.id}
+                                        className="inline-flex items-center px-1.5 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-100 text-[10px] max-w-full truncate"
+                                      >
+                                        {a.username}
+                                      </span>
+                                    ))}
+                                    {cellAssignments.length > 3 && (
+                                      <span className="text-[10px] text-slate-400">
+                                        +{cellAssignments.length - 3} nữa
+                                      </span>
+                                    )}
+                                  </div>
+                                </>
                               )}
-                            </div>
-                          </div>
-                        </td>
-
-                        {/* Ca */}
-                        <td className="px-4 py-3">
-                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-indigo-50 text-indigo-700 border border-indigo-100">
-                            <Clock size={10} />
-                            {a.shift_name}
-                          </span>
-                        </td>
-
-                        {/* Ghi chú */}
-                        <td className="px-4 py-3 max-w-[200px]">
-                          {editingId === a.id ? (
-                            <div className="flex items-center gap-1">
-                              <input
-                                type="text"
-                                value={editNotes}
-                                onChange={(e) => setEditNotes(e.target.value)}
-                                className="text-xs px-2 py-1 border border-blue-300 rounded focus:ring-1 focus:ring-blue-400 outline-none flex-1 min-w-0"
-                                placeholder="Ghi chú..."
-                                autoFocus
-                              />
-                              <button
-                                type="button"
-                                onClick={() => handleSaveNotes(a.id)}
-                                disabled={savingNotes}
-                                className="text-emerald-600 hover:text-emerald-700 transition disabled:opacity-50"
-                              >
-                                <Check size={14} />
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => setEditingId(null)}
-                                className="text-slate-400 hover:text-slate-600 transition"
-                              >
-                                <X size={14} />
-                              </button>
-                            </div>
-                          ) : (
-                            <button
-                              type="button"
-                              onClick={() => startEditNotes(a)}
-                              className="group flex items-center gap-1.5 text-xs text-slate-500 hover:text-slate-800 transition w-full text-left"
-                            >
-                              <span className="truncate">{a.notes || <span className="text-slate-300 italic">Không có</span>}</span>
-                              <Pencil size={10} className="shrink-0 opacity-0 group-hover:opacity-100 transition" />
                             </button>
-                          )}
-                        </td>
-
-                        {/* Ngày tạo */}
-                        <td className="px-4 py-3 text-xs text-slate-400 whitespace-nowrap">
-                          {formatDate(a.created_at)}
-                        </td>
-
-                        {/* Thao tác */}
-                        <td className="px-4 py-3 text-center">
-                          <button
-                            type="button"
-                            onClick={() => handleDelete(a.id)}
-                            disabled={deletingId === a.id}
-                            className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-xs text-rose-500 hover:bg-rose-50 hover:text-rose-700 transition disabled:opacity-50"
-                          >
-                            {deletingId === a.id ? (
-                              <div className="w-3 h-3 border border-rose-400 border-t-transparent rounded-full animate-spin" />
-                            ) : (
-                              <Trash2 size={13} />
-                            )}
-                            Xóa
-                          </button>
-                        </td>
-                      </tr>
+                          );
+                        })}
+                      </React.Fragment>
                     ))}
-                  </tbody>
-                </table>
+                  </div>
+                </div>
               )}
+
+              {/* Danh sách chi tiết cho hôm nay (bảng cũ, đã lọc theo hôm nay) */}
+              <div className="mt-6">
+                <h3 className="text-xs font-semibold text-slate-500 mb-2 uppercase tracking-wide">
+                  Chi tiết ca trong ngày hôm nay
+                </h3>
+                <div className="border border-slate-200 rounded-xl overflow-hidden bg-white">
+                  {filtered.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center py-10 gap-3 text-slate-300">
+                      <CalendarClock size={32} strokeWidth={1.2} />
+                      <p className="text-sm font-medium">Chưa có phân ca nào hôm nay</p>
+                    </div>
+                  ) : (
+                    <table className="w-full text-sm">
+                      <thead className="bg-slate-50 border-b border-slate-200">
+                        <tr>
+                          <th className="text-left px-4 py-3 text-xs font-semibold text-blue-600 uppercase tracking-wider">
+                            Mã ca (ID)
+                            <span className="ml-1 text-[10px] text-slate-400 normal-case font-normal">← báo cho STAFF</span>
+                          </th>
+                          <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Nhân viên</th>
+                          <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Ca</th>
+                          <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Ghi chú</th>
+                          <th className="text-center px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider w-24">Thao tác</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {filtered.map((a) => (
+                          <tr key={a.id} className="bg-white hover:bg-slate-50 transition-colors">
+                            <td className="px-4 py-3">
+                              <div className="flex items-center gap-2">
+                                <span className="text-base font-bold text-blue-600 font-mono">#{a.id}</span>
+                                <button
+                                  type="button"
+                                  onClick={() => handleCopyId(a.id)}
+                                  title="Copy mã ca"
+                                  className="p-1 rounded hover:bg-blue-50 text-slate-400 hover:text-blue-500 transition"
+                                >
+                                  {copiedId === a.id ? <CheckCheck size={13} className="text-emerald-500" /> : <Copy size={13} />}
+                                </button>
+                              </div>
+                            </td>
+                            <td className="px-4 py-3">
+                              <div className="flex items-center gap-2">
+                                <div className="w-7 h-7 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-semibold text-xs shrink-0">
+                                  {a.username.charAt(0).toUpperCase()}
+                                </div>
+                                <div>
+                                  <p className="font-medium text-slate-800 text-sm">{a.username}</p>
+                                  {selfUser && a.user_id === selfUser.id && (
+                                    <span className="text-[10px] text-blue-500 font-medium">Chủ shop</span>
+                                  )}
+                                </div>
+                              </div>
+                            </td>
+                            <td className="px-4 py-3">
+                              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-indigo-50 text-indigo-700 border border-indigo-100">
+                                <Clock size={10} />
+                                {a.shift_name}
+                              </span>
+                            </td>
+                            <td className="px-4 py-3 max-w-[200px]">
+                              {editingId === a.id ? (
+                                <div className="flex items-center gap-1">
+                                  <input
+                                    type="text"
+                                    value={editNotes}
+                                    onChange={(e) => setEditNotes(e.target.value)}
+                                    className="text-xs px-2 py-1 border border-blue-300 rounded focus:ring-1 focus:ring-blue-400 outline-none flex-1 min-w-0"
+                                    placeholder="Ghi chú..."
+                                    autoFocus
+                                  />
+                                  <button
+                                    type="button"
+                                    onClick={() => handleSaveNotes(a.id)}
+                                    disabled={savingNotes}
+                                    className="text-emerald-600 hover:text-emerald-700 transition disabled:opacity-50"
+                                  >
+                                    <Check size={14} />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => setEditingId(null)}
+                                    className="text-slate-400 hover:text-slate-600 transition"
+                                  >
+                                    <X size={14} />
+                                  </button>
+                                </div>
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={() => startEditNotes(a)}
+                                  className="group flex items-center gap-1.5 text-xs text-slate-500 hover:text-slate-800 transition w-full text-left"
+                                >
+                                  <span className="truncate">{a.notes || <span className="text-slate-300 italic">Không có</span>}</span>
+                                  <Pencil size={10} className="shrink-0 opacity-0 group-hover:opacity-100 transition" />
+                                </button>
+                              )}
+                            </td>
+                            <td className="px-4 py-3 text-center">
+                              <button
+                                type="button"
+                                onClick={() => handleDelete(a.id)}
+                                disabled={deletingId === a.id}
+                                className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-xs text-rose-500 hover:bg-rose-50 hover:text-rose-700 transition disabled:opacity-50"
+                              >
+                                {deletingId === a.id ? (
+                                  <div className="w-3 h-3 border border-rose-400 border-t-transparent rounded-full animate-spin" />
+                                ) : (
+                                  <Trash2 size={13} />
+                                )}
+                                Xóa
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  )}
+                </div>
+              </div>
             </div>
           </div>
 
@@ -592,6 +742,20 @@ export default function ShiftsPage() {
                     </select>
                     <ChevronDown size={14} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
                   </div>
+                </div>
+
+                {/* Chọn ngày làm việc */}
+                <div>
+                  <label className="block text-xs font-medium text-slate-600 mb-1">
+                    Ngày làm việc <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="date"
+                    value={formDate}
+                    onChange={(e) => setFormDate(e.target.value)}
+                    min={new Date().toISOString().slice(0, 10)}
+                    className="w-full text-sm px-3 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-300 focus:border-blue-300 outline-none"
+                  />
                 </div>
 
                 {/* Ghi chú */}

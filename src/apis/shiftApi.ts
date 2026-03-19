@@ -23,6 +23,7 @@ export interface ShiftAssignment {
   shop_id: number;
   notes: string | null;
   created_at: string;
+  date: string;
 }
 
 // ===== SHIFT TEMPLATE APIs =====
@@ -71,13 +72,32 @@ export const getMyShiftAssignmentsAsStaff = async (
   const list = unwrap<ShiftAssignment[]>(res.data);
   return Array.isArray(list) ? list : [];
 };
-/** POST /shifts/assign — SHOPOWNER gán ca cho nhân viên */
+/** POST /shifts/assign — SHOPOWNER gán ca cho nhân viên
+ * Backend AssignShiftDto yêu cầu:
+ * - shift_id: number
+ * - user_id: number
+ * - date: Date (IsDate + Type(() => Date))
+ * - notes?: string
+ * → Ở frontend luôn gửi date dạng ISO string để ValidationPipe transform sang Date.
+ */
 export const assignShift = async (dto: {
   shift_id: number;
   user_id: number;
   notes?: string;
+  date?: string | Date;
 }): Promise<ShiftAssignment> => {
-  const res = await apiClient.post('/shifts/assign', dto);
+  const payload = {
+    shift_id: dto.shift_id,
+    user_id: dto.user_id,
+    notes: dto.notes,
+    date:
+      dto.date instanceof Date
+        ? dto.date.toISOString()
+        : dto.date
+        ? new Date(dto.date).toISOString()
+        : new Date().toISOString(),
+  };
+  const res = await apiClient.post('/shifts/assign', payload);
   return unwrap<ShiftAssignment>(res.data);
 };
 

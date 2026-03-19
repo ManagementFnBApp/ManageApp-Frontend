@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { ArrowLeft, Trash2, X } from 'lucide-react';
 import { saveOrder, saveDraft, getDraft, clearDraft } from '@/data/useOrderStore';
 import { createOrder, getOrders } from '@/apis/orderApi';
-import { getMyShiftAssignmentsAsOwner } from '@/apis/shiftApi';
+import { getMyShiftAssignmentsAsOwner, getMyShiftAssignmentsAsStaff } from '@/apis/shiftApi';
 import { getStoredRoleNormalized } from '@/apis/auth';
 import { getPosShopProducts } from '@/apis/shopProductApi';
 
@@ -31,6 +31,32 @@ interface PosProduct {
 interface CategoryFilter {
   id: string;
   label: string;
+}
+
+const isSameDate = (iso1: string, iso2: string) => {
+  const normalize = (v: string): string | null => {
+    const s = String(v ?? '').trim();
+    if (!s) return null;
+    // Backend có thể trả về dạng `YYYY-MM-DD` (date-only), không cần new Date để tránh lệch TZ.
+    if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+    const d = new Date(s);
+    if (Number.isNaN(d.getTime())) return null;
+    const yyyy = d.getUTCFullYear();
+    const mm = String(d.getUTCMonth() + 1).padStart(2, '0');
+    const dd = String(d.getUTCDate()).padStart(2, '0');
+    return `${yyyy}-${mm}-${dd}`;
+  };
+
+  return normalize(iso1) !== null && normalize(iso1) === normalize(iso2);
+};
+
+function dateKeyVn(d: Date) {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Ho_Chi_Minh",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(d);
 }
 
 
@@ -85,6 +111,11 @@ export default function PosPage() {
   const [shiftLoadError, setShiftLoadError] = useState<string | null>(null);
   // Khi STAFF không tự lấy được shiftUserId → cho phép nhập thủ công
   const [manualShiftId, setManualShiftId] = useState('');
+  // Khi STAFF nhập thủ công mã ca thì tạm dừng auto-switch theo ngày
+  const [manualShiftOverridden, setManualShiftOverridden] = useState(false);
+
+  // Key theo ngày (VN) để chỉ re-fetch khi đổi ngày thật sự.
+  const todayKey = dateKeyVn(currentTime ?? new Date());
   // Track whether draft load has completed - using state (not ref) so the auto-clear effect
   // only runs AFTER the re-render caused by setDraftLoadDone(true), ensuring cart state
   // has already been updated with draft items before the empty-check fires.
@@ -134,47 +165,60 @@ export default function PosPage() {
 
   // Fetch active shift user ID
   // - SHOPOWNER: gọi GET /shifts/users rồi lọc theo userId của mình
-  // - STAFF: gọi GET /shifts/users/staff/:userId; nếu không có ca thì fallback đơn gần nhất
+  // - STAFF: gọi GET /shifts/users/staff/:userId
+  // Ưu tiên ca được gán cho "ngày làm việc" hiện tại (so sánh theo `date` từ backend).
+  // Nếu không có ca hôm nay thì KHÔNG fallback sang ca cũ, buộc nhập mã ca thủ công.
   useEffect(() => {
+    if (manualShiftOverridden) return;
     (async () => {
       const role = getStoredRoleNormalized();
       const userId = Number(
         typeof window !== 'undefined' ? localStorage.getItem('userId') : '0',
       );
 
+      const todayIso = dateKeyVn(currentTime ?? new Date());
+
       if (userId > 0) {
         try {
           if (role === 'SHOPOWNER') {
             const myShifts = await getMyShiftAssignmentsAsOwner(userId);
             if (myShifts.length > 0) {
-              setActiveShiftUserId(myShifts[0].id);
-              setShiftLoadError(null);
-              return;
+              const todayShifts = myShifts.filter((s) =>
+                isSameDate(s.date ?? s.created_at, todayIso),
+              );
+              const picked = (todayShifts[0] ?? myShifts[0]);
+              if (picked) {
+                setActiveShiftUserId(picked.id);
+                setShiftLoadError(null);
+                return;
+              }
+            }
+          } else if (role === 'STAFF') {
+            const myShifts = await getMyShiftAssignmentsAsStaff(userId);
+            if (myShifts.length > 0) {
+              const todayShifts = myShifts.filter((s) =>
+                isSameDate(s.date ?? s.created_at, todayIso),
+              );
+              const picked = (todayShifts[0] ?? myShifts[0]);
+              if (picked) {
+                // API trả danh sách orderBy created_at desc → phần tử đầu là ca mới nhất
+                setActiveShiftUserId(picked.id);
+                setShiftLoadError(null);
+                return;
+              }
             }
           }
         } catch {
-          // Ignore and fallback to orders
+          // Bỏ qua, sẽ báo lỗi phía dưới
         }
       }
 
-      // STAFF hoặc SHOPOWNER chưa có ca (hoặc load thất bại) → lấy từ đơn hàng gần nhất
-      try {
-        const orders = await getOrders();
-        if (orders.length > 0) {
-          setActiveShiftUserId(orders[0].shiftUserId);
-          setShiftLoadError(null);
-        } else {
-          setShiftLoadError(
-            'Bạn chưa được phân ca. Vui lòng liên hệ quản lý để được gán ca làm việc.',
-          );
-        }
-      } catch {
-        setShiftLoadError(
-          'Bạn chưa được phân ca. Vui lòng liên hệ quản lý để được gán ca làm việc.',
-        );
-      }
+      // Không tìm thấy ca hợp lệ cho hôm nay
+      setShiftLoadError(
+        'Bạn chưa được phân ca cho hôm nay. Vui lòng liên hệ quản lý để được gán ca làm việc.',
+      );
     })();
-  }, []);
+  }, [todayKey, manualShiftOverridden]);
 
   // Load saved draft for this table when component mounts
   useEffect(() => {
@@ -293,6 +337,7 @@ export default function PosPage() {
     setActiveShiftUserId(id);
     setShiftLoadError(null);
     setManualShiftId('');
+    setManualShiftOverridden(true);
   };
 
   const handleCheckout = async () => {
@@ -404,7 +449,11 @@ export default function PosPage() {
           {activeShiftUserId ? (
             <button
               type="button"
-              onClick={() => { setActiveShiftUserId(null); setShiftLoadError('Nhập thủ công mã ca bên dưới.'); }}
+              onClick={() => {
+                setActiveShiftUserId(null);
+                setShiftLoadError('Nhập thủ công mã ca bên dưới.');
+                setManualShiftOverridden(false);
+              }}
               title="Đổi ca"
               className="flex items-center gap-1 px-2 py-1 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-700 hover:bg-emerald-100 transition"
             >
