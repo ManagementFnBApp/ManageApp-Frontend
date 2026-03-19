@@ -3,12 +3,11 @@
 import { useState, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { ArrowLeft, Trash2, X } from 'lucide-react';
-import { getActivePosProducts } from '@/data/useMenuStore';
 import { saveOrder, saveDraft, getDraft, clearDraft } from '@/data/useOrderStore';
-import { getCategories } from '@/apis/categoryApi';
 import { createOrder, getOrders } from '@/apis/orderApi';
 import { getMyShiftAssignmentsAsOwner } from '@/apis/shiftApi';
 import { getStoredRoleNormalized } from '@/apis/auth';
+import { getPosShopProducts } from '@/apis/shopProductApi';
 
 type OrderType = "eat-in" | "takeaway";
 
@@ -26,6 +25,7 @@ interface PosProduct {
   name: string;
   price: number;
   categoryId: number;
+  image?: string;
 }
 
 interface CategoryFilter {
@@ -38,6 +38,36 @@ export default function PosPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const tableId = searchParams?.get('table') || 'mang-di';
+
+  const getShopId = (): number => {
+    if (typeof window === "undefined") return 0;
+    const raw = localStorage.getItem("shopId");
+    const n = Number(raw);
+    return Number.isFinite(n) && n > 0 ? n : 0;
+  };
+  const stockKey = (shopId: number) => `local_inventory_v1:${shopId}`;
+  const readStock = (shopId: number): Record<string, { quantity: number; minimumThreshold: number }> => {
+    if (typeof window === "undefined") return {};
+    try {
+      const raw = localStorage.getItem(stockKey(shopId));
+      if (!raw) return {};
+      const parsed = JSON.parse(raw) as Record<string, any>;
+      const out: Record<string, { quantity: number; minimumThreshold: number }> = {};
+      for (const [k, v] of Object.entries(parsed ?? {})) {
+        out[String(k)] = {
+          quantity: Number(v?.quantity ?? 0) || 0,
+          minimumThreshold: Number(v?.minimumThreshold ?? 0) || 0,
+        };
+      }
+      return out;
+    } catch {
+      return {};
+    }
+  };
+  const writeStock = (shopId: number, stock: Record<string, any>) => {
+    if (typeof window === "undefined") return;
+    localStorage.setItem(stockKey(shopId), JSON.stringify(stock));
+  };
 
   const [username, setUsername] = useState<string>('Nguyen Van A');
   const [activeCategory, setActiveCategory] = useState<string>('all');
@@ -69,22 +99,21 @@ export default function PosPage() {
   useEffect(() => {
     (async () => {
       try {
-        const [products, categoryList] = await Promise.all([
-          getActivePosProducts(),
-          getCategories(),
-        ]);
+        const products = await getPosShopProducts(true);
         setPosProducts(products);
 
-        const categoryMap = new Map(
-          categoryList.map((c) => [c.id, c.categoryName]),
-        );
-        const uniqueCategoryIds = Array.from(
-          new Set(products.map((p) => p.categoryId)),
-        );
-        const uniqueCategories = uniqueCategoryIds.map((catId) => ({
-          id: String(catId),
-          label: categoryMap.get(catId) ?? `Danh mục ${catId}`,
-        }));
+        const uniqueCategories = Array.from(
+          new Map(
+            products
+              .filter((p) => p.categoryId)
+              .map((p) => [
+                String(p.categoryId),
+                p.categoryName?.trim() || `Danh mục ${p.categoryId}`,
+              ]),
+          ).entries(),
+        )
+          .map(([id, label]) => ({ id, label }))
+          .sort((a, b) => a.label.localeCompare(b.label, "vi"));
 
         setCategories([
           { id: "all", label: "Tất Cả" },
@@ -105,7 +134,7 @@ export default function PosPage() {
 
   // Fetch active shift user ID
   // - SHOPOWNER: gọi GET /shifts/users rồi lọc theo userId của mình
-  // - STAFF: không có quyền GET /shifts/users → dùng fallback qua đơn hàng gần nhất
+  // - STAFF: gọi GET /shifts/users/staff/:userId; nếu không có ca thì fallback đơn gần nhất
   useEffect(() => {
     (async () => {
       const role = getStoredRoleNormalized();
@@ -113,20 +142,22 @@ export default function PosPage() {
         typeof window !== 'undefined' ? localStorage.getItem('userId') : '0',
       );
 
-      if (role === 'SHOPOWNER' && userId > 0) {
+      if (userId > 0) {
         try {
-          const myShifts = await getMyShiftAssignmentsAsOwner(userId);
-          if (myShifts.length > 0) {
-            setActiveShiftUserId(myShifts[0].id);
-            setShiftLoadError(null);
-            return;
+          if (role === 'SHOPOWNER') {
+            const myShifts = await getMyShiftAssignmentsAsOwner(userId);
+            if (myShifts.length > 0) {
+              setActiveShiftUserId(myShifts[0].id);
+              setShiftLoadError(null);
+              return;
+            }
           }
         } catch {
-          // SHOPOWNER shift load thất bại → tiếp tục fallback
+          // Ignore and fallback to orders
         }
       }
 
-      // STAFF hoặc SHOPOWNER chưa có ca → lấy từ đơn hàng gần nhất
+      // STAFF hoặc SHOPOWNER chưa có ca (hoặc load thất bại) → lấy từ đơn hàng gần nhất
       try {
         const orders = await getOrders();
         if (orders.length > 0) {
@@ -276,6 +307,9 @@ export default function PosPage() {
     setCheckoutError(null);
 
     try {
+      const shopId = getShopId();
+      const currentStock = shopId ? readStock(shopId) : {};
+
       // Build order items payload — dùng shop_product_id (sản phẩm của shop)
       const orderItems = cart.map((item) => ({
         shop_product_id: item.shopProductId,
@@ -290,6 +324,27 @@ export default function PosPage() {
         order_items: orderItems,
         note: `${orderType === 'eat-in' ? 'Ăn tại chỗ' : 'Mang đi'} - ${username} - Bàn ${tableId}`,
       });
+
+      // ── Trừ tồn kho local theo shopProductId ──
+      try {
+        if (shopId > 0) {
+          const next: Record<string, any> = { ...currentStock } as any;
+          for (const ci of cart) {
+            const key = String(ci.shopProductId);
+            const row = next[key] ?? { quantity: 0, minimumThreshold: 0 };
+            const q = Number(row.quantity ?? 0) || 0;
+            next[key] = {
+              ...row,
+              quantity: Math.max(0, q - ci.quantity),
+              updatedAt: new Date().toISOString(),
+            };
+          }
+          writeStock(shopId, next);
+        }
+      } catch (invErr) {
+        // Không chặn thanh toán nếu trừ tồn thất bại, vì order đã tạo thành công.
+        console.warn("Inventory decrement failed:", invErr);
+      }
 
       // Mark table as active in order history
       saveOrder({
@@ -464,28 +519,41 @@ export default function PosPage() {
             </div>
           </div>
 
-          {/* Product grid - kéo dài, scroll theo danh sách món đã chọn */}
-          <div className="flex-1 min-h-0 overflow-auto">
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 pb-4">
-              {filteredProducts.map((product) => (
-                <button
-                  key={product.id}
-                  type="button"
-                  onClick={() => addToCart(product)}
-                  className="text-left bg-white rounded-xl border border-gray-200 p-4 hover:shadow-md hover:border-blue-200 transition"
-                >
-                  <div className="aspect-square rounded-lg bg-gray-200 mb-3 flex items-center justify-center text-gray-400 text-2xl">
-                    ☕
-                  </div>
-                  <p className="font-medium text-gray-900 truncate">
-                    {product.name}
-                  </p>
-                  <p className="text-blue-600 font-semibold text-sm mt-1">
-                    {formatPrice(product.price)}
-                  </p>
-                </button>
-              ))}
-            </div>
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 pb-4">
+            {filteredProducts.map((product) => (
+              <button
+                key={product.id}
+                type="button"
+                onClick={() => addToCart(product)}
+                className="text-center bg-white rounded-lg border border-gray-200 p-2 hover:shadow-md hover:border-blue-200 transition flex flex-col items-center"
+              >
+                <div className="w-28 h-28 rounded-lg bg-gray-200 mb-2 flex items-center justify-center text-gray-400 overflow-hidden">
+                  {product.image ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={product.image}
+                      alt={product.name}
+                      className="w-full h-full object-cover"
+                      onError={(e) => {
+                        e.currentTarget.style.display = 'none';
+                        const parent = e.currentTarget.parentElement;
+                        if (parent) {
+                          parent.textContent = '☕';
+                        }
+                      }}
+                    />
+                  ) : (
+                    <span className="text-2xl">☕</span>
+                  )}
+                </div>
+                <p className="font-medium text-gray-900 line-clamp-1 text-sm">
+                  {product.name}
+                </p>
+                <p className="text-blue-600 font-semibold text-sm">
+                  {formatPrice(product.price)}
+                </p>
+              </button>
+            ))}
           </div>
         </div>
 
@@ -609,11 +677,10 @@ export default function PosPage() {
                 type="button"
                 onClick={handleSaveOrder}
                 disabled={isCheckoutLoading}
-                className={`flex-1 py-3 rounded-lg font-semibold transition ${
-                  cart.length === 0
-                    ? 'bg-red-400 hover:bg-red-500 text-white'
-                    : 'bg-amber-500 hover:bg-amber-600 text-white'
-                } disabled:opacity-50 disabled:cursor-not-allowed`}
+                className={`flex-1 py-3 rounded-lg font-semibold transition ${cart.length === 0
+                  ? 'bg-red-400 hover:bg-red-500 text-white'
+                  : 'bg-amber-500 hover:bg-amber-600 text-white'
+                  } disabled:opacity-50 disabled:cursor-not-allowed`}
               >
                 {isCheckoutLoading ? 'Đang xử lý...' : cart.length === 0 ? 'Xóa đơn' : 'Lưu đơn'}
               </button>

@@ -15,7 +15,7 @@ export const ROLE_CODE_SHOP_OWNER = 'SHOPOWNER';
 /** Lấy role đã lưu (chuẩn uppercase để khớp API backend ADMIN/SHOPOWNER) */
 export function getStoredRoleNormalized(): string {
   if (typeof window === 'undefined') return '';
-  return ((localStorage.getItem('role') ?? '').toString()).toUpperCase();
+  return ((localStorage.getItem('role') ?? '').toString()).trim().toUpperCase();
 }
 
 /** Kiểm tra user hiện tại có phải admin (theo role từ backend) */
@@ -210,6 +210,6 @@ export const handleLogout = () => {
 /** Cập nhật role trong localStorage sau khi payment thành công (không cần re-login) */
 export const updateLocalRole = (role: string) => {
   if (typeof window !== 'undefined') {
-    localStorage.setItem('role', role);
+    localStorage.setItem('role', (role ?? '').toString().trim());
   }
 };
