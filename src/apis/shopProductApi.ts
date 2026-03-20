@@ -114,11 +114,13 @@ export type PosShopProduct = {
   id: number;
   shopProductId: number;
   name: string;
+  barcode: string | null;
   price: number;
   categoryId: number;
   categoryName: string;
   image: string;
   isActive: boolean;
+  productType: "SHOP" | "SYSTEM";
 };
 
 /**
@@ -138,11 +140,45 @@ export const getPosShopProducts = async (
       id: Number(r.id ?? r.productId),
       shopProductId: Number(r.id ?? r.productId),
       name: String(r.product_name ?? r.productName ?? ""),
+      barcode: r.barcode != null ? String(r.barcode) : null,
       price: toNumber(r.list_price ?? r.listPrice),
       categoryId: Number(r.category_id ?? r.categoryId),
       categoryName: String(r.category_name ?? r.categoryName ?? ""),
       image: imageRaw.replaceAll("\\", "/"),
       isActive: Boolean(r.is_active ?? r.isActive ?? true),
+      productType: "SHOP" as const,
+    } satisfies PosShopProduct;
+  });
+  if (isActive !== undefined) {
+    return mapped.filter((p) => p.isActive === isActive);
+  }
+  return mapped;
+};
+
+/**
+ * GET /products (system products) → dùng cho POS.
+ * Returns system products in POS format similar to shop products.
+ */
+export const getPosSystemProducts = async (
+  isActive?: boolean,
+): Promise<PosShopProduct[]> => {
+  const res = await apiClient.get("/products");
+  const raw = unwrap<unknown>(res.data);
+  const arr = Array.isArray(raw) ? raw : [];
+  const mapped = arr.map((item) => {
+    const r = (item as Record<string, unknown>) ?? {};
+    const imageRaw = String(r.image ?? "");
+    return {
+      id: Number(r.id ?? r.productId),
+      shopProductId: Number(r.id ?? r.productId),
+      name: String(r.product_name ?? r.productName ?? ""),
+      barcode: r.barcode != null ? String(r.barcode) : null,
+      price: toNumber(r.list_price ?? r.listPrice),
+      categoryId: Number(r.category_id ?? r.categoryId),
+      categoryName: String(r.category_name ?? r.categoryName ?? ""),
+      image: imageRaw.replaceAll("\\", "/"),
+      isActive: Boolean(r.is_active ?? r.isActive ?? true),
+      productType: "SYSTEM" as const,
     } satisfies PosShopProduct;
   });
   if (isActive !== undefined) {

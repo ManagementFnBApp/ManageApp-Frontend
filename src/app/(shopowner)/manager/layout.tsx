@@ -39,6 +39,7 @@ import {
 const MAIN_ITEMS_STAFF = [
   { href: "/manager", label: "Tạo đơn hàng", icon: ShoppingCart },
   { href: "/manager/orders", label: "Đơn hàng", icon: ClipboardList },
+  { href: "/manager/inventory", label: "Kho hàng", icon: PackageOpen },
 ];
 
 // Shopowner thấy thêm: Quản lý Menu, Quản lý nhân viên, Quản lý ca, Quản lý khách hàng
@@ -56,8 +57,7 @@ const REPORT_ITEMS = [
     label: "Báo cáo tháng",
     icon: BarChart2,
   },
-  { id: "report-morning", label: "Báo cáo buổi sáng", icon: Sun },
-  { id: "report-afternoon", label: "Báo cáo buổi chiều", icon: Sunset },
+  
 ];
 
 const OTHER_ITEMS = [

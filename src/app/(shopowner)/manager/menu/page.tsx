@@ -593,7 +593,8 @@ export default function MenuManagePage() {
                   <th className="px-5 py-3 text-left">#</th>
                   <th className="px-5 py-3 text-left">Sản phẩm</th>
                   <th className="px-5 py-3 text-left">Danh mục</th>
-                  <th className="px-5 py-3 text-left">Ảnh / Mã</th>
+                  <th className="px-5 py-3 text-left">Barcode</th>
+                  <th className="px-5 py-3 text-left">Ảnh</th>
                   <th className="px-5 py-3 text-right">Giá vốn</th>
                   <th className="px-5 py-3 text-right">Giá bán</th>
                   <th className="px-5 py-3 text-center">Trạng thái</th>
@@ -617,7 +618,10 @@ export default function MenuManagePage() {
                     <td className="px-5 py-3 text-gray-600">
                       {getCategoryName(p.categoryId)}
                     </td>
-                    <td className="px-5 py-3 font-mono text-gray-500 truncate max-w-30">
+                    <td className="px-5 py-3 font-mono text-gray-600 text-xs">
+                      {p.barcode ? p.barcode : "—"}
+                    </td>
+                    <td className="px-5 py-3 font-mono text-gray-500">
                       {p.image ? (
                         <div className="flex items-center">
                           {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -626,8 +630,9 @@ export default function MenuManagePage() {
                             alt={p.productName}
                             className="w-10 h-10 rounded-lg object-cover border border-gray-200 bg-gray-50 shrink-0"
                             onError={(e) => {
-                              (e.currentTarget as HTMLImageElement).style.display =
-                                "none";
+                              (
+                                e.currentTarget as HTMLImageElement
+                              ).style.display = "none";
                             }}
                           />
                         </div>
@@ -885,7 +890,9 @@ export default function MenuManagePage() {
                 <div className="flex items-center gap-3">
                   <button
                     type="button"
-                    onClick={() => setForm({ ...form, isActive: !form.isActive })}
+                    onClick={() =>
+                      setForm({ ...form, isActive: !form.isActive })
+                    }
                     className={`relative w-11 h-6 rounded-full transition-colors ${form.isActive ? "bg-lime-400" : "bg-gray-300"}`}
                   >
                     <span

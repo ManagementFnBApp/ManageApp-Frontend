@@ -5,7 +5,8 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { loadPosCart, clearPosCart } from "@/lib/posCart";
 import type { PosCartPayload } from "@/lib/posCart";
-import { createOrder, completeOrder } from "@/apis/orderApi";
+import { createOrder } from "@/apis/orderApi";
+import { clearDraft, saveOrder } from "@/data/useOrderStore";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -32,6 +33,9 @@ export default function CheckoutOrderPage() {
   const [selectedMethod, setSelectedMethod] = useState("CASH");
   const [errorMsg, setErrorMsg] = useState("");
   const [orderRef, setOrderRef] = useState("");
+  const [customerName, setCustomerName] = useState("");
+  const [customerPhone, setCustomerPhone] = useState("");
+  const [customerNote, setCustomerNote] = useState("");
 
   // ── Bootstrap ──────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -53,12 +57,12 @@ export default function CheckoutOrderPage() {
   // ── Handlers ───────────────────────────────────────────────────────────────
 
   /**
-   * handleConfirm – Gọi BE API tạo đơn hàng và đánh dấu hoàn thành.
+   * handleConfirm – Gọi BE API tạo đơn hàng ở trạng thái PENDING.
    *
    * Flow:
    *   1. POST /orders  → tạo đơn (status PENDING)
-   *   2. Xoá giỏ hàng POS trong localStorage (clearPosCart) sau khi tạo đơn thành công
-   *   3. Lưu mã đơn vào state (orderRef) và chuyển UI sang trạng thái "success"
+   *   2. Clear dữ liệu tạm POS sau khi tạo đơn thành công
+   *   3. Chuyển sang Orders để xử lý complete/cancelled ở bước sau
    *
    * NOTE: paymentMethod được hiển thị cho nhân viên nhưng chưa lưu được vào DB
    *   vì BE chưa có endpoint POST /payments.
@@ -70,20 +74,55 @@ export default function CheckoutOrderPage() {
     setErrorMsg("");
 
     try {
+      const paymentLabel =
+        PAYMENT_METHODS.find((m) => m.id === selectedMethod)?.label ??
+        selectedMethod;
+
+      const noteParts = [`[${cart.orderType}]`, `PTTT: ${paymentLabel}`];
+      if (customerName.trim()) noteParts.push(`Khách: ${customerName.trim()}`);
+      if (customerPhone.trim()) noteParts.push(`SĐT: ${customerPhone.trim()}`);
+      if (customerNote.trim())
+        noteParts.push(`Ghi chú KH: ${customerNote.trim()}`);
+
       // 1️⃣ Tạo đơn hàng (PENDING) — userId BE lấy từ JWT
       const orderResponse = await createOrder({
         shiftUserId: cart.shiftId,
         totalAmount: cart.total,
-        note: `[${cart.orderType}]`,
-        order_items: cart.items.map((item) => ({
-          product_id: item.productId,
-          quantity: item.quantity,
-          unit_price: item.price,
-        })),
+        note: noteParts.join(" | "),
+        order_items: cart.items.map((item) =>
+          item.productType === "SHOP"
+            ? {
+                shop_product_id: item.shopProductId ?? item.productId,
+                quantity: item.quantity,
+                unit_price: item.price,
+              }
+            : {
+                product_id: item.productId,
+                quantity: item.quantity,
+                unit_price: item.price,
+              },
+        ),
       });
 
-      // 2️⃣ Đánh dấu hoàn thành (BE có PUT /orders/:id/complete)
-      await completeOrder(orderResponse.id);
+      saveOrder({
+        orderId: `ORD-${orderResponse.id}`,
+        createdAt: new Date().toISOString(),
+        items: cart.items.map((item) => ({
+          productId: item.productId,
+          shopProductId: item.shopProductId,
+          name: item.name,
+          price: item.price,
+          quantity: item.quantity,
+        })),
+        total: cart.total,
+        orderType: cart.orderType,
+        cashier: username || "Staff",
+        status: "PENDING",
+      });
+
+      if (cart.tableId) {
+        clearDraft(cart.tableId);
+      }
 
       clearPosCart();
       setOrderRef(String(orderResponse.id));
@@ -168,7 +207,8 @@ export default function CheckoutOrderPage() {
             Đơn hàng thành công!
           </h2>
           <p className="text-gray-500 mb-6">
-            Cảm ơn <strong>{username}</strong>, đơn hàng đã được ghi nhận.
+            Cảm ơn <strong>{username}</strong>, đơn hàng đã được tạo với trạng
+            thái <strong>PENDING</strong>.
           </p>
 
           <div className="bg-blue-50 rounded-xl p-4 mb-8 text-left space-y-2">
@@ -197,10 +237,10 @@ export default function CheckoutOrderPage() {
           </div>
 
           <button
-            onClick={() => router.push("/pos")}
+            onClick={() => router.push(`/manager/orders?new=${orderRef}`)}
             className="w-full py-4 bg-blue-600 text-white rounded-xl font-semibold text-lg hover:bg-blue-700 transition-all hover:-translate-y-0.5 hover:shadow-lg"
           >
-            Quay lại POS →
+            Qua trang Orders →
           </button>
         </div>
       </div>
@@ -300,9 +340,9 @@ export default function CheckoutOrderPage() {
 
               {/* Product list */}
               <ul className="space-y-3 mb-5">
-                {cart?.items.map((item) => (
+                {cart?.items.map((item, index) => (
                   <li
-                    key={item.productId}
+                    key={`${item.productType ?? "SYSTEM"}:${item.shopProductId ?? item.productId}:${index}`}
                     className="flex items-start justify-between text-sm"
                   >
                     <div className="flex-1 min-w-0 pr-2">
@@ -398,6 +438,50 @@ export default function CheckoutOrderPage() {
                       )}
                     </button>
                   ))}
+                </div>
+              </div>
+
+              <div className="mb-8 rounded-xl border border-gray-200 bg-gray-50 p-5">
+                <h4 className="mb-3 text-sm font-semibold text-gray-700">
+                  Thông tin khách hàng (tùy chọn)
+                </h4>
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  <div>
+                    <label className="mb-1 block text-xs font-medium text-gray-600">
+                      Tên khách
+                    </label>
+                    <input
+                      type="text"
+                      value={customerName}
+                      onChange={(e) => setCustomerName(e.target.value)}
+                      placeholder="VD: Nguyễn Văn A"
+                      className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-800 outline-none transition focus:border-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-xs font-medium text-gray-600">
+                      Số điện thoại
+                    </label>
+                    <input
+                      type="text"
+                      value={customerPhone}
+                      onChange={(e) => setCustomerPhone(e.target.value)}
+                      placeholder="VD: 09xxxxxxxx"
+                      className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-800 outline-none transition focus:border-blue-500"
+                    />
+                  </div>
+                  <div className="sm:col-span-2">
+                    <label className="mb-1 block text-xs font-medium text-gray-600">
+                      Ghi chú khách hàng
+                    </label>
+                    <textarea
+                      value={customerNote}
+                      onChange={(e) => setCustomerNote(e.target.value)}
+                      rows={3}
+                      placeholder="Yêu cầu thêm (không bắt buộc)"
+                      className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-800 outline-none transition focus:border-blue-500"
+                    />
+                  </div>
                 </div>
               </div>
 
