@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { ArrowLeft, Trash2, X } from 'lucide-react';
 import { saveOrder, saveDraft, getDraft, clearDraft } from '@/data/useOrderStore';
 import { createOrder, getOrders } from '@/apis/orderApi';
-import { getMyShiftAssignmentsAsOwner } from '@/apis/shiftApi';
+import { getMyShiftAssignmentsAsOwner, getMyShiftAssignmentsAsStaff } from '@/apis/shiftApi';
 import { getStoredRoleNormalized } from '@/apis/auth';
 import { getPosShopProducts } from '@/apis/shopProductApi';
 
@@ -141,44 +141,81 @@ export default function PosPage() {
   // - SHOPOWNER: gọi GET /shifts/users rồi lọc theo userId của mình
   // - STAFF: gọi GET /shifts/users/staff/:userId; nếu không có ca thì fallback đơn gần nhất
   useEffect(() => {
-    (async () => {
+    let isMounted = true;
+
+    const loadActiveShiftUserId = async () => {
       const role = getStoredRoleNormalized();
       const userId = Number(
         typeof window !== 'undefined' ? localStorage.getItem('userId') : '0',
       );
 
-      if (userId > 0) {
-        try {
-          if (role === 'SHOPOWNER') {
-            const myShifts = await getMyShiftAssignmentsAsOwner(userId);
-            if (myShifts.length > 0) {
-              setActiveShiftUserId(myShifts[0].id);
-              setShiftLoadError(null);
-              return;
-            }
-          }
-        } catch {
-          // Ignore and fallback to orders
-        }
-      }
-
-      // STAFF hoặc SHOPOWNER chưa có ca (hoặc load thất bại) → lấy từ đơn hàng gần nhất
-      try {
-        const orders = await getOrders();
-        if (orders.length > 0) {
-          setActiveShiftUserId(orders[0].shiftUserId);
-          setShiftLoadError(null);
-        } else {
+      if (!userId || userId <= 0) {
+        if (isMounted) {
+          setActiveShiftUserId(null);
           setShiftLoadError(
             'Bạn chưa được phân ca. Vui lòng liên hệ quản lý để được gán ca làm việc.',
           );
         }
-      } catch {
-        setShiftLoadError(
-          'Bạn chưa được phân ca. Vui lòng liên hệ quản lý để được gán ca làm việc.',
-        );
+        return;
       }
-    })();
+
+      // 1) Ưu tiên load theo assignment (OWNER hoặc STAFF)
+      try {
+        if (role === 'SHOPOWNER') {
+          const myShifts = await getMyShiftAssignmentsAsOwner(userId);
+          if (myShifts.length > 0) {
+            if (isMounted) {
+              setActiveShiftUserId(myShifts[0].id);
+              setShiftLoadError(null);
+            }
+            return;
+          }
+        } else {
+          const myShifts = await getMyShiftAssignmentsAsStaff(userId);
+          if (myShifts.length > 0) {
+            if (isMounted) {
+              setActiveShiftUserId(myShifts[0].id);
+              setShiftLoadError(null);
+            }
+            return;
+          }
+        }
+      } catch {
+        // Ignore and fallback to orders
+      }
+
+      // 2) Nếu không có assignment → fallback đơn gần nhất
+      try {
+        const orders = await getOrders();
+        if (orders.length > 0) {
+          if (isMounted) {
+            setActiveShiftUserId(orders[0].shiftUserId);
+            setShiftLoadError(null);
+          }
+        } else {
+          if (isMounted) {
+            setShiftLoadError(
+              'Bạn chưa được phân ca. Vui lòng liên hệ quản lý để được gán ca làm việc.',
+            );
+          }
+        }
+      } catch {
+        if (isMounted) {
+          setShiftLoadError(
+            'Bạn chưa được phân ca. Vui lòng liên hệ quản lý để được gán ca làm việc.',
+          );
+        }
+      }
+    };
+
+    loadActiveShiftUserId();
+    // Refresh định kỳ để khi SHOPOWNER gán ca mới, STAFF không bị giữ shift cũ
+    const intervalId = window.setInterval(loadActiveShiftUserId, 15000);
+
+    return () => {
+      isMounted = false;
+      window.clearInterval(intervalId);
+    };
   }, []);
 
   // Load saved draft for this table when component mounts

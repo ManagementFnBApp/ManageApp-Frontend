@@ -39,14 +39,6 @@ function unwrap<T>(raw: unknown): T {
   return raw as T;
 }
 
-function toDate(value: unknown): Date {
-  if (value == null) {
-    return new Date(0);
-  }
-  const d = new Date(String(value));
-  return Number.isNaN(d.getTime()) ? new Date(0) : d;
-}
-
 function toNumber(value: unknown): number {
   if (value == null) return 0;
 
@@ -92,8 +84,8 @@ function mapShopProduct(raw: Record<string, unknown>): Product {
     importPrice: toNumber(raw.import_price ?? raw.importPrice),
     listPrice: toNumber(raw.list_price ?? raw.listPrice),
     isActive: Boolean(raw.is_active ?? raw.isActive ?? true),
-    createdAt: toDate(raw.createdAt ?? raw.created_at),
-    updatedAt: toDate(raw.updatedAt ?? raw.updated_at),
+    createdAt: String(raw.createdAt ?? raw.created_at ?? ""),
+    updatedAt: String(raw.updatedAt ?? raw.updated_at ?? ""),
   };
 }
 
@@ -199,10 +191,8 @@ export const createShopProduct = async (
     form.append("barcode", payload.barcode != null ? String(payload.barcode).trim() : "");
     if (payload.description != null) form.append("description", String(payload.description));
     if (payload.measureUnit != null) form.append("measureUnit", String(payload.measureUnit));
-    // Gửi isActive trong multipart, dùng cùng logic default như nhánh JSON.
-    // Giá trị boolean được stringify thành "true"/"false" để backend có thể parse.
-    const isActive = payload.isActive ?? true;
-    form.append("isActive", String(isActive));
+    // Không gửi isActive trong multipart để tránh backend validate boolean fail
+    // (form-data luôn là string; backend hiện lấy default is_active ở DB/service).
 
     const res = await apiClient.post("/shop-products", form, {
       headers: { "Content-Type": "multipart/form-data" },

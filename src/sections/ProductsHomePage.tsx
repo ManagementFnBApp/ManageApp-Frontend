@@ -2,8 +2,7 @@
 
 import Image from "next/image";
 import { useEffect, useState } from "react";
-import { getProducts, Product } from "../apis/productApi";
-import { BASE_URL } from "@/global-configs";
+import { getProducts, getProductImageUrl, type Product } from "../apis/productApi";
 
 export default function ProductsHomePage() {
   const [activeFeature, setActiveFeature] = useState(0);
@@ -223,9 +222,8 @@ export default function ProductsHomePage() {
                   <div className="relative h-48 w-full bg-gray-100">
                     <Image
                       src={
-                        p.image
-                          ? `${BASE_URL}/${p.image}`
-                          : "/image/product-placeholder.png"
+                        getProductImageUrl(p.image) ||
+                        "/image/product-placeholder.png"
                       }
                       alt={p.productName}
                       fill
