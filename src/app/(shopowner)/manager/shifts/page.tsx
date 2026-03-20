@@ -49,6 +49,23 @@ function formatDate(iso: string) {
   });
 }
 
+function getTodayVnDateYmd(): string {
+  // en-CA trả về dạng YYYY-MM-DD
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Ho_Chi_Minh",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date());
+}
+
+function ymdToIsoUtcNoon(ymd: string): string {
+  // Parse YYYY-MM-DD safely and use UTC noon to minimize off-by-one date issues.
+  const [y, m, d] = ymd.split("-").map((n) => Number(n));
+  if (!y || !m || !d) return new Date().toISOString();
+  return new Date(Date.UTC(y, m - 1, d, 12, 0, 0)).toISOString();
+}
+
 // ───────────────────────────────────────────────────────────────────
 // Component
 // ───────────────────────────────────────────────────────────────────
@@ -69,9 +86,11 @@ export default function ShiftsPage() {
   // ── Assign form ──
   const [formShiftId, setFormShiftId] = useState<number | "">("");
   const [formUserId, setFormUserId] = useState<number | "">("");
+  const [formDateYmd, setFormDateYmd] = useState<string>(getTodayVnDateYmd());
   const [formNotes, setFormNotes] = useState("");
   const [assigning, setAssigning] = useState(false);
   const [assignError, setAssignError] = useState<string | null>(null);
+  const minDateYmd = getTodayVnDateYmd();
 
   // ── New template inline ──
   const [showNewTemplate, setShowNewTemplate] = useState(false);
@@ -149,8 +168,8 @@ export default function ShiftsPage() {
   // ───────────────────────────────────────────────────────────────────
 
   const handleAssign = async () => {
-    if (!formShiftId || !formUserId) {
-      setAssignError("Vui lòng chọn ca và người dùng.");
+    if (!formShiftId || !formUserId || !formDateYmd) {
+      setAssignError("Vui lòng chọn ca, người dùng và ngày.");
       return;
     }
     setAssigning(true);
@@ -159,6 +178,7 @@ export default function ShiftsPage() {
       const result = await assignShift({
         shift_id: Number(formShiftId),
         user_id: Number(formUserId),
+        date: ymdToIsoUtcNoon(formDateYmd),
         notes: formNotes.trim() || undefined,
       });
       setAssignments((prev) => [result, ...prev]);
@@ -594,6 +614,29 @@ export default function ShiftsPage() {
                   </div>
                 </div>
 
+                {/* Chọn ngày */}
+                <div>
+                  <label className="block text-xs font-medium text-slate-600 mb-1">
+                    Ngày làm việc <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="date"
+                    value={formDateYmd}
+                    min={minDateYmd}
+                    onChange={(e) => {
+                      const next = e.target.value;
+                      // YYYY-MM-DD so sánh chuỗi đúng thứ tự thời gian
+                      if (next && next < minDateYmd) {
+                        setFormDateYmd(minDateYmd);
+                      } else {
+                        setFormDateYmd(next);
+                      }
+                      setAssignError(null);
+                    }}
+                    className="w-full text-sm px-3 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-300 focus:border-blue-300 outline-none"
+                  />
+                </div>
+
                 {/* Ghi chú */}
                 <div>
                   <label className="block text-xs font-medium text-slate-600 mb-1">
@@ -617,7 +660,7 @@ export default function ShiftsPage() {
                 <button
                   type="button"
                   onClick={handleAssign}
-                  disabled={assigning || !formShiftId || !formUserId}
+                  disabled={assigning || !formShiftId || !formUserId || !formDateYmd}
                   className="w-full py-2.5 bg-blue-500 hover:bg-blue-600 text-white text-sm font-semibold rounded-lg transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                 >
                   {assigning ? (

@@ -22,6 +22,8 @@ export interface ShiftAssignment {
   username: string;
   shop_id: number;
   notes: string | null;
+  // Backend trả về date dạng YYYY-MM-DD (đã format theo timezone Asia/Ho_Chi_Minh)
+  date: string;
   created_at: string;
 }
 
@@ -75,6 +77,7 @@ export const getMyShiftAssignmentsAsStaff = async (
 export const assignShift = async (dto: {
   shift_id: number;
   user_id: number;
+  date: string;
   notes?: string;
 }): Promise<ShiftAssignment> => {
   const res = await apiClient.post('/shifts/assign', dto);
