@@ -1,9 +1,15 @@
 "use client";
 
 import Image from "next/image";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useLayoutEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { login, register, ROLE_CODE_ADMIN, ROLE_CODE_SHOP_OWNER } from "@/apis/auth";
+import {
+  login,
+  register,
+  ROLE_CODE_ADMIN,
+  ROLE_CODE_SHOP_OWNER,
+  getStoredRoleNormalized,
+} from "@/apis/auth";
 
 const ROLE_CODE_STAFF = "STAFF";
 
@@ -21,6 +27,30 @@ export default function AuthPage() {
       setIsLogin(true);
     }
   }, [mode]);
+
+  // Đã đăng nhập mà vẫn vào /auth (gõ URL, bookmark…) → chuyển về đúng khu vực, không giữ form login.
+  useLayoutEffect(() => {
+    if (typeof window === "undefined") return;
+    if (!localStorage.getItem("accessToken")) return;
+
+    const role = getStoredRoleNormalized();
+    const returnUrl = searchParams?.get("returnUrl");
+    let destination = "/";
+    if (role === ROLE_CODE_ADMIN) {
+      destination = "/admin";
+    } else if (role === ROLE_CODE_SHOP_OWNER || role === ROLE_CODE_STAFF) {
+      destination = "/manager";
+    }
+    if (
+      returnUrl &&
+      typeof returnUrl === "string" &&
+      returnUrl.startsWith("/") &&
+      !returnUrl.startsWith("//")
+    ) {
+      destination = returnUrl;
+    }
+    router.replace(destination);
+  }, [router, searchParams]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
