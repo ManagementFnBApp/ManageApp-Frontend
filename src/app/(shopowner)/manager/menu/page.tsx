@@ -15,15 +15,34 @@ type ToastType = "create" | "edit" | "soft-delete" | "hard-delete";
 const formatPrice = (n: number) =>
   new Intl.NumberFormat("vi-VN").format(n) + " ₫";
 
+/** Khi cửa hàng chưa gắn danh mục — chỉ dùng một câu thống nhất trên trang / trong form. */
+const MSG_NO_SHOP_CATEGORIES =
+  "Vui lòng chọn danh mục sản phẩm cho cửa hàng của bạn.";
+
 export default function MenuManagePage() {
   const router = useRouter();
 
-  // Chỉ SHOPOWNER mới được truy cập trang này
+  const [role, setRole] = useState<string>(() => getStoredRoleNormalized());
+
+  // Chỉ SHOPOWNER mới được truy cập trang này.
+  // Nghe sự kiện role đổi sau khi user nâng cấp subscription để tránh redirect nhầm.
   useEffect(() => {
-    if (getStoredRoleNormalized() !== "SHOPOWNER") {
-      router.replace("/manager");
+    const syncRole = () => setRole(getStoredRoleNormalized());
+    syncRole();
+    window.addEventListener("lumio:role-changed", syncRole);
+    return () => window.removeEventListener("lumio:role-changed", syncRole);
+  }, []);
+
+  useEffect(() => {
+    if (role !== "SHOPOWNER") {
+      // Tránh trường hợp role vừa được update ngay sau mount.
+      const t = window.setTimeout(() => {
+        const latest = getStoredRoleNormalized();
+        if (latest !== "SHOPOWNER") router.replace("/manager");
+      }, 400);
+      return () => window.clearTimeout(t);
     }
-  }, [router]);
+  }, [role, router]);
 
   const {
     products,
@@ -44,18 +63,37 @@ export default function MenuManagePage() {
   );
 
   const fetchShopCategories = useCallback(async () => {
-    setShopCategoriesLoading(true);
-    try {
-      const list = await getShopCategories();
-      setShopCategories(list);
-      setShopCategoriesError(null);
-    } catch (err) {
-      console.error("Failed to fetch shop categories:", err);
-      setShopCategoriesError("Không thể tải danh mục cửa hàng");
-      setShopCategories([]);
-    } finally {
-      setShopCategoriesLoading(false);
-    }
+    let attempt = 0;
+    const run = async () => {
+      setShopCategoriesLoading(true);
+      try {
+        const list = await getShopCategories();
+        setShopCategories(list);
+        setShopCategoriesError(null);
+        attempt = 0;
+      } catch (err: any) {
+        const status = err?.status ?? err?.originalError?.response?.status;
+        console.error("Failed to fetch shop categories:", err);
+
+        // Backend vừa kích hoạt subscription có thể chưa sẵn sàng ngay.
+        if (status === 403 && attempt < 3) {
+          attempt += 1;
+          setShopCategoriesLoading(true);
+          const delayMs = [1200, 2400, 4200][attempt - 1] ?? 3000;
+          setTimeout(() => {
+            void run();
+          }, delayMs);
+          return;
+        }
+
+        setShopCategoriesError("Không thể tải danh mục cửa hàng");
+        setShopCategories([]);
+      } finally {
+        setShopCategoriesLoading(false);
+      }
+    };
+
+    await run();
   }, []);
 
   useEffect(() => {
@@ -163,9 +201,7 @@ export default function MenuManagePage() {
   // ── Open modals ──
   const openAdd = () => {
     if (shopCategories.length === 0) {
-      setFormError(
-        'Chưa chọn danh mục cho cửa hàng. Hãy bấm "Chọn thêm danh mục" để chọn từ danh sách Admin đã tạo.',
-      );
+      setFormError(MSG_NO_SHOP_CATEGORIES);
       return;
     }
     setForm({ ...EMPTY_FORM, categoryId: shopCategories[0].id });
@@ -256,9 +292,7 @@ export default function MenuManagePage() {
         !validCategoryId ||
         !shopCategories.some((c) => c.id === validCategoryId)
       ) {
-        setFormError(
-          'Vui lòng chọn danh mục thuộc cửa hàng (đã chọn ở bước "Chọn thêm danh mục").',
-        );
+        setFormError(MSG_NO_SHOP_CATEGORIES);
         return;
       }
       if (!imageFile) {
@@ -483,7 +517,7 @@ export default function MenuManagePage() {
             <span className="text-sm text-gray-400">Đang tải...</span>
           ) : shopCategories.length === 0 ? (
             <span className="text-sm text-amber-600">
-              Chưa chọn danh mục. Hãy chọn từ danh sách Admin đã tạo.
+              {MSG_NO_SHOP_CATEGORIES}
             </span>
           ) : (
             <div className="flex flex-wrap gap-2">
@@ -519,14 +553,6 @@ export default function MenuManagePage() {
           </button>
         </div>
       </div>
-
-      {/* ── No shop categories hint ── */}
-      {shopCategories.length === 0 && !shopCategoriesLoading && (
-        <div className="px-8 py-3 bg-amber-50 border-b border-amber-200 text-amber-700 text-sm font-medium">
-          Chưa chọn danh mục cho cửa hàng. Bấm &quot;Chọn thêm danh mục&quot; để
-          chọn từ danh sách Admin đã tạo. Sau đó bạn mới có thể thêm sản phẩm.
-        </div>
-      )}
 
       {/* ── Filters ── */}
       <div className="px-8 py-4 flex flex-wrap gap-3 items-center bg-white border-b border-gray-100">

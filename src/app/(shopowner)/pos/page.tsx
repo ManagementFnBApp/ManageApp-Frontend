@@ -76,6 +76,7 @@ export default function PosPage() {
   const [cart, setCart] = useState<CartItem[]>([]);
   const [currentTime, setCurrentTime] = useState<Date | null>(null);
   const [posProducts, setPosProducts] = useState<PosProduct[]>([]);
+  const [posProductsLoading, setPosProductsLoading] = useState(true);
   const [categories, setCategories] = useState<CategoryFilter[]>([
     { id: "all", label: "Tất Cả" },
   ]);
@@ -99,6 +100,7 @@ export default function PosPage() {
   useEffect(() => {
     (async () => {
       try {
+        setPosProductsLoading(true);
         const products = await getPosShopProducts(true);
         setPosProducts(products);
 
@@ -126,6 +128,8 @@ export default function PosPage() {
         ]);
       } catch (err) {
         console.error("Không thể tải sản phẩm POS", err);
+      } finally {
+        setPosProductsLoading(false);
       }
     })();
   }, []);
@@ -561,42 +565,84 @@ export default function PosPage() {
             </div>
           </div>
 
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 pb-4">
-            {filteredProducts.map((product) => (
-              <button
-                key={product.id}
-                type="button"
-                onClick={() => addToCart(product)}
-                className="text-center bg-white rounded-lg border border-gray-200 p-2 hover:shadow-md hover:border-blue-200 transition flex flex-col items-center"
-              >
-                <div className="w-28 h-28 rounded-lg bg-gray-200 mb-2 flex items-center justify-center text-gray-400 overflow-hidden">
-                  {product.image ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      src={product.image}
-                      alt={product.name}
-                      className="w-full h-full object-cover"
-                      onError={(e) => {
-                        e.currentTarget.style.display = 'none';
-                        const parent = e.currentTarget.parentElement;
-                        if (parent) {
-                          parent.textContent = '☕';
-                        }
-                      }}
-                    />
-                  ) : (
-                    <span className="text-2xl">☕</span>
-                  )}
-                </div>
-                <p className="font-medium text-gray-900 line-clamp-1 text-sm">
-                  {product.name}
+          {posProductsLoading ? (
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 pb-4">
+              {Array.from({ length: 6 }).map((_, idx) => (
+                <div
+                  key={idx}
+                  className="w-full h-40 rounded-lg bg-gray-100 animate-pulse border border-gray-50"
+                />
+              ))}
+            </div>
+          ) : filteredProducts.length === 0 ? (
+            <div className="pb-4">
+              <div className="flex flex-col items-center justify-center py-10 gap-2 text-gray-500">
+                <svg
+                  className="w-12 h-12"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={1.5}
+                    d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"
+                  />
+                </svg>
+                <p className="text-sm font-semibold text-gray-700">
+                  Chưa thêm sản phẩm vào menu
                 </p>
-                <p className="text-blue-600 font-semibold text-sm">
-                  {formatPrice(product.price)}
+                <p className="text-xs text-gray-400 text-center">
+                  Vui lòng thêm sản phẩm trước khi bán hàng tại POS.
                 </p>
-              </button>
-            ))}
-          </div>
+                <button
+                  type="button"
+                  onClick={() => router.push("/manager/menu")}
+                  className="mt-2 px-4 py-2 bg-blue-600 text-white rounded-xl font-semibold text-sm hover:bg-blue-700 transition"
+                >
+                  Click vào để đến trang Menu để thêm sản phẩm
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 pb-4">
+              {filteredProducts.map((product) => (
+                <button
+                  key={product.id}
+                  type="button"
+                  onClick={() => addToCart(product)}
+                  className="text-center bg-white rounded-lg border border-gray-200 p-2 hover:shadow-md hover:border-blue-200 transition flex flex-col items-center"
+                >
+                  <div className="w-28 h-28 rounded-lg bg-gray-200 mb-2 flex items-center justify-center text-gray-400 overflow-hidden">
+                    {product.image ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={product.image}
+                        alt={product.name}
+                        className="w-full h-full object-cover"
+                        onError={(e) => {
+                          e.currentTarget.style.display = "none";
+                          const parent = e.currentTarget.parentElement;
+                          if (parent) {
+                            parent.textContent = "☕";
+                          }
+                        }}
+                      />
+                    ) : (
+                      <span className="text-2xl">☕</span>
+                    )}
+                  </div>
+                  <p className="font-medium text-gray-900 line-clamp-1 text-sm">
+                    {product.name}
+                  </p>
+                  <p className="text-blue-600 font-semibold text-sm">
+                    {formatPrice(product.price)}
+                  </p>
+                </button>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* Right column - Order summary (cùng chiều cao với cột trái) */}
@@ -686,9 +732,9 @@ export default function PosPage() {
                   ⚠ Không tìm được ca làm việc tự động.
                 </p>
                 <p className="text-amber-600 text-xs mb-2">
-                  Liên hệ SHOPOWNER để lấy <strong>Mã ca (Assignment ID)</strong> từ trang Ca làm việc.
+                  Liên hệ SHOPOWNER để lấy <strong>Mã ca </strong> từ trang Ca làm việc.
                 </p>
-                <div className="flex gap-1.5">
+                {/* <div className="flex gap-1.5">
                   <input
                     type="number"
                     min={1}
@@ -706,7 +752,7 @@ export default function PosPage() {
                   >
                     Xác nhận
                   </button>
-                </div>
+                </div> */}
               </div>
             )}
             {checkoutError && (

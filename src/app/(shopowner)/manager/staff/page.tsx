@@ -34,12 +34,25 @@ function formatDate(d: string | undefined) {
 export default function ManagerStaffPage() {
   const router = useRouter();
 
+  const [role, setRole] = useState<string>(() => getStoredRoleNormalized());
+
   // Chỉ SHOPOWNER mới được truy cập trang này
   useEffect(() => {
-    if (getStoredRoleNormalized() !== 'SHOPOWNER') {
-      router.replace('/manager');
+    const syncRole = () => setRole(getStoredRoleNormalized());
+    syncRole();
+    window.addEventListener("lumio:role-changed", syncRole);
+    return () => window.removeEventListener("lumio:role-changed", syncRole);
+  }, []);
+
+  useEffect(() => {
+    if (role !== "SHOPOWNER") {
+      const t = window.setTimeout(() => {
+        const latest = getStoredRoleNormalized();
+        if (latest !== "SHOPOWNER") router.replace("/manager");
+      }, 400);
+      return () => window.clearTimeout(t);
     }
-  }, [router]);
+  }, [role, router]);
 
   const [staffList, setStaffList] = useState<AppUser[]>([]);
   const [loading, setLoading] = useState(true);

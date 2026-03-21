@@ -84,9 +84,17 @@ export default function ManagerLayout({
   const [role, setRole] = useState("");
 
   useEffect(() => {
-    const name = localStorage.getItem("username");
-    if (name) setManagerName(name);
-    setRole(getStoredRoleNormalized());
+    const syncRoleAndName = () => {
+      const name = localStorage.getItem("username");
+      if (name) setManagerName(name);
+      setRole(getStoredRoleNormalized());
+    };
+
+    syncRoleAndName();
+    window.addEventListener("lumio:role-changed", syncRoleAndName);
+    return () => {
+      window.removeEventListener("lumio:role-changed", syncRoleAndName);
+    };
   }, []);
 
   const isStaff = role === "STAFF";

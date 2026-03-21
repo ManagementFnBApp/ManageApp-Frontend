@@ -194,15 +194,20 @@ export const resetPassword = async (data: ResetPasswordDto): Promise<ResetPasswo
   return raw as ResetPasswordResponse;
 };
 
+/** Xóa session trên trình duyệt (không điều hướng). Dùng sau subscription: user cần đăng nhập lại để có JWT mới. */
+export const clearAuthStorage = () => {
+  if (typeof window === 'undefined') return;
+  localStorage.removeItem('accessToken');
+  localStorage.removeItem('userId');
+  localStorage.removeItem('username');
+  localStorage.removeItem('role');
+  localStorage.removeItem('shopId');
+};
+
 // Logout
 export const handleLogout = () => {
   if (typeof window !== 'undefined') {
-    localStorage.removeItem('accessToken');
-    localStorage.removeItem('userId');
-    localStorage.removeItem('username');
-    localStorage.removeItem('role');
-    localStorage.removeItem('shopId');
-
+    clearAuthStorage();
     window.location.href = '/';
   }
 };
@@ -211,6 +216,9 @@ export const handleLogout = () => {
 export const updateLocalRole = (role: string) => {
   if (typeof window !== 'undefined') {
     localStorage.setItem('role', role);
+    // Notify client-side guards/layouts that depend on `localStorage.role`.
+    // (So user doesn't need to logout/login after actions like subscription upgrade.)
+    window.dispatchEvent(new CustomEvent("lumio:role-changed", { detail: { role } }));
   }
 };
 

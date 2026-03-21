@@ -70,7 +70,7 @@ export default function ServicesPage() {
         {isLoggedIn && userRole === ROLE_CODE_SHOP_OWNER && (
           <div className="inline-flex items-center gap-2 bg-green-100 text-green-800 px-6 py-3 rounded-full font-semibold">
             ✅ Bạn đã là Shop Owner — truy cập hệ thống{" "}
-            <Link href="/pos" className="underline hover:text-green-900">
+            <Link href="/manager" className="underline hover:text-green-900">
               tại đây
             </Link>
           </div>

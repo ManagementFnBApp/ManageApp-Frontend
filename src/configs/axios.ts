@@ -97,20 +97,38 @@ export class ApiClientService {
 
   private handleError(error: AxiosError): Promise<never> {
     const status = error.response?.status;
-    const isLoginRequest = error.config?.url?.includes('/auth/login') && error.config?.method === 'post';
-    const isManagedUserRequest = error.config?.url?.includes('/users/managed') && error.config?.method === 'post';
-    const isGetUsersRequest = error.config?.url?.includes('/users') && (error.config?.method === 'get' || error.config?.method === 'GET');
+    const requestUrl = String(error.config?.url ?? "");
+    const isLoginRequest = requestUrl.includes('auth/login') && error.config?.method === 'post';
+    const isManagedUserRequest = requestUrl.includes('users/managed') && error.config?.method === 'post';
+    const isGetUsersRequest =
+      requestUrl.includes('users') &&
+      (error.config?.method === 'get' || error.config?.method === 'GET');
     // STAFF không có quyền GET /shifts/users → POS page tự xử lý fallback, không redirect /403
-    const isGetShiftUsersRequest = error.config?.url?.includes('/shifts/users') && (error.config?.method === 'get' || error.config?.method === 'GET');
+    const isGetShiftUsersRequest =
+      requestUrl.includes('shifts/users') &&
+      (error.config?.method === 'get' || error.config?.method === 'GET');
     // STAFF gọi POST /orders/list → để orders page tự xử lý lỗi, không redirect /403
-    const isOrdersListRequest = error.config?.url?.includes('/orders/list') && (error.config?.method === 'post' || error.config?.method === 'POST');
+    const isOrdersListRequest =
+      requestUrl.includes('orders/list') &&
+      (error.config?.method === 'post' || error.config?.method === 'POST');
     // GET /shop-products → SHOPOWNER + STAFF đều có quyền; tự xử lý lỗi tại component
-    const isShopProductsRequest = error.config?.url?.includes('/shop-products');
+    // axios config.url đôi khi có/không có dấu "/" đầu tùy cách axios build request,
+    // nên chỉ match theo phần đuôi/tên endpoint.
+    const isShopProductsRequest = requestUrl.includes('shop-products');
+    const isShopCategoriesRequest = requestUrl.includes('shop-categories');
 
     // Không auto logout trên /users/managed vì có validation ở backend
     if (status === 401 && !isLoginRequest && !isManagedUserRequest) {
       this.errorHandler?.onUnauthorized?.();
-    } else if (status === 403 && !isLoginRequest && !isGetUsersRequest && !isGetShiftUsersRequest && !isOrdersListRequest && !isShopProductsRequest) {
+    } else if (
+      status === 403 &&
+      !isLoginRequest &&
+      !isGetUsersRequest &&
+      !isGetShiftUsersRequest &&
+      !isOrdersListRequest &&
+      !isShopProductsRequest &&
+      !isShopCategoriesRequest
+    ) {
       // 403 từ login → không redirect. GET /users → để adminApi xử lý. GET /shifts/users → POS fallback.
       // POST /orders/list → orders page xử lý. /shop-products → component tự xử lý.
       this.errorHandler?.onForbidden?.();

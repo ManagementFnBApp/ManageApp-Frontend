@@ -29,7 +29,12 @@ const STORAGE_KEY = 'pos_orders';
 const DRAFTS_KEY = 'pos_saved_drafts';
 
 // ── API Base URLs ──
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
+// Dùng cùng config backend với rest of app.
+// .env hiện tại dùng NEXT_PUBLIC_SERVER_API_URL (vd: http://localhost:2999)
+// còn endpoints POS đặt dưới "/api".
+const SERVER_BASE =
+  (process.env.NEXT_PUBLIC_SERVER_API_URL || 'http://localhost:2999').replace(/\/$/, '');
+const API_BASE = `${SERVER_BASE}/api`;
 
 // ── Orders ──────────────────────────────────────────────────────────────────
 

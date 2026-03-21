@@ -73,6 +73,8 @@ function ymdToIsoUtcNoon(ymd: string): string {
 export default function ShiftsPage() {
   const router = useRouter();
 
+  const [role, setRole] = useState<string>(() => getStoredRoleNormalized());
+
   // ── Data state ──
   const [assignments, setAssignments] = useState<ShiftAssignment[]>([]);
   const [templates, setTemplates] = useState<ShiftTemplate[]>([]);
@@ -126,10 +128,21 @@ export default function ShiftsPage() {
 
   // Chỉ SHOPOWNER mới được truy cập trang này
   useEffect(() => {
-    if (getStoredRoleNormalized() !== 'SHOPOWNER') {
-      router.replace('/manager');
+    const syncRole = () => setRole(getStoredRoleNormalized());
+    syncRole();
+    window.addEventListener("lumio:role-changed", syncRole);
+    return () => window.removeEventListener("lumio:role-changed", syncRole);
+  }, []);
+
+  useEffect(() => {
+    if (role !== "SHOPOWNER") {
+      const t = window.setTimeout(() => {
+        const latest = getStoredRoleNormalized();
+        if (latest !== "SHOPOWNER") router.replace("/manager");
+      }, 400);
+      return () => window.clearTimeout(t);
     }
-  }, [router]);
+  }, [role, router]);
 
   const loadAll = useCallback(async () => {
     setLoading(true);

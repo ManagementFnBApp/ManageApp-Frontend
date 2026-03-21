@@ -9,23 +9,44 @@ export default function ShopOwnerGuardLayout({ children }: { children: React.Rea
   const [authorized, setAuthorized] = useState<boolean | null>(null);
 
   useEffect(() => {
-    const token = localStorage.getItem('accessToken');
-    const role = getStoredRoleNormalized();
+    let retryTimeoutId: number | undefined;
 
-    if (!token) {
-      router.replace('/auth?mode=login');
-      return;
-    }
-    if (role === 'ADMIN') {
-      router.replace('/admin');
-      return;
-    }
-    // Cho phép SHOPOWNER và STAFF vào /manager, /pos
-    if (role !== ROLE_CODE_SHOP_OWNER && role !== 'STAFF') {
-      router.replace('/');
-      return;
-    }
-    setAuthorized(true);
+    const validate = () => {
+      const token = localStorage.getItem('accessToken');
+      const role = getStoredRoleNormalized();
+
+      if (!token) {
+        router.replace('/auth?mode=login');
+        return;
+      }
+      if (role === 'ADMIN') {
+        router.replace('/admin');
+        return;
+      }
+      // Cho phép SHOPOWNER và STAFF vào /manager, /pos
+      if (role !== ROLE_CODE_SHOP_OWNER && role !== 'STAFF') {
+        // Có thể role chưa kịp cập nhật sau subscription -> chờ thêm 400-500ms rồi re-check
+        if (retryTimeoutId) window.clearTimeout(retryTimeoutId);
+        retryTimeoutId = window.setTimeout(() => {
+          const latestRole = getStoredRoleNormalized();
+          if (latestRole === ROLE_CODE_SHOP_OWNER || latestRole === 'STAFF') {
+            setAuthorized(true);
+            return;
+          }
+          router.replace('/');
+        }, 450);
+        return;
+      }
+
+      setAuthorized(true);
+    };
+
+    validate();
+    window.addEventListener('lumio:role-changed', validate);
+    return () => {
+      if (retryTimeoutId) window.clearTimeout(retryTimeoutId);
+      window.removeEventListener('lumio:role-changed', validate);
+    };
   }, [router]);
 
   if (authorized !== true) {

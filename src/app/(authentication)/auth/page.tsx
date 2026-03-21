@@ -22,6 +22,20 @@ export default function AuthPage() {
     }
   }, [mode]);
 
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      if (sessionStorage.getItem("lumio:subscriptionLoginHint") === "1") {
+        sessionStorage.removeItem("lumio:subscriptionLoginHint");
+        setSuccessMessage(
+          "Thanh toán gói cửa hàng thành công. Vui lòng đăng nhập lại — token mới sẽ có quyền Shop Owner và shop_id để bạn vào trang quản lý cửa hàng.",
+        );
+      }
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
   const [loginData, setLoginData] = useState({
     username: "",
     password: "",
@@ -67,7 +81,7 @@ export default function AuthPage() {
       const role = (response.role ?? "").toString().toUpperCase();
       const returnUrl = searchParams?.get("returnUrl");
       let destination = "/";
-      if (response.role === "ADMIN") {
+      if (role === ROLE_CODE_ADMIN) {
         destination = "/admin";
       } else if (role === ROLE_CODE_SHOP_OWNER || role === ROLE_CODE_STAFF) {
         destination = "/manager";
@@ -82,7 +96,8 @@ export default function AuthPage() {
         destination = returnUrl;
       }
 
-      setTimeout(() => router.push(destination), 1200);
+      // Điều hướng ngay để tránh trường hợp user đổi URL trong lúc chờ timeout
+      router.replace(destination);
     } catch (err: any) {
       // Ưu tiên message từ API (vd: 403 tài khoản bị chặn)
       const message =
@@ -142,7 +157,7 @@ export default function AuthPage() {
           className="fixed top-24 right-6 z-[100] animate-[slideInRight_0.4s_ease-out]"
           role="alert"
         >
-          <div className="flex items-center gap-3 px-5 py-4 rounded-xl shadow-lg bg-green-500 text-white max-w-sm">
+          <div className="flex items-center gap-3 px-5 py-4 rounded-xl shadow-lg bg-green-500 text-white max-w-md">
             <div className="flex-shrink-0 w-10 h-10 rounded-full bg-white/20 flex items-center justify-center">
               <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 20 20">
                 <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />

@@ -7,7 +7,7 @@ import {
   createSubscriptionPayment,
   confirmPayment,
 } from "@/apis/subscription";
-import { updateLocalRole, ROLE_CODE_SHOP_OWNER } from "@/apis/auth";
+import { clearAuthStorage } from "@/apis/auth";
 import Link from "next/link";
 
 const PAYMENT_METHODS = [
@@ -37,18 +37,27 @@ function CheckoutContent() {
   const [shopNameTouched, setShopNameTouched] = useState(false);
 
   useEffect(() => {
-    if (typeof window !== "undefined") {
-      const token = localStorage.getItem("accessToken");
-      const uname = localStorage.getItem("username") || "";
-      setIsLoggedIn(!!token);
-      setUsername(uname);
-      if (!token) {
-        router.replace(
-          `/auth?mode=login&returnUrl=/checkout?subscriptionId=${subscriptionId}&packageCode=${packageCode}&price=${price}&billing=${billing}`,
-        );
-      }
+    if (typeof window === "undefined") return;
+    if (step === "success") return;
+
+    const token = localStorage.getItem("accessToken");
+    const uname = localStorage.getItem("username") || "";
+    setIsLoggedIn(!!token);
+    setUsername(uname);
+    if (!token) {
+      router.replace(
+        `/auth?mode=login&returnUrl=/checkout?subscriptionId=${subscriptionId}&packageCode=${packageCode}&price=${price}&billing=${billing}`,
+      );
     }
-  }, [router, subscriptionId, packageCode, price, billing]);
+  }, [router, subscriptionId, packageCode, price, billing, step]);
+
+  // Sau thanh toán subscription: xóa phiên để user đăng nhập lại (JWT mới có SHOPOWNER + shop_id).
+  useEffect(() => {
+    if (step !== "success" || typeof window === "undefined") return;
+    clearAuthStorage();
+  }, [step]);
+
+  // Trạng thái "success": hiển thị tóm tắt + hướng dẫn đăng nhập lại (không vào /manager bằng token cũ).
 
   if (!subscriptionId || !packageCode) {
     return (
@@ -95,10 +104,9 @@ function CheckoutContent() {
         price,
       );
 
-      // Bước 3: Confirm thanh toán (PUT /subscriptions/payments/:id/status) → kích hoạt shop + role SHOPOWNER
+      // Bước 3: Confirm thanh toán → kích hoạt shop + gán role SHOPOWNER trên server (JWT cũ vẫn lỗi thời → user đăng nhập lại).
       await confirmPayment(payment.sub_payment_id);
 
-      updateLocalRole(ROLE_CODE_SHOP_OWNER);
       setShopName(
         payment.shop?.shop_name ||
           name ||
@@ -171,15 +179,21 @@ function CheckoutContent() {
               </span>
             </div>
           </div>
-          <p className="text-amber-600 text-sm mb-4">
-            Vui lòng đăng nhập lại để nhận quyền Shop Owner và vào trang quản lý.
-          </p>
-          <Link
-            href={`/auth?mode=login&returnUrl=${encodeURIComponent('/manager')}`}
+         
+          <button
+            type="button"
+            onClick={() => {
+              try {
+                sessionStorage.setItem("lumio:subscriptionLoginHint", "1");
+              } catch {
+                /* ignore */
+              }
+              router.push("/auth?mode=login&returnUrl=/manager");
+            }}
             className="block w-full py-4 bg-blue-600 text-white rounded-xl font-semibold text-lg hover:bg-blue-700 transition-all hover:-translate-y-0.5 hover:shadow-lg text-center"
           >
-            Đăng nhập lại → Vào quản lý
-          </Link>
+            Đăng nhập lại để vào quản lý cửa hàng
+          </button>
         </div>
       </div>
     );

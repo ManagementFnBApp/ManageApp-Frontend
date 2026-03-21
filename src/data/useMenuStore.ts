@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import {
   getShopProducts,
   createShopProduct,
@@ -14,6 +14,7 @@ export function useMenuStore() {
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const retryRef = useRef(0);
 
   const fetchProducts = useCallback(async () => {
     setLoading(true);
@@ -21,6 +22,7 @@ export function useMenuStore() {
       const data = await getShopProducts();
       setProducts(data);
       setError(null);
+      retryRef.current = 0;
     } catch (err: any) {
       const status = err?.status ?? err?.originalError?.response?.status;
       const msg = err?.message ?? err?.originalError?.message;
@@ -28,6 +30,15 @@ export function useMenuStore() {
         setError("Máy chủ trả lỗi 500. Chạy backend (port 2999) rồi bấm Thử lại.");
       } else {
         setError(msg ?? "Không thể tải danh sách sản phẩm.");
+      }
+      if (status === 403 && retryRef.current < 3) {
+        retryRef.current += 1;
+        // Backend vừa activate subscription có thể cần thêm chút thời gian.
+        // Retry vài lần để tránh phải logout/login.
+        const delayMs = [1200, 2400, 4200][retryRef.current - 1] ?? 3000;
+        setTimeout(() => {
+          void fetchProducts();
+        }, delayMs);
       }
     } finally {
       setLoading(false);
