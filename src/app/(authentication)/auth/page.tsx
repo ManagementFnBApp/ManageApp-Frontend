@@ -1,9 +1,15 @@
 "use client";
 
 import Image from "next/image";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { login, register, ROLE_CODE_ADMIN, ROLE_CODE_SHOP_OWNER } from "@/apis/auth";
+import {
+  login,
+  register,
+  ROLE_CODE_ADMIN,
+  ROLE_CODE_SHOP_OWNER,
+} from "@/apis/auth";
+import { createProfile } from "@/apis/profileApi";
 
 const ROLE_CODE_STAFF = "STAFF";
 
@@ -37,6 +43,7 @@ export default function AuthPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
+  const isSubmitting = useRef(false);
 
   const handleToggle = () => {
     setIsAnimating(true);
@@ -63,6 +70,8 @@ export default function AuthPage() {
         password: loginData.password,
       });
       setSuccessMessage("Bạn đã đăng nhập thành công!");
+
+      await createProfile({ full_name: registerData.username });
 
       const role = (response.role ?? "").toString().toUpperCase();
       const returnUrl = searchParams?.get("returnUrl");
@@ -99,7 +108,9 @@ export default function AuthPage() {
           "Không thể kết nối đến server. Kiểm tra backend đã chạy và NEXT_PUBLIC_SERVER_API_URL trong .env.",
         );
       } else {
-        setError("Đăng nhập thất bại. Vui lòng kiểm tra lại username và mật khẩu.");
+        setError(
+          "Đăng nhập thất bại. Vui lòng kiểm tra lại username và mật khẩu.",
+        );
       }
     } finally {
       setIsLoading(false);
@@ -108,6 +119,8 @@ export default function AuthPage() {
 
   const handleRegisterSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmitting.current) return; // block re-entry
+    isSubmitting.current = true;
     setIsLoading(true);
     setError("");
     setSuccessMessage("");
@@ -115,6 +128,7 @@ export default function AuthPage() {
     if (registerData.password !== registerData.confirmPassword) {
       setError("Passwords do not match!");
       setIsLoading(false);
+      isSubmitting.current = false;
       return;
     }
 
@@ -124,13 +138,16 @@ export default function AuthPage() {
         email: registerData.email,
         password: registerData.password,
       });
-      setSuccessMessage(`Đăng ký thành công! Hãy đăng nhập và chọn gói dịch vụ để bắt đầu.`);
+      setSuccessMessage(
+        `Đăng ký thành công! Hãy đăng nhập và chọn gói dịch vụ để bắt đầu.`,
+      );
       setIsLogin(true);
       router.replace("/auth?mode=login");
     } catch (err: any) {
       setError(err.message || "Đăng ký thất bại. Vui lòng thử lại.");
     } finally {
       setIsLoading(false);
+      isSubmitting.current = false;
     }
   };
 
@@ -139,13 +156,17 @@ export default function AuthPage() {
       {/* Success popup - góc phải trên màn hình */}
       {successMessage && (
         <div
-          className="fixed top-24 right-6 z-[100] animate-[slideInRight_0.4s_ease-out]"
+          className="fixed top-24 right-6 z-100 animate-[slideInRight_0.4s_ease-out]"
           role="alert"
         >
           <div className="flex items-center gap-3 px-5 py-4 rounded-xl shadow-lg bg-green-500 text-white max-w-sm">
-            <div className="flex-shrink-0 w-10 h-10 rounded-full bg-white/20 flex items-center justify-center">
+            <div className="shrink-0 w-10 h-10 rounded-full bg-white/20 flex items-center justify-center">
               <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                <path
+                  fillRule="evenodd"
+                  d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+                  clipRule="evenodd"
+                />
               </svg>
             </div>
             <p className="font-medium">{successMessage}</p>
@@ -160,9 +181,7 @@ export default function AuthPage() {
             boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.15)",
           }}
         >
-          <div
-            className="relative grid lg:grid-cols-2 min-h-[600px] overflow-hidden"
-          >
+          <div className="relative grid lg:grid-cols-2 min-h-150 overflow-hidden">
             {/* Welcome Section with Background - Sliding Panel */}
             <div
               className="relative hidden lg:flex flex-col justify-center items-center p-12 overflow-hidden image-panel"
@@ -193,7 +212,8 @@ export default function AuthPage() {
               <div
                 className="relative z-10 text-center space-y-6 max-w-md mx-auto"
                 style={{
-                  transition: "opacity 0.4s ease-out 0.2s, transform 0.4s ease-out 0.2s",
+                  transition:
+                    "opacity 0.4s ease-out 0.2s, transform 0.4s ease-out 0.2s",
                   opacity: isAnimating ? 0 : 1,
                   transform: isAnimating
                     ? `translateX(${isLogin ? "-30px" : "30px"})`
@@ -254,7 +274,8 @@ export default function AuthPage() {
                       transform: isAnimating
                         ? "translateX(-30px)"
                         : "translateX(0)",
-                      transition: "opacity 0.4s ease-out 0.2s, transform 0.4s ease-out 0.2s",
+                      transition:
+                        "opacity 0.4s ease-out 0.2s, transform 0.4s ease-out 0.2s",
                       willChange: "transform, opacity",
                     }}
                   >
@@ -266,8 +287,11 @@ export default function AuthPage() {
 
                     <form onSubmit={handleLoginSubmit} className="space-y-5">
                       {error && (
-                        <div role="alert" className="p-3 bg-red-50 border border-red-200 rounded-xl text-red-700 text-sm flex items-start gap-2">
-                          <span className="flex-shrink-0 mt-0.5">⚠️</span>
+                        <div
+                          role="alert"
+                          className="p-3 bg-red-50 border border-red-200 rounded-xl text-red-700 text-sm flex items-start gap-2"
+                        >
+                          <span className="shrink-0 mt-0.5">⚠️</span>
                           <span>{error}</span>
                         </div>
                       )}
@@ -281,7 +305,10 @@ export default function AuthPage() {
                           placeholder="Username"
                           value={loginData.username}
                           onChange={(e) => {
-                            setLoginData({ ...loginData, username: e.target.value });
+                            setLoginData({
+                              ...loginData,
+                              username: e.target.value,
+                            });
                             if (error) setError("");
                           }}
                         />
@@ -311,7 +338,10 @@ export default function AuthPage() {
                           placeholder="Password"
                           value={loginData.password}
                           onChange={(e) => {
-                            setLoginData({ ...loginData, password: e.target.value });
+                            setLoginData({
+                              ...loginData,
+                              password: e.target.value,
+                            });
                             if (error) setError("");
                           }}
                         />
@@ -370,7 +400,8 @@ export default function AuthPage() {
                       transform: isAnimating
                         ? "translateX(30px)"
                         : "translateX(0)",
-                      transition: "opacity 0.4s ease-out 0.2s, transform 0.4s ease-out 0.2s",
+                      transition:
+                        "opacity 0.4s ease-out 0.2s, transform 0.4s ease-out 0.2s",
                       willChange: "transform, opacity",
                     }}
                   >

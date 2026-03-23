@@ -1,6 +1,7 @@
-import { apiClient } from '../configs/axios';
-import { BASE_URL } from '../global-configs';
-import { decodeJwt, UserJwtPayload } from '../lib/jwt';
+import { ChangePasswordDto } from "@/types/user.types";
+import { apiClient } from "../configs/axios";
+import { BASE_URL } from "../global-configs";
+import { decodeJwt, UserJwtPayload } from "../lib/jwt";
 
 // Login
 export interface LoginDto {
@@ -9,13 +10,13 @@ export interface LoginDto {
 }
 
 /** role_code từ bảng Role (backend) - dùng cho so sánh sau khi login */
-export const ROLE_CODE_ADMIN = 'ADMIN';
-export const ROLE_CODE_SHOP_OWNER = 'SHOPOWNER';
+export const ROLE_CODE_ADMIN = "ADMIN";
+export const ROLE_CODE_SHOP_OWNER = "SHOPOWNER";
 
 /** Lấy role đã lưu (chuẩn uppercase để khớp API backend ADMIN/SHOPOWNER) */
 export function getStoredRoleNormalized(): string {
-  if (typeof window === 'undefined') return '';
-  return ((localStorage.getItem('role') ?? '').toString()).toUpperCase();
+  if (typeof window === "undefined") return "";
+  return (localStorage.getItem("role") ?? "").toString().toUpperCase();
 }
 
 /** Kiểm tra user hiện tại có phải admin (theo role từ backend) */
@@ -38,7 +39,12 @@ export interface LoginResponse {
 
 /** Đúng format response backend: ResponseData<AuthPermission> */
 interface BackendLoginResponse {
-  data: { user_id: number; token: string; expiredTime: number; role?: string | null };
+  data: {
+    user_id: number;
+    token: string;
+    expiredTime: number;
+    role?: string | null;
+  };
   statusCode: number;
   message: string;
 }
@@ -49,31 +55,31 @@ interface BackendLoginResponse {
  * Role lấy từ JWT (backend đặt payload.role = role_code).
  */
 export const login = async (data: LoginDto): Promise<LoginResponse> => {
-  const isEmail = data.username.includes('@');
+  const isEmail = data.username.includes("@");
 
   // Admin login: dùng fetch thuần để tránh axios interceptor gọi handleLogout khi 401
   if (isEmail) {
     try {
       const res = await fetch(`${BASE_URL}/admins/login`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email: data.username, password: data.password }),
       });
       if (res.ok) {
         const json = await res.json();
         const adminData = json.data ?? json;
         if (adminData?.token) {
-          localStorage.setItem('accessToken', adminData.token);
-          localStorage.setItem('userId', String(adminData.adminId));
-          localStorage.setItem('username', data.username);
-          localStorage.setItem('role', 'ADMIN');
+          localStorage.setItem("accessToken", adminData.token);
+          localStorage.setItem("userId", String(adminData.adminId));
+          localStorage.setItem("username", data.username);
+          localStorage.setItem("role", "ADMIN");
         }
         return {
           user_id: adminData.adminId,
           username: data.username,
           token: adminData.token,
           expiredTime: adminData.expiredTime,
-          role: 'ADMIN',
+          role: "ADMIN",
         };
       }
       // Admin login thất bại → tiếp tục staff login
@@ -84,8 +90,8 @@ export const login = async (data: LoginDto): Promise<LoginResponse> => {
 
   // User login: dùng fetch thuần để tránh axios interceptor redirect về '/' khi BE trả 401
   const res = await fetch(`${BASE_URL}/auth/login`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ username: data.username, password: data.password }),
   });
 
@@ -93,7 +99,10 @@ export const login = async (data: LoginDto): Promise<LoginResponse> => {
 
   if (!res.ok) {
     // Lấy message lỗi từ BE (thường là "Username or password is incorrect")
-    const message = json?.message || json?.data?.message || 'Đăng nhập thất bại. Vui lòng kiểm tra lại thông tin.';
+    const message =
+      json?.message ||
+      json?.data?.message ||
+      "Đăng nhập thất bại. Vui lòng kiểm tra lại thông tin.";
     throw new Error(Array.isArray(message) ? message[0] : message);
   }
 
@@ -101,23 +110,26 @@ export const login = async (data: LoginDto): Promise<LoginResponse> => {
   if (authData?.token) {
     const payload = decodeJwt<UserJwtPayload>(authData.token);
     const userRole = payload?.role ?? null;
-    localStorage.setItem('accessToken', authData.token);
-    localStorage.setItem('userId', String(authData.user_id));
-    localStorage.setItem('username', data.username);
-    localStorage.setItem('role', userRole ?? '');
+    localStorage.setItem("accessToken", authData.token);
+    localStorage.setItem("userId", String(authData.user_id));
+    localStorage.setItem("username", data.username);
+    localStorage.setItem("role", userRole ?? "");
   }
 
-  const payload = decodeJwt<UserJwtPayload & { shop_id?: number }>(authData.token);
-  const roleFromJwt = (payload?.role ?? '').toString().toUpperCase();
+  const payload = decodeJwt<UserJwtPayload & { shop_id?: number }>(
+    authData.token,
+  );
+  const roleFromJwt = (payload?.role ?? "").toString().toUpperCase();
   const roleFromApi = (authData as { role?: string | null }).role;
-  const role = (roleFromApi ?? roleFromJwt).toString().toUpperCase().trim() || null;
+  const role =
+    (roleFromApi ?? roleFromJwt).toString().toUpperCase().trim() || null;
 
-  localStorage.setItem('accessToken', authData.token);
-  localStorage.setItem('userId', String(authData.user_id));
-  localStorage.setItem('username', data.username.trim());
-  localStorage.setItem('role', role ?? '');
+  localStorage.setItem("accessToken", authData.token);
+  localStorage.setItem("userId", String(authData.user_id));
+  localStorage.setItem("username", data.username.trim());
+  localStorage.setItem("role", role ?? "");
   if (payload?.shop_id != null) {
-    localStorage.setItem('shopId', String(payload.shop_id));
+    localStorage.setItem("shopId", String(payload.shop_id));
   }
 
   return {
@@ -144,13 +156,17 @@ export interface RegisterResponse {
   createdAt: Date;
 }
 
-export const register = async (data: RegisterDto): Promise<RegisterResponse> => {
+export const register = async (
+  data: RegisterDto,
+): Promise<RegisterResponse> => {
   const registerPayload = {
     username: data.username.trim(),
     email: data.email.trim(),
     password: data.password,
   };
-  const response = await apiClient.post<{ data?: RegisterResponse } & RegisterResponse>('/auth/register', registerPayload);
+  const response = await apiClient.post<
+    { data?: RegisterResponse } & RegisterResponse
+  >("/auth/register", registerPayload);
   const result = response.data?.data ?? response.data;
   return result as RegisterResponse;
 };
@@ -166,10 +182,14 @@ export interface ForgotPasswordResponse {
   token?: string;
 }
 
-export const forgotPassword = async (data: ForgotPasswordDto): Promise<ForgotPasswordResponse> => {
-  const response = await apiClient.post<ForgotPasswordResponse | { data: ForgotPasswordResponse }>('/auth/forgot-password', data);
+export const forgotPassword = async (
+  data: ForgotPasswordDto,
+): Promise<ForgotPasswordResponse> => {
+  const response = await apiClient.post<
+    ForgotPasswordResponse | { data: ForgotPasswordResponse }
+  >("/auth/forgot-password", data);
   const raw = response.data;
-  if (raw && typeof raw === 'object' && 'data' in (raw as object)) {
+  if (raw && typeof raw === "object" && "data" in (raw as object)) {
     return (raw as { data: ForgotPasswordResponse }).data;
   }
   return raw as ForgotPasswordResponse;
@@ -185,32 +205,45 @@ export interface ResetPasswordResponse {
   message: string;
 }
 
-export const resetPassword = async (data: ResetPasswordDto): Promise<ResetPasswordResponse> => {
-  const response = await apiClient.post<ResetPasswordResponse | { data: ResetPasswordResponse }>('/auth/reset-password', data);
+export const resetPassword = async (
+  data: ResetPasswordDto,
+): Promise<ResetPasswordResponse> => {
+  const response = await apiClient.post<
+    ResetPasswordResponse | { data: ResetPasswordResponse }
+  >("/auth/reset-password", data);
   const raw = response.data;
-  if (raw && typeof raw === 'object' && 'data' in (raw as object)) {
+  if (raw && typeof raw === "object" && "data" in (raw as object)) {
     return (raw as { data: ResetPasswordResponse }).data;
   }
   return raw as ResetPasswordResponse;
 };
 
+export const changePassword = async (
+  payload: ChangePasswordDto,
+): Promise<void> => {
+  await apiClient.post("/auth/change-password", {
+    old_password: payload.oldPassword,
+    new_password: payload.newPassword,
+  });
+};
+
 // Logout
 export const handleLogout = () => {
-  if (typeof window !== 'undefined') {
-    localStorage.removeItem('accessToken');
-    localStorage.removeItem('userId');
-    localStorage.removeItem('username');
-    localStorage.removeItem('role');
-    localStorage.removeItem('shopId');
+  if (typeof window !== "undefined") {
+    localStorage.removeItem("accessToken");
+    localStorage.removeItem("userId");
+    localStorage.removeItem("username");
+    localStorage.removeItem("role");
+    localStorage.removeItem("shopId");
 
-    window.location.href = '/';
+    window.location.href = "/";
   }
 };
 
 /** Cập nhật role trong localStorage sau khi payment thành công (không cần re-login) */
 export const updateLocalRole = (role: string) => {
-  if (typeof window !== 'undefined') {
-    localStorage.setItem('role', role);
+  if (typeof window !== "undefined") {
+    localStorage.setItem("role", role);
   }
 };
 
@@ -218,10 +251,13 @@ export const updateLocalRole = (role: string) => {
  * Refresh user info từ JWT token hiện tại trong localStorage
  * Gọi hàm này sau khi payment success để cập nhật role SHOPOWNER mà không cần re-login
  */
-export const refreshUserInfoFromToken = (): { role: string | null; shop_id?: number } | null => {
-  if (typeof window === 'undefined') return null;
+export const refreshUserInfoFromToken = (): {
+  role: string | null;
+  shop_id?: number;
+} | null => {
+  if (typeof window === "undefined") return null;
 
-  const token = localStorage.getItem('accessToken');
+  const token = localStorage.getItem("accessToken");
   if (!token) return null;
 
   try {
@@ -229,14 +265,14 @@ export const refreshUserInfoFromToken = (): { role: string | null; shop_id?: num
     if (!payload) return null;
 
     // Cập nhật role từ JWT
-    const roleFromJwt = (payload?.role ?? '').toString().toUpperCase();
+    const roleFromJwt = (payload?.role ?? "").toString().toUpperCase();
     if (roleFromJwt) {
-      localStorage.setItem('role', roleFromJwt);
+      localStorage.setItem("role", roleFromJwt);
     }
 
     // Cập nhật shop_id nếu có
     if (payload?.shop_id != null) {
-      localStorage.setItem('shopId', String(payload.shop_id));
+      localStorage.setItem("shopId", String(payload.shop_id));
     }
 
     return {
@@ -244,7 +280,7 @@ export const refreshUserInfoFromToken = (): { role: string | null; shop_id?: num
       shop_id: payload?.shop_id,
     };
   } catch (error) {
-    console.error('Failed to refresh user info from token:', error);
+    console.error("Failed to refresh user info from token:", error);
     return null;
   }
 };

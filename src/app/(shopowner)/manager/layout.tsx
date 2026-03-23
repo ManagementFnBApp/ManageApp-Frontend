@@ -265,6 +265,13 @@ export default function ManagerLayout({
               <DropdownMenuSeparator />
               <DropdownMenuItem
                 className="gap-2 cursor-pointer"
+                onClick={() => router.push("/profile")}
+              >
+                <Home size={14} />
+                Trang cá nhân
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                className="gap-2 cursor-pointer"
                 onClick={() =>
                   router.push(role === "SHOPOWNER" ? "/" : "/manager")
                 }

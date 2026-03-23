@@ -165,8 +165,11 @@ export default function Header() {
                       </svg>
                     </button>
                   </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="w-52">
-                    <DropdownMenuItem disabled className="gap-2 opacity-70">
+                  <DropdownMenuContent align="end" className="w-100 mr-3">
+                    <DropdownMenuItem
+                      className="gap-2"
+                      onClick={() => router.push("/profile")}
+                    >
                       <div
                         className={`w-6 h-6 rounded-full flex items-center justify-center text-white font-semibold text-xs shrink-0 ${
                           role === "ADMIN"
