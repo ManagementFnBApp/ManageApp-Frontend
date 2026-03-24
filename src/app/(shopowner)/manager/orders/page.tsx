@@ -24,10 +24,13 @@ import { getStoredRoleNormalized } from "@/apis/auth";
 // Map BE response to the shape used by this page
 type OrderItem = {
   id: number;
-  product_id: number;
+  product_id: number | null;
+  shop_product_id?: number | null;
   quantity: number;
   unit_price: number;
-  product: { product_name: string };
+  product_name?: string;
+  product?: { product_name?: string } | null;
+  shop_product?: { product_name?: string } | null;
 };
 
 type Order = {
@@ -36,6 +39,7 @@ type Order = {
   total: number;
   status: "PENDING" | "COMPLETED" | "CANCELLED";
   shiftUserId: number;
+  customerId: number | null;
   note: string | null;
   items: OrderItem[];
 };
@@ -47,9 +51,67 @@ function toOrder(r: OrderResponse): Order {
     total: r.totalAmount,
     status: r.orderStatus as Order["status"],
     shiftUserId: r.shiftUserId,
+    customerId: r.customerId ?? null,
     note: r.note,
     items: (r.order_items ?? []) as OrderItem[],
   };
+}
+
+type ParsedOrderNote = {
+  orderType?: string;
+  paymentMethod?: string;
+  customerName?: string;
+  customerPhone?: string;
+  customerNote?: string;
+  otherParts: string[];
+};
+
+function parseOrderNote(note: string | null): ParsedOrderNote {
+  if (!note) return { otherParts: [] };
+
+  const parts = note
+    .split("|")
+    .map((p) => p.trim())
+    .filter(Boolean);
+
+  const parsed: ParsedOrderNote = { otherParts: [] };
+
+  for (const part of parts) {
+    if (part.startsWith("[") && part.endsWith("]")) {
+      parsed.orderType = part.slice(1, -1);
+      continue;
+    }
+    if (part.startsWith("PTTT:")) {
+      parsed.paymentMethod = part.replace("PTTT:", "").trim();
+      continue;
+    }
+    if (part.startsWith("Khách:")) {
+      parsed.customerName = part.replace("Khách:", "").trim();
+      continue;
+    }
+    if (part.startsWith("SĐT:")) {
+      parsed.customerPhone = part.replace("SĐT:", "").trim();
+      continue;
+    }
+    if (part.startsWith("Ghi chú KH:")) {
+      parsed.customerNote = part.replace("Ghi chú KH:", "").trim();
+      continue;
+    }
+    parsed.otherParts.push(part);
+  }
+
+  return parsed;
+}
+
+function getOrderItemName(item: OrderItem): string {
+  return (
+    item.product_name ||
+    item.shop_product?.product_name ||
+    item.product?.product_name ||
+    (item.shop_product_id ? `Shop Product #${item.shop_product_id}` : null) ||
+    (item.product_id ? `Product #${item.product_id}` : null) ||
+    "Sản phẩm"
+  );
 }
 
 type StatusFilter = "ALL" | "PENDING" | "COMPLETED" | "CANCELLED";
@@ -134,8 +196,8 @@ export default function OrdersPage() {
 
   useEffect(() => {
     const role = getStoredRoleNormalized();
-    setIsShopOwner(role === 'SHOPOWNER');
-    setIsStaff(role === 'STAFF');
+    setIsShopOwner(role === "SHOPOWNER");
+    setIsStaff(role === "STAFF");
   }, []);
 
   // ── Edit modal state ──
@@ -160,20 +222,24 @@ export default function OrdersPage() {
           if (found) {
             setSelectedOrder(found);
             setActiveStatus("PENDING");
-            setSuccessBanner(`Đơn hàng #${newOrderId} đã được tạo thành công với trạng thái Đang chờ.`);
+            setSuccessBanner(
+              `Đơn hàng #${newOrderId} đã được tạo thành công với trạng thái Đang chờ.`,
+            );
           }
         }
       })
       .catch((err) => {
         const status = (err as { status?: number })?.status;
         if (status === 403) {
-          setError('Bạn không có quyền xem đơn hàng. Vui lòng liên hệ SHOPOWNER.');
+          setError(
+            "Bạn không có quyền xem đơn hàng. Vui lòng liên hệ SHOPOWNER.",
+          );
         } else {
           setError(err?.message ?? "Không thể tải đơn hàng");
         }
       })
       .finally(() => setLoading(false));
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Bỏ chọn khi đổi tab
@@ -266,9 +332,11 @@ export default function OrdersPage() {
       await updateOrder(Number(selectedOrder.orderId), {
         note: editForm.note || undefined,
         totalAmount: editForm.totalAmount,
-        shiftUserId: editForm.shiftUserId > 0 ? editForm.shiftUserId : undefined,
+        shiftUserId:
+          editForm.shiftUserId > 0 ? editForm.shiftUserId : undefined,
         order_items: selectedOrder.items.map((item) => ({
-          product_id: item.product_id,
+          product_id: item.product_id ?? undefined,
+          shop_product_id: item.shop_product_id ?? undefined,
           quantity: item.quantity,
           unit_price: item.unit_price,
         })),
@@ -504,160 +572,225 @@ export default function OrdersPage() {
               {/* ── Cột phải: chi tiết ── */}
               <div className="w-1/2">
                 {selectedOrder ? (
-                  <div className="flex flex-col h-[calc(100vh-180px)] bg-white rounded-2xl border shadow-sm overflow-hidden">
-                    {/* Header */}
-                    <div className="px-5 py-3 border-b border-slate-100 flex items-center justify-between">
-                      <span className="font-bold text-slate-800 text-sm">
-                        Đơn #{selectedOrder.orderId}
-                      </span>
-                      <span
-                        className={`text-xs font-semibold px-2.5 py-1 rounded-full ${
-                          STATUS_BADGE[selectedOrder.status]?.className ??
-                          "bg-slate-100 text-slate-500"
-                        }`}
-                      >
-                        {STATUS_BADGE[selectedOrder.status]?.label ??
-                          selectedOrder.status}
-                      </span>
-                    </div>
+                  (() => {
+                    const parsedNote = parseOrderNote(selectedOrder.note);
+                    const hasCustomerInfo =
+                      !!parsedNote.customerName ||
+                      !!parsedNote.customerPhone ||
+                      !!selectedOrder.customerId;
 
-                    {/* Meta info */}
-                    <div className="px-5 py-3 bg-slate-50 flex items-center gap-6 border-b border-slate-100">
-                      <div className="flex items-center gap-1.5 text-slate-500">
-                        <Clock size={13} />
-                        <span className="text-xs">
-                          {selectedOrder.createdAt
-                            ? `${formatTime(selectedOrder.createdAt)} · ${formatDate(selectedOrder.createdAt)}`
-                            : "—"}
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-1.5 text-slate-500">
-                        <User size={13} />
-                        <span className="text-xs">
-                          Ca #{selectedOrder.shiftUserId}
-                        </span>
-                      </div>
-                    </div>
-
-                    {/* Items list */}
-                    <div className="flex-1 overflow-y-auto px-5 py-3 flex flex-col gap-2">
-                      {selectedOrder.items.length === 0 ? (
-                        <p className="text-xs text-slate-400 text-center py-6">
-                          Không có món
-                        </p>
-                      ) : (
-                        selectedOrder.items.map((item) => (
-                          <div
-                            key={item.id}
-                            className="flex items-center justify-between py-1.5 border-b border-slate-50"
+                    return (
+                      <div className="flex flex-col h-[calc(100vh-180px)] bg-white rounded-2xl border shadow-sm overflow-hidden">
+                        {/* Header */}
+                        <div className="px-5 py-3 border-b border-slate-100 flex items-center justify-between">
+                          <span className="font-bold text-slate-800 text-sm">
+                            Đơn #{selectedOrder.orderId}
+                          </span>
+                          <span
+                            className={`text-xs font-semibold px-2.5 py-1 rounded-full ${
+                              STATUS_BADGE[selectedOrder.status]?.className ??
+                              "bg-slate-100 text-slate-500"
+                            }`}
                           >
-                            <div className="flex-1 min-w-0">
-                              <p className="text-sm font-medium text-slate-700 truncate">
-                                {item.product?.product_name ?? `#${item.product_id}`}
-                              </p>
-                              <p className="text-xs text-slate-400">
-                                {formatPrice(item.unit_price)} × {item.quantity}
-                              </p>
-                            </div>
-                            <div className="text-right ml-3">
-                              <p className="text-xs text-slate-400">
-                                x{item.quantity}
-                              </p>
-                              <p className="text-sm font-semibold text-slate-700">
-                                {formatPrice(item.unit_price * item.quantity)}
-                              </p>
-                            </div>
+                            {STATUS_BADGE[selectedOrder.status]?.label ??
+                              selectedOrder.status}
+                          </span>
+                        </div>
+
+                        {/* Meta info */}
+                        <div className="px-5 py-3 bg-slate-50 flex items-center gap-6 border-b border-slate-100">
+                          <div className="flex items-center gap-1.5 text-slate-500">
+                            <Clock size={13} />
+                            <span className="text-xs">
+                              {selectedOrder.createdAt
+                                ? `${formatTime(selectedOrder.createdAt)} · ${formatDate(selectedOrder.createdAt)}`
+                                : "—"}
+                            </span>
                           </div>
-                        ))
-                      )}
-                      {selectedOrder.note && (
-                        <p className="text-xs text-slate-500 bg-slate-50 rounded-lg px-3 py-2 mt-2">
-                          Ghi chú: {selectedOrder.note}
-                        </p>
-                      )}
-                    </div>
+                          <div className="flex items-center gap-1.5 text-slate-500">
+                            <User size={13} />
+                            <span className="text-xs">
+                              Ca #{selectedOrder.shiftUserId}
+                            </span>
+                          </div>
+                        </div>
 
-                    {/* Footer */}
-                    <div className="px-5 py-4 bg-slate-50 border-t flex flex-col gap-4">
-                      <div className="flex justify-between items-center">
-                        <span className="font-semibold text-slate-600">
-                          Tổng cộng
-                        </span>
-                        <span className="text-lg font-bold text-rose-600">
-                          {formatPrice(selectedOrder.total)}
-                        </span>
-                      </div>
-
-                      {/* Action buttons — chỉ hiện khi PENDING */}
-                      {selectedOrder.status === "PENDING" &&
-                        (confirmCancel ? (
-                          <div className="flex flex-col gap-2">
-                            <p className="text-xs text-center text-slate-600 font-medium">
-                              Xác nhận huỷ đơn{" "}
-                              <span className="font-bold text-rose-600">
-                                #{selectedOrder.orderId}
-                              </span>
-                              ?
+                        {hasCustomerInfo && (
+                          <div className="px-5 py-3 border-b border-slate-100 bg-blue-50/70">
+                            <p className="text-[11px] font-semibold uppercase tracking-wide text-blue-700 mb-1.5">
+                              Khách hàng
                             </p>
-                            <div className="flex gap-2">
-                              <button
-                                type="button"
-                                onClick={() => setConfirmCancel(false)}
-                                disabled={!!actionLoading}
-                                className="flex-1 py-2 rounded-lg border border-slate-200 bg-white text-slate-600 text-xs font-semibold hover:bg-slate-100 transition disabled:opacity-50"
-                              >
-                                Không, giữ lại
-                              </button>
-                              <button
-                                type="button"
-                                onClick={handleCancel}
-                                disabled={!!actionLoading}
-                                className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg bg-rose-500 hover:bg-rose-600 text-white text-xs font-semibold transition disabled:opacity-50"
-                              >
-                                <XCircle size={13} />
-                                {actionLoading === "cancel"
-                                  ? "Đang huỷ…"
-                                  : "Xác nhận huỷ"}
-                              </button>
+                            <div className="space-y-1">
+                              {parsedNote.customerName && (
+                                <p className="text-base font-bold text-slate-800">
+                                  {parsedNote.customerName}
+                                </p>
+                              )}
+                              {parsedNote.customerPhone && (
+                                <p className="text-sm font-semibold text-slate-700">
+                                  {parsedNote.customerPhone}
+                                </p>
+                              )}
+                              {!parsedNote.customerName &&
+                                !parsedNote.customerPhone &&
+                                selectedOrder.customerId && (
+                                  <p className="text-sm font-semibold text-slate-700">
+                                    Khách hàng ID #{selectedOrder.customerId}
+                                  </p>
+                                )}
                             </div>
                           </div>
-                        ) : (
-                          <div className="flex gap-2">
-                            {isShopOwner && (
-                              <button
-                                type="button"
-                                onClick={openEdit}
-                                disabled={!!actionLoading}
-                                className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-slate-200 bg-white text-slate-600 text-xs font-medium hover:bg-slate-100 transition disabled:opacity-50"
+                        )}
+
+                        {/* Items list */}
+                        <div className="flex-1 overflow-y-auto px-5 py-3 flex flex-col gap-2">
+                          {selectedOrder.items.length === 0 ? (
+                            <p className="text-xs text-slate-400 text-center py-6">
+                              Không có món
+                            </p>
+                          ) : (
+                            selectedOrder.items.map((item) => (
+                              <div
+                                key={item.id}
+                                className="flex items-center justify-between py-1.5 border-b border-slate-50"
                               >
-                                <Pencil size={13} />
-                                Sửa đơn
-                              </button>
-                            )}
-                            <button
-                              type="button"
-                              onClick={handleComplete}
-                              disabled={!!actionLoading}
-                              className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-semibold transition disabled:opacity-50"
-                            >
-                              <CheckCircle size={13} />
-                              {actionLoading === "complete"
-                                ? "Đang xử lý…"
-                                : "Hoàn thành"}
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => setConfirmCancel(true)}
-                              disabled={!!actionLoading}
-                              className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-rose-500 hover:bg-rose-600 text-white text-xs font-semibold transition disabled:opacity-50"
-                            >
-                              <XCircle size={13} />
-                              Huỷ đơn
-                            </button>
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-sm font-medium text-slate-700 truncate">
+                                    {getOrderItemName(item)}
+                                  </p>
+                                  <p className="text-xs text-slate-400">
+                                    {formatPrice(item.unit_price)} ×{" "}
+                                    {item.quantity}
+                                  </p>
+                                </div>
+                                <div className="text-right ml-3">
+                                  <p className="text-xs text-slate-400">
+                                    x{item.quantity}
+                                  </p>
+                                  <p className="text-sm font-semibold text-slate-700">
+                                    {formatPrice(
+                                      item.unit_price * item.quantity,
+                                    )}
+                                  </p>
+                                </div>
+                              </div>
+                            ))
+                          )}
+                          {(parsedNote.orderType ||
+                            parsedNote.paymentMethod ||
+                            parsedNote.customerNote ||
+                            parsedNote.otherParts.length > 0) && (
+                            <div className="text-xs text-slate-600 bg-slate-50 rounded-lg px-3 py-2 mt-2 space-y-1">
+                              {(parsedNote.orderType ||
+                                parsedNote.paymentMethod) && (
+                                <p>
+                                  {parsedNote.orderType
+                                    ? `[${parsedNote.orderType}]`
+                                    : ""}
+                                  {parsedNote.orderType &&
+                                  parsedNote.paymentMethod
+                                    ? " | "
+                                    : ""}
+                                  {parsedNote.paymentMethod
+                                    ? `PTTT: ${parsedNote.paymentMethod}`
+                                    : ""}
+                                </p>
+                              )}
+                              {parsedNote.customerNote && (
+                                <p>Ghi chú KH: {parsedNote.customerNote}</p>
+                              )}
+                              {parsedNote.otherParts.length > 0 && (
+                                <p>
+                                  Ghi chú: {parsedNote.otherParts.join(" | ")}
+                                </p>
+                              )}
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Footer */}
+                        <div className="px-5 py-4 bg-slate-50 border-t flex flex-col gap-4">
+                          <div className="flex justify-between items-center">
+                            <span className="font-semibold text-slate-600">
+                              Tổng cộng
+                            </span>
+                            <span className="text-lg font-bold text-rose-600">
+                              {formatPrice(selectedOrder.total)}
+                            </span>
                           </div>
-                        ))}
-                    </div>
-                  </div>
+
+                          {/* Action buttons — chỉ hiện khi PENDING */}
+                          {selectedOrder.status === "PENDING" &&
+                            (confirmCancel ? (
+                              <div className="flex flex-col gap-2">
+                                <p className="text-xs text-center text-slate-600 font-medium">
+                                  Xác nhận huỷ đơn{" "}
+                                  <span className="font-bold text-rose-600">
+                                    #{selectedOrder.orderId}
+                                  </span>
+                                  ?
+                                </p>
+                                <div className="flex gap-2">
+                                  <button
+                                    type="button"
+                                    onClick={() => setConfirmCancel(false)}
+                                    disabled={!!actionLoading}
+                                    className="flex-1 py-2 rounded-lg border border-slate-200 bg-white text-slate-600 text-xs font-semibold hover:bg-slate-100 transition disabled:opacity-50"
+                                  >
+                                    Không, giữ lại
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={handleCancel}
+                                    disabled={!!actionLoading}
+                                    className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg bg-rose-500 hover:bg-rose-600 text-white text-xs font-semibold transition disabled:opacity-50"
+                                  >
+                                    <XCircle size={13} />
+                                    {actionLoading === "cancel"
+                                      ? "Đang huỷ…"
+                                      : "Xác nhận huỷ"}
+                                  </button>
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="flex gap-2">
+                                {isShopOwner && (
+                                  <button
+                                    type="button"
+                                    onClick={openEdit}
+                                    disabled={!!actionLoading}
+                                    className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-slate-200 bg-white text-slate-600 text-xs font-medium hover:bg-slate-100 transition disabled:opacity-50"
+                                  >
+                                    <Pencil size={13} />
+                                    Sửa đơn
+                                  </button>
+                                )}
+                                <button
+                                  type="button"
+                                  onClick={handleComplete}
+                                  disabled={!!actionLoading}
+                                  className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-semibold transition disabled:opacity-50"
+                                >
+                                  <CheckCircle size={13} />
+                                  {actionLoading === "complete"
+                                    ? "Đang xử lý…"
+                                    : "Hoàn thành"}
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setConfirmCancel(true)}
+                                  disabled={!!actionLoading}
+                                  className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-rose-500 hover:bg-rose-600 text-white text-xs font-semibold transition disabled:opacity-50"
+                                >
+                                  <XCircle size={13} />
+                                  Huỷ đơn
+                                </button>
+                              </div>
+                            ))}
+                        </div>
+                      </div>
+                    );
+                  })()
                 ) : (
                   <div className="h-full bg-white/50 rounded-2xl border border-dashed border-slate-200 flex flex-col items-center justify-center gap-3 text-slate-300">
                     <Receipt size={40} strokeWidth={1.2} />

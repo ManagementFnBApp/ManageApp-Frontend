@@ -7,6 +7,11 @@ import { loadPosCart, clearPosCart } from "@/lib/posCart";
 import type { PosCartPayload } from "@/lib/posCart";
 import { createOrder } from "@/apis/orderApi";
 import { clearDraft, saveOrder } from "@/data/useOrderStore";
+import {
+  getCustomers,
+  createCustomer,
+  type Customer,
+} from "@/apis/customerApi";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -37,6 +42,13 @@ export default function CheckoutOrderPage() {
   const [customerPhone, setCustomerPhone] = useState("");
   const [customerNote, setCustomerNote] = useState("");
 
+  // ─── Customer management
+  const [customerId, setCustomerId] = useState<number | null>(null);
+  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [nameSuggestions, setNameSuggestions] = useState<Customer[]>([]);
+  const [showNameSuggestions, setShowNameSuggestions] = useState(false);
+  const [loadingCustomers, setLoadingCustomers] = useState(false);
+
   // ── Bootstrap ──────────────────────────────────────────────────────────────
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -54,19 +66,62 @@ export default function CheckoutOrderPage() {
     setStep("form");
   }, [router]);
 
+  // Load customer list on mount
+  useEffect(() => {
+    const loadCustomers = async () => {
+      try {
+        setLoadingCustomers(true);
+        const data = await getCustomers();
+        setCustomers(data);
+      } catch (error) {
+        console.error("Failed to load customers:", error);
+      } finally {
+        setLoadingCustomers(false);
+      }
+    };
+
+    if (step === "form") {
+      loadCustomers();
+    }
+  }, [step]);
+
+  // ── Customer suggestion and auto-fill by name only ─────────────────────────
+  const handleNameChange = (value: string) => {
+    setCustomerName(value);
+    setCustomerId(null);
+
+    if (!value.trim()) {
+      setNameSuggestions([]);
+      setShowNameSuggestions(false);
+      return;
+    }
+
+    // Case-sensitive partial match as requested
+    const matched = customers.filter((c) =>
+      (c.full_name || "").includes(value),
+    );
+    setNameSuggestions(matched);
+    setShowNameSuggestions(matched.length > 0);
+  };
+
+  const handleSelectCustomer = (customer: Customer) => {
+    setCustomerId(customer.id);
+    setCustomerPhone(customer.phone);
+    setCustomerName(customer.full_name || "");
+    setNameSuggestions([]);
+    setShowNameSuggestions(false);
+  };
+
   // ── Handlers ───────────────────────────────────────────────────────────────
 
   /**
    * handleConfirm – Gọi BE API tạo đơn hàng ở trạng thái PENDING.
    *
    * Flow:
-   *   1. POST /orders  → tạo đơn (status PENDING)
-   *   2. Clear dữ liệu tạm POS sau khi tạo đơn thành công
-   *   3. Chuyển sang Orders để xử lý complete/cancelled ở bước sau
-   *
-   * NOTE: paymentMethod được hiển thị cho nhân viên nhưng chưa lưu được vào DB
-   *   vì BE chưa có endpoint POST /payments.
-   *   TODO: Thêm lối gọi payments API khi BE triển khai xong bảng payments.
+   *   1. Nếu user muốn lưu khách hàng mới → tạo khách trước
+   *   2. POST /orders → tạo đơn (status PENDING) với customerId (nếu có)
+   *   3. Clear dữ liệu tạm POS sau khi tạo đơn thành công
+   *   4. Chuyển sang Orders để xử lý complete/cancelled ở bước sau
    */
   const handleConfirm = async () => {
     if (!cart) return;
@@ -74,6 +129,36 @@ export default function CheckoutOrderPage() {
     setErrorMsg("");
 
     try {
+      let finalCustomerId = customerId;
+
+      // 1️⃣ Auto-save khách hàng nếu có thông tin hợp lệ (không cần tick checkbox)
+      if (!finalCustomerId && (customerName.trim() || customerPhone.trim())) {
+        const typedPhone = customerPhone.trim();
+
+        if (typedPhone) {
+          const existedByPhone = customers.find((c) => c.phone === typedPhone);
+
+          if (existedByPhone) {
+            finalCustomerId = existedByPhone.id;
+            if (!customerName.trim() && existedByPhone.full_name) {
+              setCustomerName(existedByPhone.full_name);
+            }
+          } else {
+            try {
+              const newCustomer = await createCustomer({
+                shop_id: Number(localStorage.getItem("shopId")) || 0,
+                phone: typedPhone,
+                full_name: customerName.trim() || undefined,
+                loyalty_point: 0,
+              });
+              finalCustomerId = newCustomer.id;
+            } catch {
+              // Không chặn thanh toán nếu lưu khách thất bại
+            }
+          }
+        }
+      }
+
       const paymentLabel =
         PAYMENT_METHODS.find((m) => m.id === selectedMethod)?.label ??
         selectedMethod;
@@ -84,9 +169,10 @@ export default function CheckoutOrderPage() {
       if (customerNote.trim())
         noteParts.push(`Ghi chú KH: ${customerNote.trim()}`);
 
-      // 1️⃣ Tạo đơn hàng (PENDING) — userId BE lấy từ JWT
+      // 2️⃣ Tạo đơn hàng (PENDING) — userId BE lấy từ JWT
       const orderResponse = await createOrder({
         shiftUserId: cart.shiftId,
+        customerId: finalCustomerId || undefined,
         totalAmount: cart.total,
         note: noteParts.join(" | "),
         order_items: cart.items.map((item) => {
@@ -303,13 +389,12 @@ export default function CheckoutOrderPage() {
   return (
     <div className="min-h-screen bg-linear-to-br from-slate-50 via-blue-50 to-slate-100 py-16 px-4">
       <div className="container mx-auto max-w-5xl">
-        {/* Back button */}
         <Link
           href="/pos"
-          className="inline-flex items-center gap-2 text-gray-500 hover:text-blue-600 transition mb-8 text-sm font-medium"
+          className="mb-6 inline-flex items-center gap-2 text-sm font-medium text-gray-600 transition hover:text-blue-600"
         >
           <svg
-            className="w-4 h-4"
+            className="h-4 w-4"
             fill="none"
             stroke="currentColor"
             viewBox="0 0 24 24"
@@ -450,22 +535,58 @@ export default function CheckoutOrderPage() {
                 </div>
               </div>
 
+              {/* Customer information section */}
               <div className="mb-8 rounded-xl border border-gray-200 bg-gray-50 p-5">
-                <h4 className="mb-3 text-sm font-semibold text-gray-700">
+                <h4 className="mb-4 text-sm font-semibold text-gray-700">
                   Thông tin khách hàng (tùy chọn)
                 </h4>
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+
+                {/* Manual input or create new */}
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 mb-4">
                   <div>
                     <label className="mb-1 block text-xs font-medium text-gray-600">
                       Tên khách
                     </label>
-                    <input
-                      type="text"
-                      value={customerName}
-                      onChange={(e) => setCustomerName(e.target.value)}
-                      placeholder="VD: Nguyễn Văn A"
-                      className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-800 outline-none transition focus:border-blue-500"
-                    />
+                    <div className="relative">
+                      <input
+                        type="text"
+                        value={customerName}
+                        onChange={(e) => handleNameChange(e.target.value)}
+                        onFocus={() => {
+                          if (nameSuggestions.length > 0) {
+                            setShowNameSuggestions(true);
+                          }
+                        }}
+                        onBlur={() => {
+                          window.setTimeout(
+                            () => setShowNameSuggestions(false),
+                            120,
+                          );
+                        }}
+                        placeholder="VD: Nguyễn Văn Bảo"
+                        className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-800 outline-none transition focus:border-blue-500"
+                      />
+                      {showNameSuggestions && nameSuggestions.length > 0 && (
+                        <div className="absolute top-full left-0 right-0 z-10 mt-1 max-h-48 overflow-y-auto rounded-lg border border-gray-300 bg-white shadow-lg">
+                          {nameSuggestions.map((customer) => (
+                            <button
+                              key={customer.id}
+                              type="button"
+                              onMouseDown={(e) => e.preventDefault()}
+                              onClick={() => handleSelectCustomer(customer)}
+                              className="w-full border-b border-gray-100 px-3 py-2 text-left hover:bg-blue-50 last:border-b-0"
+                            >
+                              <div className="text-sm font-medium text-gray-800">
+                                {customer.full_name || "Không tên"}
+                              </div>
+                              <div className="text-xs text-gray-500">
+                                {customer.phone}
+                              </div>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
                   </div>
                   <div>
                     <label className="mb-1 block text-xs font-medium text-gray-600">
@@ -492,6 +613,12 @@ export default function CheckoutOrderPage() {
                     />
                   </div>
                 </div>
+                {loadingCustomers && (
+                  <p className="text-xs text-gray-500">
+                    Đang tải danh sách khách hàng...
+                  </p>
+                )}
+                {customerId && <p className="text-xs text-green-600"></p>}
               </div>
 
               {/* Contextual instructions */}

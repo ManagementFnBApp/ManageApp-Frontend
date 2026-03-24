@@ -1,14 +1,20 @@
-'use client';
+"use client";
 
-import { usePathname } from 'next/navigation';
-import Header from '@/components/Header';
-import Footer from '@/components/Footer';
+import { usePathname } from "next/navigation";
+import Header from "@/components/Header";
+import Footer from "@/components/Footer";
 
-const DASHBOARD_ROUTES = ['/admin', '/manager', '/pos'];
+const DASHBOARD_ROUTES = ["/admin", "/manager", "/pos", "/checkout-order"];
 
-export default function ClientLayout({ children }: { children: React.ReactNode }) {
+export default function ClientLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
   const pathname = usePathname();
-  const isDashboard = DASHBOARD_ROUTES.some((r) => pathname === r || pathname.startsWith(r + '/'));
+  const isDashboard = DASHBOARD_ROUTES.some(
+    (r) => pathname === r || pathname.startsWith(r + "/"),
+  );
 
   if (isDashboard) {
     return <>{children}</>;
