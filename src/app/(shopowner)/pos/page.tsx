@@ -123,8 +123,12 @@ export default function PosPage() {
 
   useEffect(() => {
     let isMounted = true;
+    let isLoadingInventory = false;
 
     const loadInventoryItemStock = async () => {
+      if (isLoadingInventory) return;
+      isLoadingInventory = true;
+
       try {
         const shopId = getShopId();
         if (shopId <= 0) {
@@ -155,7 +159,8 @@ export default function PosPage() {
             if (id == null) continue;
             const key = `${source}:${id}`;
             const prev = quantityMap.get(key) ?? 0;
-            quantityMap.set(key, prev + (Number(item.quantity) || 0));
+            const quantity = Number(item.quantity) || 0;
+            quantityMap.set(key, prev + quantity);
           }
         }
 
@@ -163,6 +168,8 @@ export default function PosPage() {
       } catch (err) {
         console.warn("Không thể tải tồn kho từ inventory items:", err);
         if (isMounted) setInventoryItemQuantityByKey(new Map());
+      } finally {
+        isLoadingInventory = false;
       }
     };
 
@@ -317,6 +324,14 @@ export default function PosPage() {
       ? `SHOP:${product.shopProductId}`
       : `SYSTEM:${product.id}`;
 
+  const getCartKeyForProduct = (product: PosShopProduct) => {
+    const barcode = product.barcode?.trim();
+    if (barcode) return barcode;
+    return product.productType === "SHOP"
+      ? `SHOP:${product.shopProductId}`
+      : `SYSTEM:${product.id}`;
+  };
+
   const availableProducts = filteredProducts.filter((product) => {
     const key = getInventoryKeyForProduct(product);
     const hasInventoryItem = inventoryItemQuantityByKey.has(key);
@@ -333,20 +348,17 @@ export default function PosPage() {
 
   const addToCart = (product: PosShopProduct) => {
     setCart((prev) => {
-      const existing = prev.find((i) => i.barcode === product.barcode);
+      const cartKey = getCartKeyForProduct(product);
+      const existing = prev.find((i) => i.barcode === cartKey);
       if (existing) {
         return prev.map((i) =>
-          i.barcode === product.barcode
-            ? { ...i, quantity: i.quantity + 1 }
-            : i,
+          i.barcode === cartKey ? { ...i, quantity: i.quantity + 1 } : i,
         );
       }
       return [
         ...prev,
         {
-          barcode:
-            product.barcode ||
-            `${product.productType}:${product.shopProductId}`,
+          barcode: cartKey,
           name: product.name,
           price: product.price,
           quantity: 1,

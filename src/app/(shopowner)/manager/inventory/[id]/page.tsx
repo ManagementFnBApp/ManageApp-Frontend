@@ -75,6 +75,13 @@ export default function InventoryDetailPage() {
     );
   };
 
+  const resolveProductBarcode = (row: InventoryItem): string => {
+    const list = row.productType === "SHOP" ? shopProducts : systemProducts;
+    const id = row.productType === "SHOP" ? row.shopProductId : row.productId;
+    if (id == null) return "-";
+    return list.find((p) => p.productId === id)?.barcode ?? "-";
+  };
+
   return (
     <div className="min-h-screen bg-white p-4 sm:p-6">
       <div className="mb-5 flex items-center justify-between gap-3">
@@ -120,6 +127,7 @@ export default function InventoryDetailPage() {
                 data={items}
                 showActions={false}
                 getProductName={resolveProductName}
+                getProductBarcode={resolveProductBarcode}
               />
             )}
           </section>

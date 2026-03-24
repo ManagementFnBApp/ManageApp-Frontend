@@ -7,7 +7,7 @@ export interface Inventory {
   minimumThreshold: number;
   reorderQuantity: number;
   lastRestockAt: string | null;
-  updateAt: string | null;
+  updatedAt: string | null;
 }
 
 export interface InventoryItem {

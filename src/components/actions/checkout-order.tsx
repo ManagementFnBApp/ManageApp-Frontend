@@ -89,19 +89,28 @@ export default function CheckoutOrderPage() {
         shiftUserId: cart.shiftId,
         totalAmount: cart.total,
         note: noteParts.join(" | "),
-        order_items: cart.items.map((item) =>
-          item.productType === "SHOP"
-            ? {
-                shop_product_id: item.shopProductId ?? item.productId,
-                quantity: item.quantity,
-                unit_price: item.price,
-              }
-            : {
-                product_id: item.productId,
-                quantity: item.quantity,
-                unit_price: item.price,
-              },
-        ),
+        order_items: cart.items.map((item) => {
+          const isShopProduct =
+            item.productType === "SHOP" ||
+            (item.productType == null && item.shopProductId != null) ||
+            (item.productType == null &&
+              typeof item.barcode === "string" &&
+              item.barcode.startsWith("SHOP:"));
+
+          if (isShopProduct) {
+            return {
+              shop_product_id: item.shopProductId ?? item.productId,
+              quantity: item.quantity,
+              unit_price: item.price,
+            };
+          }
+
+          return {
+            product_id: item.productId,
+            quantity: item.quantity,
+            unit_price: item.price,
+          };
+        }),
       });
 
       saveOrder({
