@@ -7,6 +7,9 @@ const STORAGE_KEY = 'pos_pending_cart';
 
 export interface PosCartItem {
   productId: number;
+  shopProductId?: number;
+  productType?: 'SYSTEM' | 'SHOP';
+  barcode?: string;
   name: string;
   price: number;
   quantity: number;
@@ -20,6 +23,8 @@ export interface PosCartPayload {
   shiftId: number;
   /** userId lấy từ JWT sub */
   userId: number;
+  /** bàn POS hiện tại (nếu có) */
+  tableId?: string;
 }
 
 export function savePosCart(payload: PosCartPayload): void {
