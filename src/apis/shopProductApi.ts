@@ -1,5 +1,6 @@
 import { apiClient } from "../configs/axios";
 import type { Product } from "./productApi";
+export type { Product } from "./productApi";
 
 // Payload riêng cho shop-products (backend dùng FileInterceptor('image'))
 export type CreateShopProductPayload = {
@@ -15,6 +16,10 @@ export type CreateShopProductPayload = {
 };
 
 export type UpdateShopProductPayload = Partial<CreateShopProductPayload>;
+export type ShopProductMutationResult = {
+  product: Product;
+  message?: string;
+};
 
 const debugLoggingEnabled =
   typeof process !== "undefined" &&
@@ -37,6 +42,13 @@ function unwrap<T>(raw: unknown): T {
     return (raw as { data: T }).data;
   }
   return raw as T;
+}
+
+function extractMessage(raw: unknown): string | undefined {
+  if (raw == null || typeof raw !== "object") return undefined;
+  const message = (raw as { message?: unknown }).message;
+  if (typeof message === "string" && message.trim()) return message;
+  return undefined;
 }
 
 function toNumber(value: unknown): number {
@@ -157,7 +169,7 @@ export const getPosShopProducts = async (
  */
 export const createShopProduct = async (
   payload: CreateShopProductPayload,
-): Promise<Product> => {
+): Promise<ShopProductMutationResult> => {
   const categoryId = Number(payload.categoryId);
   if (!Number.isInteger(categoryId) || categoryId <= 0) {
     throw new Error(
@@ -197,7 +209,10 @@ export const createShopProduct = async (
     const res = await apiClient.post("/shop-products", form, {
       headers: { "Content-Type": "multipart/form-data" },
     });
-    return mapShopProduct(unwrap<Record<string, unknown>>(res.data) ?? {});
+    return {
+      product: mapShopProduct(unwrap<Record<string, unknown>>(res.data) ?? {}),
+      message: extractMessage(res.data),
+    };
   }
 
   // fallback JSON nếu chỉ có string URL/path
@@ -220,7 +235,10 @@ export const createShopProduct = async (
     body.measureUnit = String(payload.measureUnit).trim();
 
   const res = await apiClient.post("/shop-products", body);
-  return mapShopProduct(unwrap<Record<string, unknown>>(res.data) ?? {});
+  return {
+    product: mapShopProduct(unwrap<Record<string, unknown>>(res.data) ?? {}),
+    message: extractMessage(res.data),
+  };
 };
 
 /**
@@ -230,7 +248,7 @@ export const createShopProduct = async (
 export const updateShopProduct = async (
   id: number,
   payload: UpdateShopProductPayload,
-): Promise<Product> => {
+): Promise<ShopProductMutationResult> => {
   // multipart khi đổi ảnh
   if (payload.image instanceof File) {
     const form = new FormData();
@@ -246,7 +264,10 @@ export const updateShopProduct = async (
     const res = await apiClient.patch(`/shop-products/${id}`, form, {
       headers: { "Content-Type": "multipart/form-data" },
     });
-    return mapShopProduct(unwrap<Record<string, unknown>>(res.data) ?? {});
+    return {
+      product: mapShopProduct(unwrap<Record<string, unknown>>(res.data) ?? {}),
+      message: extractMessage(res.data),
+    };
   }
 
   const body: Record<string, unknown> = {};
@@ -270,7 +291,10 @@ export const updateShopProduct = async (
     if (debugLoggingEnabled) {
       console.log("✅ updateShopProduct response:", res.data);
     }
-    return mapShopProduct(unwrap<Record<string, unknown>>(res.data) ?? {});
+    return {
+      product: mapShopProduct(unwrap<Record<string, unknown>>(res.data) ?? {}),
+      message: extractMessage(res.data),
+    };
   } catch (err: any) {
     if (debugLoggingEnabled) {
       console.error(

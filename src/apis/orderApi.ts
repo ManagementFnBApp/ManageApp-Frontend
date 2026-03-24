@@ -33,10 +33,14 @@ export interface UpdateOrderPayload {
 
 export interface OrderItemResponse {
   id: number;
-  product_id: number;
+  product_id: number | null;
+  shop_product_id?: number | null;
   quantity: number;
   unit_price: number;
-  product: { product_name: string };
+  /** getAllOrders map thẳng tên từ  shop_product */
+  product_name?: string;
+  product?: { product_name: string } | null;
+  shop_product?: { product_name: string } | null;
 }
 
 /** Khớp backend OrderResponseDto - có shiftUserId */

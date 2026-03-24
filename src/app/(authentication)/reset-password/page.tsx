@@ -4,6 +4,7 @@ import Image from "next/image";
 import { useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { resetPassword } from "@/apis/auth";
+import { Eye, EyeOff } from "lucide-react";
 
 export default function ResetPasswordPage() {
   const router = useRouter();
@@ -16,6 +17,8 @@ export default function ResetPasswordPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -176,58 +179,64 @@ export default function ResetPasswordPage() {
                   <div className="relative animate-[slideUp_0.7s_ease-out_0.2s_both]">
                     <input
                       id="newPassword"
-                      type="password"
+                      type={showNewPassword ? "text" : "password"}
                       required
                       minLength={6}
-                      className="w-full px-4 py-3 pr-10 bg-gray-50 border-0 rounded-xl outline-none transition-all focus:bg-white focus:ring-2 focus:ring-purple-500"
+                      autoComplete="new-password"
+                      className="w-full px-4 py-3 pr-12 bg-gray-50 border-0 rounded-xl outline-none transition-all focus:bg-white focus:ring-2 focus:ring-purple-500 disabled:opacity-60"
                       placeholder="New Password"
                       value={newPassword}
                       onChange={(e) => setNewPassword(e.target.value)}
                       disabled={isLoading}
                     />
-                    <div className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400">
-                      <svg
-                        className="w-5 h-5"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"
-                        />
-                      </svg>
-                    </div>
+                    <button
+                      type="button"
+                      aria-label={
+                        showNewPassword ? "Ẩn mật khẩu mới" : "Hiện mật khẩu mới"
+                      }
+                      className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 rounded-lg text-gray-500 hover:text-gray-800 hover:bg-gray-100 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-400 disabled:pointer-events-none"
+                      onClick={() => setShowNewPassword((v) => !v)}
+                      disabled={isLoading}
+                      tabIndex={-1}
+                    >
+                      {showNewPassword ? (
+                        <EyeOff className="w-5 h-5" strokeWidth={2} />
+                      ) : (
+                        <Eye className="w-5 h-5" strokeWidth={2} />
+                      )}
+                    </button>
                   </div>
 
                   <div className="relative animate-[slideUp_0.7s_ease-out_0.3s_both]">
                     <input
                       id="confirmPassword"
-                      type="password"
+                      type={showConfirmPassword ? "text" : "password"}
                       required
-                      className="w-full px-4 py-3 pr-10 bg-gray-50 border-0 rounded-xl outline-none transition-all focus:bg-white focus:ring-2 focus:ring-purple-500"
+                      autoComplete="new-password"
+                      className="w-full px-4 py-3 pr-12 bg-gray-50 border-0 rounded-xl outline-none transition-all focus:bg-white focus:ring-2 focus:ring-purple-500 disabled:opacity-60"
                       placeholder="Confirm New Password"
                       value={confirmPassword}
                       onChange={(e) => setConfirmPassword(e.target.value)}
                       disabled={isLoading}
                     />
-                    <div className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400">
-                      <svg
-                        className="w-5 h-5"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
-                        />
-                      </svg>
-                    </div>
+                    <button
+                      type="button"
+                      aria-label={
+                        showConfirmPassword
+                          ? "Ẩn mật khẩu xác nhận"
+                          : "Hiện mật khẩu xác nhận"
+                      }
+                      className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 rounded-lg text-gray-500 hover:text-gray-800 hover:bg-gray-100 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-400 disabled:pointer-events-none"
+                      onClick={() => setShowConfirmPassword((v) => !v)}
+                      disabled={isLoading}
+                      tabIndex={-1}
+                    >
+                      {showConfirmPassword ? (
+                        <EyeOff className="w-5 h-5" strokeWidth={2} />
+                      ) : (
+                        <Eye className="w-5 h-5" strokeWidth={2} />
+                      )}
+                    </button>
                   </div>
 
                   <button

@@ -10,6 +10,7 @@ import {
   ROLE_CODE_SHOP_OWNER,
   getStoredRoleNormalized,
 } from "@/apis/auth";
+import { Eye, EyeOff } from "lucide-react";
 
 const ROLE_CODE_STAFF = "STAFF";
 
@@ -81,6 +82,10 @@ export default function AuthPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
+  const [showLoginPassword, setShowLoginPassword] = useState(false);
+  const [showRegisterPassword, setShowRegisterPassword] = useState(false);
+  const [showRegisterConfirmPassword, setShowRegisterConfirmPassword] =
+    useState(false);
 
   const handleToggle = () => {
     setIsAnimating(true);
@@ -350,9 +355,10 @@ export default function AuthPage() {
                       <div className="relative animate-[slideUp_0.7s_ease-out_0.2s_both]">
                         <input
                           id="password"
-                          type="password"
+                          type={showLoginPassword ? "text" : "password"}
                           required
-                          className="w-full px-4 py-3 pr-10 bg-gray-50 border-0 rounded-xl outline-none transition-all focus:bg-white focus:ring-2 focus:ring-blue-500"
+                          autoComplete="current-password"
+                          className="w-full px-4 py-3 pr-12 bg-gray-50 border-0 rounded-xl outline-none transition-all focus:bg-white focus:ring-2 focus:ring-blue-500"
                           placeholder="Password"
                           value={loginData.password}
                           onChange={(e) => {
@@ -360,21 +366,21 @@ export default function AuthPage() {
                             if (error) setError("");
                           }}
                         />
-                        <div className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400">
-                          <svg
-                            className="w-5 h-5"
-                            fill="none"
-                            stroke="currentColor"
-                            viewBox="0 0 24 24"
-                          >
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              strokeWidth={2}
-                              d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"
-                            />
-                          </svg>
-                        </div>
+                        <button
+                          type="button"
+                          aria-label={
+                            showLoginPassword ? "Ẩn mật khẩu" : "Hiện mật khẩu"
+                          }
+                          className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 rounded-lg text-gray-500 hover:text-gray-800 hover:bg-gray-100 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
+                          onClick={() => setShowLoginPassword((v) => !v)}
+                          tabIndex={-1}
+                        >
+                          {showLoginPassword ? (
+                            <EyeOff className="w-5 h-5" strokeWidth={2} />
+                          ) : (
+                            <Eye className="w-5 h-5" strokeWidth={2} />
+                          )}
+                        </button>
                       </div>
 
                       <div className="text-right animate-[slideUp_0.7s_ease-out_0.3s_both]">
@@ -500,10 +506,11 @@ export default function AuthPage() {
                       <div className="relative animate-[slideUp_0.7s_ease-out_0.2s_both]">
                         <input
                           id="register-password"
-                          type="password"
+                          type={showRegisterPassword ? "text" : "password"}
                           required
                           minLength={6}
-                          className="w-full px-4 py-3 pr-10 bg-gray-50 border-0 rounded-xl outline-none transition-all focus:bg-white focus:ring-2 focus:ring-purple-500"
+                          autoComplete="new-password"
+                          className="w-full px-4 py-3 pr-12 bg-gray-50 border-0 rounded-xl outline-none transition-all focus:bg-white focus:ring-2 focus:ring-purple-500"
                           placeholder="Password"
                           value={registerData.password}
                           onChange={(e) =>
@@ -513,29 +520,30 @@ export default function AuthPage() {
                             })
                           }
                         />
-                        <div className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400">
-                          <svg
-                            className="w-5 h-5"
-                            fill="none"
-                            stroke="currentColor"
-                            viewBox="0 0 24 24"
-                          >
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              strokeWidth={2}
-                              d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"
-                            />
-                          </svg>
-                        </div>
+                        <button
+                          type="button"
+                          aria-label={
+                            showRegisterPassword ? "Ẩn mật khẩu" : "Hiện mật khẩu"
+                          }
+                          className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 rounded-lg text-gray-500 hover:text-gray-800 hover:bg-gray-100 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-400"
+                          onClick={() => setShowRegisterPassword((v) => !v)}
+                          tabIndex={-1}
+                        >
+                          {showRegisterPassword ? (
+                            <EyeOff className="w-5 h-5" strokeWidth={2} />
+                          ) : (
+                            <Eye className="w-5 h-5" strokeWidth={2} />
+                          )}
+                        </button>
                       </div>
 
                       <div className="relative animate-[slideUp_0.7s_ease-out_0.25s_both]">
                         <input
                           id="confirmPassword"
-                          type="password"
+                          type={showRegisterConfirmPassword ? "text" : "password"}
                           required
-                          className="w-full px-4 py-3 pr-10 bg-gray-50 border-0 rounded-xl outline-none transition-all focus:bg-white focus:ring-2 focus:ring-purple-500"
+                          autoComplete="new-password"
+                          className="w-full px-4 py-3 pr-12 bg-gray-50 border-0 rounded-xl outline-none transition-all focus:bg-white focus:ring-2 focus:ring-purple-500"
                           placeholder="Confirm Password"
                           value={registerData.confirmPassword}
                           onChange={(e) =>
@@ -545,21 +553,25 @@ export default function AuthPage() {
                             })
                           }
                         />
-                        <div className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400">
-                          <svg
-                            className="w-5 h-5"
-                            fill="none"
-                            stroke="currentColor"
-                            viewBox="0 0 24 24"
-                          >
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              strokeWidth={2}
-                              d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
-                            />
-                          </svg>
-                        </div>
+                        <button
+                          type="button"
+                          aria-label={
+                            showRegisterConfirmPassword
+                              ? "Ẩn mật khẩu xác nhận"
+                              : "Hiện mật khẩu xác nhận"
+                          }
+                          className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 rounded-lg text-gray-500 hover:text-gray-800 hover:bg-gray-100 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-400"
+                          onClick={() =>
+                            setShowRegisterConfirmPassword((v) => !v)
+                          }
+                          tabIndex={-1}
+                        >
+                          {showRegisterConfirmPassword ? (
+                            <EyeOff className="w-5 h-5" strokeWidth={2} />
+                          ) : (
+                            <Eye className="w-5 h-5" strokeWidth={2} />
+                          )}
+                        </button>
                       </div>
 
                       <button

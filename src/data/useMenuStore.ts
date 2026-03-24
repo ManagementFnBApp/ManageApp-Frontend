@@ -52,7 +52,7 @@ export function useMenuStore() {
   const addProduct = useCallback(
     async (payload: CreateShopProductPayload) => {
       const created = await createShopProduct(payload);
-      setProducts((prev) => [created, ...prev]);
+      setProducts((prev) => [created.product, ...prev]);
       return created;
     },
     [],
@@ -62,7 +62,7 @@ export function useMenuStore() {
     async (id: number, changes: UpdateShopProductPayload) => {
       const updated = await updateShopProduct(id, changes);
       setProducts((prev) =>
-        prev.map((p) => (p.productId === id ? updated : p)),
+        prev.map((p) => (p.productId === id ? updated.product : p)),
       );
       return updated;
     },
@@ -84,9 +84,13 @@ export function useMenuStore() {
   }, []);
 
   const toggleActive = useCallback(async (id: number) => {
-    setProducts((prevProducts) => {
+    return await new Promise<{ message?: string }>((resolve, reject) => {
+      setProducts((prevProducts) => {
       const current = prevProducts.find((p) => p.productId === id);
-      if (!current) return prevProducts;
+      if (!current) {
+        reject(new Error("Không tìm thấy sản phẩm để cập nhật trạng thái."));
+        return prevProducts;
+      }
 
       const optimisticProducts = prevProducts.map((p) =>
         p.productId === id ? { ...p, isActive: !p.isActive } : p
@@ -95,17 +99,20 @@ export function useMenuStore() {
       updateShopProduct(id, { isActive: !current.isActive })
         .then((updated) => {
           setProducts((prev) =>
-            prev.map((p) => (p.productId === id ? updated : p))
+            prev.map((p) => (p.productId === id ? updated.product : p))
           );
+          resolve({ message: updated.message });
         })
         .catch((err) => {
           console.error('Toggle active failed:', err);
           setProducts((prev) =>
             prev.map((p) => (p.productId === id ? current : p))
           );
+          reject(err);
         });
 
       return optimisticProducts;
+    });
     });
   }, []);
 

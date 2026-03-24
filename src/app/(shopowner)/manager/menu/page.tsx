@@ -10,7 +10,6 @@ import { getStoredRoleNormalized } from "@/apis/auth";
 
 type Category = { id: number; name: string };
 type ModalMode = "add" | "edit" | null;
-type ToastType = "create" | "edit" | "soft-delete" | "hard-delete";
 
 const formatPrice = (n: number) =>
   new Intl.NumberFormat("vi-VN").format(n) + " ₫";
@@ -51,7 +50,6 @@ export default function MenuManagePage() {
     refresh,
     addProduct,
     editProduct,
-    removeProduct,
     toggleActive,
   } = useMenuStore();
 
@@ -172,17 +170,12 @@ export default function MenuManagePage() {
   const [formError, setFormError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
-  const [toggleConfirmTarget, setToggleConfirmTarget] =
-    useState<Product | null>(null);
-  const [hardDeleteTarget, setHardDeleteTarget] = useState<Product | null>(
-    null,
-  );
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
 
-  const [toast, setToast] = useState<{ type: ToastType } | null>(null);
-
-  const showToast = (type: ToastType) => {
-    setToast({ type });
-    setTimeout(() => setToast(null), 3000);
+  const showToast = (message?: string) => {
+    if (!message?.trim()) return;
+    setToastMessage(message);
+    setTimeout(() => setToastMessage(null), 3000);
   };
 
   // ── Filtered list ──
@@ -307,7 +300,7 @@ export default function MenuManagePage() {
     const listPrice = Number(form.listPrice);
     try {
       if (modalMode === "add") {
-        await addProduct({
+        const result = await addProduct({
           categoryId: Number(form.categoryId),
           productName: form.productName.trim(),
           image: imageFile as File,
@@ -319,22 +312,47 @@ export default function MenuManagePage() {
           isActive: form.isActive ?? true,
         });
         closeModal();
-        showToast("create");
+        showToast(result.message);
         refresh();
       } else if (editTarget) {
         // Tránh gửi categoryId/isActive trong update để tránh backend truyền thẳng vào Prisma bị lỗi.
         // Status vẫn dùng nút toggle ở table.
-        await editProduct(editTarget.productId, {
-          productName: form.productName.trim(),
-          ...(imageFile ? { image: imageFile } : {}),
-          barcode: String(form.barcode ?? "").trim(),
-          description: form.description?.trim() || undefined,
-          measureUnit: form.measureUnit?.trim() || undefined,
-          importPrice: Number.isNaN(importPrice) ? 0 : importPrice,
-          listPrice: Number.isNaN(listPrice) ? 0 : listPrice,
-        });
+        // Chỉ gửi các field thật sự thay đổi để PATCH đúng nghĩa partial update.
+        const nextProductName = form.productName.trim();
+        const prevProductName = String(editTarget.productName ?? "").trim();
+
+        const nextBarcode = String(form.barcode ?? "").trim() || undefined;
+        const prevBarcode = String(editTarget.barcode ?? "").trim() || undefined;
+
+        const nextDescription = form.description?.trim() || undefined;
+        const prevDescription = String(editTarget.description ?? "").trim() || undefined;
+
+        const nextMeasureUnit = form.measureUnit?.trim() || undefined;
+        const prevMeasureUnit = String(editTarget.measureUnit ?? "").trim() || undefined;
+
+        const nextImportPrice = Number.isNaN(importPrice) ? 0 : importPrice;
+        const prevImportPrice = Number(editTarget.importPrice ?? 0);
+
+        const nextListPrice = Number.isNaN(listPrice) ? 0 : listPrice;
+        const prevListPrice = Number(editTarget.listPrice ?? 0);
+
+        const changes: Record<string, unknown> = {};
+        if (nextProductName !== prevProductName) changes.productName = nextProductName;
+        if (nextBarcode !== prevBarcode) changes.barcode = nextBarcode;
+        if (nextDescription !== prevDescription) changes.description = nextDescription;
+        if (nextMeasureUnit !== prevMeasureUnit) changes.measureUnit = nextMeasureUnit;
+        if (nextImportPrice !== prevImportPrice) changes.importPrice = nextImportPrice;
+        if (nextListPrice !== prevListPrice) changes.listPrice = nextListPrice;
+        if (imageFile) changes.image = imageFile;
+
+        if (Object.keys(changes).length === 0) {
+          setFormError("Không có thay đổi để cập nhật.");
+          return;
+        }
+
+        const result = await editProduct(editTarget.productId, changes);
         closeModal();
-        showToast("edit");
+        showToast(result.message);
         refresh();
       }
     } catch (err: unknown) {
@@ -344,43 +362,13 @@ export default function MenuManagePage() {
     }
   };
 
-  // ── Soft delete (ngừng bán) ──
-  const confirmSoftDelete = async () => {
-    if (!toggleConfirmTarget) return;
-    try {
-      await toggleActive(toggleConfirmTarget.productId);
-      setToggleConfirmTarget(null);
-      setFormError(null);
-      showToast("soft-delete");
-      refresh();
-    } catch (err: unknown) {
-      setFormError(getApiErrorMessage(err));
-      setToggleConfirmTarget(null);
-    }
-  };
-
-  // ── Hard delete (xóa hẳn) ──
-  const confirmHardDelete = async () => {
-    if (!hardDeleteTarget) return;
-    try {
-      await removeProduct(hardDeleteTarget.productId);
-      setHardDeleteTarget(null);
-      setFormError(null);
-      showToast("hard-delete");
-      refresh();
-    } catch (err: unknown) {
-      setFormError(getApiErrorMessage(err));
-      setHardDeleteTarget(null);
-    }
-  };
-
   const getCategoryName = (id: number) =>
     shopCategories.find((c) => c.id === id)?.name ?? `Cat #${id}`;
 
   return (
     <div className="min-h-screen bg-[#f0f0f0] flex flex-col">
       {/* ── Toast ── */}
-      {toast && (
+      {toastMessage && (
         <div className="fixed top-5 right-5 z-60 flex items-center gap-3 bg-emerald-500 rounded-2xl shadow-xl px-5 py-4 min-w-75 max-w-sm">
           <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center shrink-0">
             <svg
@@ -398,15 +386,11 @@ export default function MenuManagePage() {
             </svg>
           </div>
           <p className="flex-1 text-sm font-medium text-white">
-            {toast.type === "create"
-              ? "Bạn đã thêm sản phẩm mới thành công!"
-              : toast.type === "hard-delete"
-                ? "Bạn đã xóa thành công!"
-                : "Bạn đã chỉnh sửa thành công!"}
+            {toastMessage}
           </p>
           <button
             type="button"
-            onClick={() => setToast(null)}
+            onClick={() => setToastMessage(null)}
             className="text-white/70 hover:text-white transition shrink-0"
           >
             <svg
@@ -672,8 +656,8 @@ export default function MenuManagePage() {
                         type="button"
                         onClick={async () => {
                           try {
-                            await toggleActive(p.productId);
-                            showToast("edit");
+                            const result = await toggleActive(p.productId);
+                            showToast(result.message);
                             refresh();
                           } catch (err: unknown) {
                             setFormError(getApiErrorMessage(err));
@@ -692,7 +676,7 @@ export default function MenuManagePage() {
                       </button>
                     </td>
                     <td className="px-5 py-3">
-                      <div className="flex items-center justify-center gap-2">
+                      <div className="flex items-center justify-center">
                         <button
                           type="button"
                           onClick={() => openEdit(p)}
@@ -710,26 +694,6 @@ export default function MenuManagePage() {
                               strokeLinejoin="round"
                               strokeWidth={2}
                               d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
-                            />
-                          </svg>
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setHardDeleteTarget(p)}
-                          title="Xóa vĩnh viễn"
-                          className="p-1.5 rounded-lg text-red-400 hover:bg-red-50 transition"
-                        >
-                          <svg
-                            className="w-4 h-4"
-                            fill="none"
-                            stroke="currentColor"
-                            viewBox="0 0 24 24"
-                          >
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              strokeWidth={2}
-                              d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
                             />
                           </svg>
                         </button>
@@ -951,108 +915,6 @@ export default function MenuManagePage() {
                 </button>
               </div>
             </form>
-          </div>
-        </div>
-      )}
-
-      {/* ══ TOGGLE CONFIRM (chỉ khi tắt sản phẩm) ══ */}
-      {toggleConfirmTarget && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm mx-4 p-6">
-            <div className="flex items-center gap-3 mb-4">
-              <div className="w-10 h-10 rounded-full bg-amber-100 flex items-center justify-center">
-                <svg
-                  className="w-5 h-5 text-amber-500"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M12 9v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-                  />
-                </svg>
-              </div>
-              <div>
-                <h3 className="font-bold text-gray-800">Ngừng bán sản phẩm?</h3>
-                <p className="text-sm text-gray-500">
-                  Bạn có thể bật lại bất cứ lúc nào.
-                </p>
-              </div>
-            </div>
-            <p className="text-sm text-gray-700 bg-gray-50 rounded-lg px-3 py-2 mb-5">
-              <span className="font-semibold">
-                {toggleConfirmTarget.productName}
-              </span>{" "}
-              — Ảnh: {toggleConfirmTarget.image || "—"}
-            </p>
-            <div className="flex gap-3">
-              <button
-                onClick={() => setToggleConfirmTarget(null)}
-                className="flex-1 py-2.5 rounded-xl border border-gray-300 text-sm font-medium hover:bg-gray-50 transition"
-              >
-                Hủy
-              </button>
-              <button
-                onClick={confirmSoftDelete}
-                className="flex-1 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-semibold text-sm transition"
-              >
-                Ngừng bán
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ══ HARD DELETE CONFIRM ══ */}
-      {hardDeleteTarget && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm mx-4 p-6">
-            <div className="flex items-center gap-3 mb-4">
-              <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center">
-                <svg
-                  className="w-5 h-5 text-red-500"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-                  />
-                </svg>
-              </div>
-              <div>
-                <h3 className="font-bold text-gray-800">Xóa vĩnh viễn?</h3>
-                <p className="text-sm text-red-500">
-                  Hành động này không thể hoàn tác!
-                </p>
-              </div>
-            </div>
-            <p className="text-sm text-gray-700 bg-red-50 rounded-lg px-3 py-2 mb-5">
-              <span className="font-semibold">
-                {hardDeleteTarget.productName}
-              </span>{" "}
-              — Ảnh: {hardDeleteTarget.image || "—"}
-            </p>
-            <div className="flex gap-3">
-              <button
-                onClick={() => setHardDeleteTarget(null)}
-                className="flex-1 py-2.5 rounded-xl border border-gray-300 text-sm font-medium hover:bg-gray-50 transition"
-              >
-                Hủy
-              </button>
-              <button
-                onClick={confirmHardDelete}
-                className="flex-1 py-2.5 rounded-xl bg-red-500 hover:bg-red-600 text-white font-semibold text-sm transition"
-              >
-                Xóa vĩnh viễn
-              </button>
-            </div>
           </div>
         </div>
       )}

@@ -28,19 +28,17 @@ export function isStoredRoleShopOwner(): boolean {
   return getStoredRoleNormalized() === ROLE_CODE_SHOP_OWNER;
 }
 
-export interface LoginResponse {
+/** Khớp `AuthPermission` backend — `data` của POST /auth/login (không có username/role). */
+export interface AuthPermissionDto {
   user_id: number;
-  username?: string;
   token: string;
   expiredTime: number;
-  role?: string | null; // role_code từ JWT: 'ADMIN', 'SHOPOWNER', ...
 }
 
-/** Đúng format response backend: ResponseData<AuthPermission> */
-interface BackendLoginResponse {
-  data: { user_id: number; token: string; expiredTime: number; role?: string | null };
-  statusCode: number;
-  message: string;
+/** Kết quả `login()`: payload BE + username form + role decode JWT. */
+export interface LoginResponse extends AuthPermissionDto {
+  username?: string;
+  role?: string | null;
 }
 
 /**
@@ -97,7 +95,7 @@ export const login = async (data: LoginDto): Promise<LoginResponse> => {
     throw new Error(Array.isArray(message) ? message[0] : message);
   }
 
-  const authData = json?.data ?? json;
+  const authData = (json?.data ?? json) as AuthPermissionDto;
   if (authData?.token) {
     const payload = decodeJwt<UserJwtPayload>(authData.token);
     const userRole = payload?.role ?? null;
@@ -109,8 +107,7 @@ export const login = async (data: LoginDto): Promise<LoginResponse> => {
 
   const payload = decodeJwt<UserJwtPayload & { shop_id?: number }>(authData.token);
   const roleFromJwt = (payload?.role ?? '').toString().toUpperCase();
-  const roleFromApi = (authData as { role?: string | null }).role;
-  const role = (roleFromApi ?? roleFromJwt).toString().toUpperCase().trim() || null;
+  const role = roleFromJwt.trim() || null;
 
   localStorage.setItem('accessToken', authData.token);
   localStorage.setItem('userId', String(authData.user_id));

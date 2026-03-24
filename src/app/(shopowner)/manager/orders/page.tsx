@@ -24,11 +24,32 @@ import { getStoredRoleNormalized } from "@/apis/auth";
 // Map BE response to the shape used by this page
 type OrderItem = {
   id: number;
-  product_id: number;
+  product_id: number | null;
+  shop_product_id?: number | null;
   quantity: number;
   unit_price: number;
-  product: { product_name: string };
+  /** Backend getAllOrders thêm field phẳng */
+  product_name?: string;
+  product?: { product_name: string } | null;
+  shop_product?: { product_name: string } | null;
 };
+
+function getOrderLineProductName(item: OrderItem): string {
+  const flat =
+    typeof item.product_name === "string" ? item.product_name.trim() : "";
+  if (flat) return flat;
+  const fromProduct = item.product?.product_name?.trim();
+  if (fromProduct) return fromProduct;
+  const fromShop = item.shop_product?.product_name?.trim();
+  if (fromShop) return fromShop;
+  const camel = item as OrderItem & {
+    shopProduct?: { product_name?: string } | null;
+  };
+  const fromShopCamel = camel.shopProduct?.product_name?.trim();
+  if (fromShopCamel) return fromShopCamel;
+  const id = item.product_id ?? item.shop_product_id;
+  return id != null ? `#${id}` : "Sản phẩm";
+}
 
 type Order = {
   orderId: string;
@@ -267,11 +288,16 @@ export default function OrdersPage() {
         note: editForm.note || undefined,
         totalAmount: editForm.totalAmount,
         shiftUserId: editForm.shiftUserId > 0 ? editForm.shiftUserId : undefined,
-        order_items: selectedOrder.items.map((item) => ({
-          product_id: item.product_id,
-          quantity: item.quantity,
-          unit_price: item.unit_price,
-        })),
+        order_items: selectedOrder.items.map((item) => {
+          const base = { quantity: item.quantity, unit_price: item.unit_price };
+          if (item.shop_product_id != null) {
+            return { ...base, shop_product_id: item.shop_product_id };
+          }
+          if (item.product_id != null) {
+            return { ...base, product_id: item.product_id };
+          }
+          throw new Error("Dòng đơn không có product_id hoặc shop_product_id");
+        }),
       });
       setOrders((prev) =>
         prev.map((o) =>
@@ -553,7 +579,7 @@ export default function OrdersPage() {
                           >
                             <div className="flex-1 min-w-0">
                               <p className="text-sm font-medium text-slate-700 truncate">
-                                {item.product?.product_name ?? `#${item.product_id}`}
+                                {getOrderLineProductName(item)}
                               </p>
                               <p className="text-xs text-slate-400">
                                 {formatPrice(item.unit_price)} × {item.quantity}
