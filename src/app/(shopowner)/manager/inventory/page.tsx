@@ -390,7 +390,7 @@ export default function InventoryPage() {
       (item) => item.inventoryId === confirmDeleteInventory.inventoryId,
     );
     if (hasItemsInInventory) {
-      showToast("error", "Kho đang có sản phẩm.Vui lòng xóa sản phẩm trước!");
+      showToast("error", "Kho đang có sản phẩm. Vui lòng xóa sản phẩm trước!");
       return;
     }
 
