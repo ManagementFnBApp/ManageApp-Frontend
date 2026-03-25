@@ -8,16 +8,9 @@ import {
   UtensilsCrossed,
   ShoppingCart,
   BarChart2,
-  Sun,
-  Sunset,
   PackageOpen,
-  XCircle,
   ChevronLeft,
   ChevronRight,
-  Settings,
-  Bell,
-  Moon,
-  Sun as SunIcon,
   LogOut,
   Home,
   ChevronDown,
@@ -36,35 +29,25 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 
-// Staff chỉ thấy: Tạo đơn hàng, Đơn hàng, Phiếu nhập hàng, Phiếu hủy hàng
-const MAIN_ITEMS_STAFF = [
+// Bán hàng — cả staff và shopowner đều thấy
+const SALE_ITEMS = [
   { href: "/manager", label: "Tạo đơn hàng", icon: ShoppingCart },
   { href: "/manager/orders", label: "Đơn hàng", icon: ClipboardList },
   { href: "/manager/inventory", label: "Kho hàng", icon: PackageOpen },
 ];
 
-// Shopowner thấy thêm: Quản lý Menu, Quản lý nhân viên, Quản lý ca, Quản lý khách hàng, Gói dịch vụ
-const MAIN_ITEMS_SHOPOWNER_EXTRA = [
-  { href: "/manager/menu", label: "Quản lý Menu", icon: UtensilsCrossed },
-  { href: "/manager/staff", label: "Quản lý nhân viên", icon: Users },
-  { href: "/manager/shifts", label: "Quản lý ca", icon: Clock },
-  { href: "/manager/customers", label: "Quản lý khách hàng", icon: UserCheck },
+// Quản lý — chỉ shopowner
+const MANAGE_ITEMS = [
+  { href: "/manager/menu", label: "Menu", icon: UtensilsCrossed },
+  { href: "/manager/staff", label: "Nhân viên", icon: Users },
+  { href: "/manager/shifts", label: "Ca làm việc", icon: Clock },
+  { href: "/manager/customers", label: "Khách hàng", icon: UserCheck },
+];
+
+// Báo cáo & Tài chính — chỉ shopowner
+const FINANCE_ITEMS = [
+  { href: "/manager/report", label: "Báo cáo tháng", icon: BarChart2 },
   { href: "/manager/subscription", label: "Gói dịch vụ", icon: CreditCard },
-];
-
-const REPORT_ITEMS = [
-  {
-    id: "report-monthly",
-    href: "/manager/report",
-    label: "Báo cáo tháng",
-    icon: BarChart2,
-  },
-  
-];
-
-const OTHER_ITEMS = [
-  { id: "import", label: "Phiếu nhập hàng", icon: PackageOpen },
-  { id: "cancel", label: "Phiếu hủy hàng", icon: XCircle },
 ];
 
 function getRoleDisplayLabel(role: string): string {
@@ -92,21 +75,6 @@ export default function ManagerLayout({
   }, []);
 
   const isStaff = role === "STAFF";
-  const mainItems = isStaff
-    ? MAIN_ITEMS_STAFF
-    : [...MAIN_ITEMS_STAFF, ...MAIN_ITEMS_SHOPOWNER_EXTRA];
-
-  const handleReportOrOther = (id: string) => {
-    if (
-      id === "report-morning" ||
-      id === "report-afternoon" ||
-      id === "import" ||
-      id === "cancel"
-    ) {
-      // Tính năng đang phát triển - giữ hành vi cũ
-      alert("Tính năng đang được phát triển.");
-    }
-  };
 
   const isActive = (href: string) => {
     if (href === "/manager") return pathname === "/manager";
@@ -156,88 +124,89 @@ export default function ManagerLayout({
           </button>
         </div>
 
-        {/* MAIN */}
-        <nav className="flex-1 overflow-y-auto py-3">
+        {/* NAV */}
+        <nav className="flex-1 overflow-y-auto py-3 flex flex-col gap-1">
+          {/* ── Bán hàng ── */}
           {!collapsed && (
-            <p className="px-4 py-1.5 text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
-              Chính
+            <p className="px-4 pt-1 pb-1 text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+              Bán hàng
             </p>
           )}
           <ul className="space-y-0.5 px-2">
-            {mainItems.map(({ href, label, icon: Icon }) => (
+            {SALE_ITEMS.map(({ href, label, icon: Icon }) => (
               <li key={href}>
                 <Link
                   href={href}
                   className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition ${
                     isActive(href)
-                      ? "bg-slate-100 text-slate-900"
+                      ? "bg-blue-50 text-blue-700"
                       : "text-slate-600 hover:bg-slate-50 hover:text-slate-800"
                   }`}
                 >
-                  <Icon size={20} className="shrink-0 text-slate-500" />
+                  <Icon
+                    size={18}
+                    className={`shrink-0 ${isActive(href) ? "text-blue-500" : "text-slate-400"}`}
+                  />
                   {!collapsed && <span>{label}</span>}
                 </Link>
               </li>
             ))}
           </ul>
 
-          {!collapsed && (
+          {/* ── Quản lý (shopowner only) ── */}
+          {!isStaff && (
             <>
-              {!isStaff && (
-                <>
-                  <p className="px-4 py-1.5 mt-4 text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
-                    Báo cáo
-                  </p>
-                  <ul className="space-y-0.5 px-2">
-                    {REPORT_ITEMS.map(({ id, href, label, icon: Icon }) => (
-                      <li key={id}>
-                        {href ? (
-                          <Link
-                            href={href}
-                            className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition ${
-                              isActive(href)
-                                ? "bg-slate-100 text-slate-900"
-                                : "text-slate-600 hover:bg-slate-50 hover:text-slate-800"
-                            }`}
-                          >
-                            <Icon
-                              size={20}
-                              className="shrink-0 text-slate-500"
-                            />
-                            <span>{label}</span>
-                          </Link>
-                        ) : (
-                          <button
-                            type="button"
-                            onClick={() => handleReportOrOther(id)}
-                            className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-800 transition w-full text-left"
-                          >
-                            <Icon
-                              size={20}
-                              className="shrink-0 text-slate-500"
-                            />
-                            <span>{label}</span>
-                          </button>
-                        )}
-                      </li>
-                    ))}
-                  </ul>
-                </>
+              {!collapsed && (
+                <p className="px-4 pt-3 pb-1 text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                  Quản lý
+                </p>
               )}
-              <p className="px-4 py-1.5 mt-2 text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
-                Khác
-              </p>
+              {collapsed && <div className="mx-3 my-2 border-t border-slate-100" />}
               <ul className="space-y-0.5 px-2">
-                {OTHER_ITEMS.map(({ id, label, icon: Icon }) => (
-                  <li key={id}>
-                    <button
-                      type="button"
-                      onClick={() => handleReportOrOther(id)}
-                      className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-800 transition w-full text-left"
+                {MANAGE_ITEMS.map(({ href, label, icon: Icon }) => (
+                  <li key={href}>
+                    <Link
+                      href={href}
+                      className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition ${
+                        isActive(href)
+                          ? "bg-blue-50 text-blue-700"
+                          : "text-slate-600 hover:bg-slate-50 hover:text-slate-800"
+                      }`}
                     >
-                      <Icon size={20} className="shrink-0 text-slate-500" />
-                      <span>{label}</span>
-                    </button>
+                      <Icon
+                        size={18}
+                        className={`shrink-0 ${isActive(href) ? "text-blue-500" : "text-slate-400"}`}
+                      />
+                      {!collapsed && <span>{label}</span>}
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+
+              {/* ── Báo cáo & Tài chính ── */}
+              {!collapsed && (
+                <p className="px-4 pt-3 pb-1 text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                  Báo cáo & Tài chính
+                </p>
+              )}
+              {collapsed && <div className="mx-3 my-2 border-t border-slate-100" />}
+              <ul className="space-y-0.5 px-2">
+                {FINANCE_ITEMS.map(({ href, label, icon: Icon }) => (
+                  <li key={href}>
+                    <Link
+                      href={href}
+                      className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition ${
+                        isActive(href)
+                          ? "bg-blue-50 text-blue-700"
+                          : "text-slate-600 hover:bg-slate-50 hover:text-slate-800"
+                      }`}
+                    >
+                      <Icon
+                        size={18}
+                        className={`shrink-0 ${isActive(href) ? "text-blue-500" : "text-slate-400"}`}
+                      />
+                      {!collapsed && <span>{label}</span>}
+                    </Link>
                   </li>
                 ))}
               </ul>
