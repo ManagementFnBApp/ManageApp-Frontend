@@ -291,14 +291,16 @@ export default function PosPage() {
     const key = getInventoryKeyForProduct(product);
     const hasInventoryItem = inventoryItemQuantityByKey.has(key);
     const quantity = inventoryItemQuantityByKey.get(key);
-    return !(hasInventoryItem && quantity === 0);
+    // Nếu chưa có trong inventory hoặc quantity null/undefined/0 thì coi là hết hàng
+    return hasInventoryItem && typeof quantity === "number" && quantity > 0;
   });
 
   const outOfStockProducts = filteredProducts.filter((product) => {
     const key = getInventoryKeyForProduct(product);
     const hasInventoryItem = inventoryItemQuantityByKey.has(key);
     const quantity = inventoryItemQuantityByKey.get(key);
-    return hasInventoryItem && quantity === 0;
+    // Nếu chưa có trong inventory hoặc quantity null/undefined/0 thì coi là hết hàng
+    return !hasInventoryItem || quantity == null || quantity === 0;
   });
 
   const addToCart = (product: PosShopProduct) => {
@@ -560,7 +562,8 @@ export default function PosPage() {
                     : `SYSTEM:${product.id}`;
                 const hasInventoryItem = inventoryItemQuantityByKey.has(key);
                 const quantity = inventoryItemQuantityByKey.get(key);
-                const isOutOfStock = hasInventoryItem && quantity === 0;
+                const isOutOfStock =
+                  !hasInventoryItem || quantity == null || quantity === 0;
                 const isLowStock =
                   hasInventoryItem &&
                   (quantity ?? 0) > 0 &&

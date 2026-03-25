@@ -239,9 +239,24 @@ export default function CheckoutOrderPage() {
       setOrderRef(String(orderResponse.id));
       setStep("success");
     } catch (err: unknown) {
-      const msg =
+      let msg =
         (err as { message?: string })?.message ||
         "Có lỗi xảy ra. Vui lòng thử lại.";
+      if (
+        typeof msg === "string" &&
+        msg.includes("Insufficient inventory quantity to fulfill the decrease")
+      ) {
+        msg =
+          "Số lượng hàng tồn kho ít hơn số lượng hàng thanh toán. Vui lòng kiểm tra lại kho hàng hoặc giảm số lượng.";
+      } else if (
+        typeof msg === "string" &&
+        msg.includes(
+          "Error processing order: Insufficient inventory quantity to fulfill the decrease",
+        )
+      ) {
+        msg =
+          "Lỗi sản phẩm chưa có số lượng trong inventory. Vui lòng kiểm tra lại kho hàng.";
+      }
       setErrorMsg(msg);
       setStep("error");
     }
