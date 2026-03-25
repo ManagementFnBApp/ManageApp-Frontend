@@ -477,11 +477,10 @@ export default function AuthPage() {
                       <div className="relative animate-[slideUp_0.7s_ease-out_0.2s_both]">
                         <input
                           id="register-password"
-                          type="text"
+                          type={showRegisterPassword ? "text" : "password"}
                           required
                           minLength={6}
                           autoComplete="new-password"
-                          style={showRegisterPassword ? {} : { WebkitTextSecurity: "disc" } as React.CSSProperties}
                           className="w-full px-4 py-3 pr-10 bg-gray-50 border-0 rounded-xl outline-none transition-all focus:bg-white focus:ring-2 focus:ring-purple-500"
                           placeholder="Password"
                           value={registerData.password}
