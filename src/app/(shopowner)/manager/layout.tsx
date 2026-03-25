@@ -59,7 +59,6 @@ const REPORT_ITEMS = [
     label: "Báo cáo tháng",
     icon: BarChart2,
   },
-  
 ];
 
 const OTHER_ITEMS = [
@@ -274,9 +273,14 @@ export default function ManagerLayout({
               </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-48">
-              <DropdownMenuItem disabled className="gap-2 opacity-60">
-                <User size={14} />
-                <span className="text-xs">{managerName}</span>
+              <DropdownMenuItem
+                className="gap-2 cursor-pointer"
+                onClick={() =>
+                  router.push(role === "SHOPOWNER" ? "/manager/profile" : "/")
+                }
+              >
+                <User size={15} />
+                <span className="text-xs">Profile</span>
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem
