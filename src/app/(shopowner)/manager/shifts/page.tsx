@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import {
   ArrowLeft,
@@ -13,6 +13,8 @@ import {
   Check,
   Clock,
   ChevronDown,
+  ChevronLeft,
+  ChevronRight,
   Copy,
   CheckCheck,
 } from "lucide-react";
@@ -28,6 +30,11 @@ import {
 } from "@/apis/shiftApi";
 import { getManagedUsers, type AppUser } from "@/apis/adminApi";
 import { getStoredRoleNormalized } from "@/apis/auth";
+import {
+  ConfirmDeleteModal,
+  ToastMessage,
+  type ToastType,
+} from "../inventory/inventoryComponent";
 
 // ───────────────────────────────────────────────────────────────────
 // Helpers
@@ -39,14 +46,6 @@ function getErrorMsg(e: unknown): string {
   if (Array.isArray(backendMsg)) return backendMsg.join(", ");
   if (typeof backendMsg === "string") return backendMsg;
   return err?.message ?? "Đã xảy ra lỗi. Vui lòng thử lại.";
-}
-
-function formatDate(iso: string) {
-  return new Date(iso).toLocaleDateString("vi-VN", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-  });
 }
 
 function getTodayVnDateYmd(): string {
@@ -66,12 +65,103 @@ function ymdToIsoUtcNoon(ymd: string): string {
   return new Date(Date.UTC(y, m - 1, d, 12, 0, 0)).toISOString();
 }
 
+const TIMETABLE_SLOT_COUNT = 4;
+const DAY_HEADERS_VI = ["T2", "T3", "T4", "T5", "T6", "T7", "CN"];
+const SLOT_LABELS_VI = ["Sáng", "Trưa", "Chiều", "Tối"];
+
+function stripVietnameseDiacritics(input: string): string {
+  // "Sáng" -> "Sang" để match keyword ổn định dù dữ liệu có dấu/không dấu.
+  return input.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+}
+
+function getSlotLabel(tmpl: ShiftTemplate | null, slotIdx: number): string {
+  if (!tmpl) return SLOT_LABELS_VI[slotIdx] ?? `Slot ${slotIdx + 1}`;
+  const name = stripVietnameseDiacritics(tmpl.shift_name).toLowerCase();
+
+  if (name.includes("sang")) return "Sáng";
+  if (name.includes("trua")) return "Trưa";
+  if (name.includes("chieu")) return "Chiều";
+  if (name.includes("toi")) return "Tối";
+
+  // Fallback: nếu shift_name không theo chuẩn từ khóa trên.
+  return tmpl.shift_name;
+}
+
+function parseYmdUtcNoon(ymd: string): Date {
+  const [y, m, d] = ymd.split("-").map((n) => Number(n));
+  if (!y || !m || !d) return new Date();
+  return new Date(Date.UTC(y, m - 1, d, 12, 0, 0));
+}
+
+function formatYmdUtc(d: Date): string {
+  const y = d.getUTCFullYear();
+  const mo = String(d.getUTCMonth() + 1).padStart(2, "0");
+  const day = String(d.getUTCDate()).padStart(2, "0");
+  return `${y}-${mo}-${day}`;
+}
+
+/** Thứ Hai của tuần chứa ngày YYYY-MM-DD (theo cùng quy ước UTC noon). */
+function startOfWeekMondayYmd(ymd: string): string {
+  const d = parseYmdUtcNoon(ymd);
+  const dow = d.getUTCDay();
+  const offset = dow === 0 ? -6 : 1 - dow;
+  d.setUTCDate(d.getUTCDate() + offset);
+  return formatYmdUtc(d);
+}
+
+function addDaysYmd(ymd: string, days: number): string {
+  const d = parseYmdUtcNoon(ymd);
+  d.setUTCDate(d.getUTCDate() + days);
+  return formatYmdUtc(d);
+}
+
+function formatDdMm(ymd: string): string {
+  const [y, m, d] = ymd.split("-");
+  if (!y || !m || !d) return "";
+  return `${d}/${m}`;
+}
+
+/** Chuẩn hóa ngày phân ca để khớp ô lưới (ưu tiên prefix YYYY-MM-DD). */
+function assignmentDateYmd(a: ShiftAssignment): string {
+  const raw = a.date;
+  if (!raw) return "";
+  if (typeof raw === "string" && /^\d{4}-\d{2}-\d{2}/.test(raw)) {
+    return raw.slice(0, 10);
+  }
+  try {
+    return new Intl.DateTimeFormat("en-CA", {
+      timeZone: "Asia/Ho_Chi_Minh",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).format(new Date(raw));
+  } catch {
+    return "";
+  }
+}
+
+function compareYmd(a: string, b: string): number {
+  return a.localeCompare(b);
+}
+
+function shiftStatusLabel(ymd: string): { text: string; className: string } {
+  const today = getTodayVnDateYmd();
+  const c = compareYmd(ymd, today);
+  if (c < 0)
+    return { text: "(Đã qua)", className: "text-emerald-600" };
+  if (c === 0)
+    return { text: "(Hôm nay)", className: "text-sky-600" };
+  return { text: "(Sắp tới)", className: "text-amber-600" };
+}
+
 // ───────────────────────────────────────────────────────────────────
 // Component
 // ───────────────────────────────────────────────────────────────────
 
 export default function ShiftsPage() {
   const router = useRouter();
+
+  const [role, setRole] = useState<string>(() => getStoredRoleNormalized());
 
   // ── Data state ──
   const [assignments, setAssignments] = useState<ShiftAssignment[]>([]);
@@ -113,11 +203,47 @@ export default function ShiftsPage() {
   // ── Copy ID ──
   const [copiedId, setCopiedId] = useState<number | null>(null);
 
+  // ── Shift details modal ──
+  const [detailsOpen, setDetailsOpen] = useState(false);
+  const [detailsAssignment, setDetailsAssignment] = useState<ShiftAssignment | null>(
+    null,
+  );
+
+  // ── Confirm delete modal ──
+  const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null);
+
+  // ── Toast (dùng chung component với các trang manager khác) ──
+  const [toast, setToast] = useState<{ type: ToastType; message: string } | null>(
+    null,
+  );
+
+  // ── Tuần hiển thị (lưới timetable) ──
+  const [weekStartYmd, setWeekStartYmd] = useState(() =>
+    startOfWeekMondayYmd(getTodayVnDateYmd()),
+  );
+
   const handleCopyId = (id: number) => {
     navigator.clipboard.writeText(String(id)).then(() => {
       setCopiedId(id);
       setTimeout(() => setCopiedId(null), 2000);
     });
+  };
+
+  const showToast = (type: ToastType, message: string) => {
+    setToast({ type, message });
+  };
+
+  const openShiftDetails = (a: ShiftAssignment) => {
+    setDetailsAssignment(a);
+    startEditNotes(a);
+    setDetailsOpen(true);
+  };
+
+  const closeShiftDetails = () => {
+    setDetailsOpen(false);
+    setDetailsAssignment(null);
+    setEditingId(null);
   };
 
   // ───────────────────────────────────────────────────────────────────
@@ -126,10 +252,21 @@ export default function ShiftsPage() {
 
   // Chỉ SHOPOWNER mới được truy cập trang này
   useEffect(() => {
-    if (getStoredRoleNormalized() !== 'SHOPOWNER') {
-      router.replace('/manager');
+    const syncRole = () => setRole(getStoredRoleNormalized());
+    syncRole();
+    window.addEventListener("lumio:role-changed", syncRole);
+    return () => window.removeEventListener("lumio:role-changed", syncRole);
+  }, []);
+
+  useEffect(() => {
+    if (role !== "SHOPOWNER") {
+      const t = window.setTimeout(() => {
+        const latest = getStoredRoleNormalized();
+        if (latest !== "SHOPOWNER") router.replace("/manager");
+      }, 400);
+      return () => window.clearTimeout(t);
     }
-  }, [router]);
+  }, [role, router]);
 
   const loadAll = useCallback(async () => {
     setLoading(true);
@@ -163,6 +300,12 @@ export default function ShiftsPage() {
     loadAll();
   }, [loadAll]);
 
+  useEffect(() => {
+    if (!toast) return;
+    const timer = window.setTimeout(() => setToast(null), 3500);
+    return () => window.clearTimeout(timer);
+  }, [toast]);
+
   // ───────────────────────────────────────────────────────────────────
   // Handlers
   // ───────────────────────────────────────────────────────────────────
@@ -182,6 +325,7 @@ export default function ShiftsPage() {
         notes: formNotes.trim() || undefined,
       });
       setAssignments((prev) => [result, ...prev]);
+      setWeekStartYmd(startOfWeekMondayYmd(formDateYmd));
       setFormShiftId("");
       setFormUserId("");
       setFormNotes("");
@@ -192,13 +336,16 @@ export default function ShiftsPage() {
     }
   };
 
-  const handleDelete = async (id: number) => {
+  const handleDelete = async (
+    id: number,
+  ): Promise<{ ok: boolean; message: string }> => {
     setDeletingId(id);
     try {
-      await deleteShiftAssignment(id);
+      const msg = await deleteShiftAssignment(id);
       setAssignments((prev) => prev.filter((a) => a.id !== id));
+      return { ok: true, message: msg };
     } catch (e) {
-      alert(getErrorMsg(e));
+      return { ok: false, message: getErrorMsg(e) };
     } finally {
       setDeletingId(null);
     }
@@ -226,7 +373,7 @@ export default function ShiftsPage() {
     setEditNotes(a.notes ?? "");
   };
 
-  const handleSaveNotes = async (id: number) => {
+  const handleSaveNotes = async (id: number): Promise<boolean> => {
     setSavingNotes(true);
     try {
       const updated = await updateShiftAssignment(id, editNotes);
@@ -234,8 +381,10 @@ export default function ShiftsPage() {
         prev.map((a) => (a.id === id ? { ...a, notes: updated.notes } : a)),
       );
       setEditingId(null);
+      return true;
     } catch (e) {
       alert(getErrorMsg(e));
+      return false;
     } finally {
       setSavingNotes(false);
     }
@@ -256,38 +405,63 @@ export default function ShiftsPage() {
     return true;
   });
 
+  const weekDayYmds = useMemo(
+    () => Array.from({ length: 7 }, (_, i) => addDaysYmd(weekStartYmd, i)),
+    [weekStartYmd],
+  );
+
+  const slotTemplates = useMemo((): (ShiftTemplate | null)[] => {
+    const sorted = [...templates].sort((a, b) => a.id - b.id);
+    return Array.from(
+      { length: TIMETABLE_SLOT_COUNT },
+      (_, i) => sorted[i] ?? null,
+    );
+  }, [templates]);
+
+  const slotTemplateIds = useMemo(
+    () =>
+      new Set(
+        slotTemplates.filter((t): t is ShiftTemplate => t != null).map((t) => t.id),
+      ),
+    [slotTemplates],
+  );
+
+  const assignmentsOutsideTimetableSlots = useMemo(
+    () => filtered.filter((a) => !slotTemplateIds.has(a.shift_id)),
+    [filtered, slotTemplateIds],
+  );
+
+  const goPrevWeek = () =>
+    setWeekStartYmd((w) => addDaysYmd(w, -7));
+  const goNextWeek = () =>
+    setWeekStartYmd((w) => addDaysYmd(w, 7));
+  const goThisWeek = () =>
+    setWeekStartYmd(startOfWeekMondayYmd(getTodayVnDateYmd()));
+
+  const todayYmdForGrid = getTodayVnDateYmd();
+
   // Count by shift
   const countByShift = templates.map((t) => ({
     ...t,
     count: assignments.filter((a) => a.shift_id === t.id).length,
   }));
 
+  const detailsYmd = detailsAssignment ? assignmentDateYmd(detailsAssignment) : "";
+  const detailsStatus = detailsYmd ? shiftStatusLabel(detailsYmd) : null;
+
   // ───────────────────────────────────────────────────────────────────
   // Render
   // ───────────────────────────────────────────────────────────────────
 
   return (
-    <div className="h-screen flex flex-col bg-slate-50 overflow-hidden">
-      {/* ── Header ── */}
-      <header className="flex-shrink-0 flex items-center gap-4 px-6 py-3.5 bg-white border-b border-slate-200 shadow-sm">
-        <button
-          type="button"
-          onClick={() => router.push("/manager")}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-slate-500 hover:bg-slate-100 hover:text-slate-800 transition-colors"
-        >
-          <ArrowLeft size={16} />
-          <span className="text-sm font-medium">Quay lại</span>
-        </button>
-        <div className="h-5 w-px bg-slate-200" />
-        <div className="flex items-center gap-2">
-          <CalendarClock size={18} className="text-blue-500" />
-          <h1 className="text-base font-bold text-slate-800">Quản lý Ca làm việc</h1>
-        </div>
-        <span className="text-xs text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full">
-          {assignments.length} ca đã phân
-        </span>
-      </header>
-
+    <div className="min-h-screen flex flex-col bg-slate-50 overflow-x-hidden">
+      {toast ? (
+        <ToastMessage
+          type={toast.type}
+          message={toast.message}
+          onClose={() => setToast(null)}
+        />
+      ) : null}
       {loading ? (
         <div className="flex-1 flex flex-col items-center justify-center gap-3 text-slate-400">
           <div className="w-8 h-8 border-2 border-slate-300 border-t-blue-500 rounded-full animate-spin" />
@@ -306,15 +480,16 @@ export default function ShiftsPage() {
           </button>
         </div>
       ) : (
-        <div className="flex-1 min-h-0 overflow-hidden flex flex-col lg:flex-row gap-0">
+        <div className="flex-1 flex flex-col gap-0">
+          <div className="flex flex-col lg:flex-row gap-0">
 
           {/* ══════════════════════════════════════════════════════
-              LEFT — Danh sách phân ca
+              LEFT — Lịch tuần (timetable)
           ══════════════════════════════════════════════════════ */}
-          <div className="flex-1 min-h-0 flex flex-col overflow-hidden border-r border-slate-200">
+          <div className="flex-1 flex flex-col border-r border-slate-200">
 
             {/* Stats mini bar */}
-            <div className="flex-shrink-0 flex items-center gap-3 px-6 py-3 bg-white border-b border-slate-100 overflow-x-auto">
+            <div className="flex-shrink-0 flex flex-wrap items-center gap-2 px-6 py-3 bg-white border-b border-slate-100">
               {countByShift.length === 0 ? (
                 <span className="text-xs text-slate-400">Chưa có ca mẫu nào</span>
               ) : (
@@ -331,193 +506,221 @@ export default function ShiftsPage() {
                   </div>
                 ))
               )}
-              <div className="ml-auto flex items-center gap-1.5 text-xs text-slate-400 shrink-0">
+              <div className="ml-auto flex items-center gap-1.5 text-xs text-slate-400">
                 <Users size={13} />
                 <span>{new Set(assignments.map((a) => a.user_id)).size} người được phân</span>
               </div>
             </div>
 
-            {/* Filters */}
-            <div className="flex-shrink-0 flex items-center gap-3 px-6 py-2.5 bg-slate-50 border-b border-slate-100">
-              <span className="text-xs font-medium text-slate-500">Lọc:</span>
-              <div className="relative">
-                <select
-                  value={filterUser}
-                  onChange={(e) => setFilterUser(e.target.value === "" ? "" : Number(e.target.value))}
-                  className="text-xs pl-2 pr-6 py-1.5 border border-slate-200 rounded-lg bg-white appearance-none focus:ring-1 focus:ring-blue-300 outline-none"
-                >
-                  <option value="">Tất cả nhân viên</option>
-                  {allUserOptions.map((u) => (
-                    <option key={u.id} value={u.id}>{u.label}</option>
-                  ))}
-                </select>
-                <ChevronDown size={12} className="absolute right-1.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
-              </div>
-              <div className="relative">
-                <select
-                  value={filterShift}
-                  onChange={(e) => setFilterShift(e.target.value === "" ? "" : Number(e.target.value))}
-                  className="text-xs pl-2 pr-6 py-1.5 border border-slate-200 rounded-lg bg-white appearance-none focus:ring-1 focus:ring-blue-300 outline-none"
-                >
-                  <option value="">Tất cả ca</option>
-                  {templates.map((t) => (
-                    <option key={t.id} value={t.id}>{t.shift_name}</option>
-                  ))}
-                </select>
-                <ChevronDown size={12} className="absolute right-1.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
-              </div>
-              {(filterUser !== "" || filterShift !== "") && (
+            {/* Tuần + thời khóa biểu (7 hàng ngày × 4 cột ca) */}
+            <div className="flex-shrink-0 flex flex-wrap items-center gap-2 px-6 py-2.5 bg-white border-b border-slate-100">
+              <span className="text-xs font-semibold text-slate-600">Tuần làm việc</span>
+              <div className="flex items-center gap-1 rounded-lg border border-slate-200 bg-slate-50 p-0.5">
                 <button
                   type="button"
-                  onClick={() => { setFilterUser(""); setFilterShift(""); }}
-                  className="text-xs text-slate-400 hover:text-slate-600 transition"
+                  onClick={goPrevWeek}
+                  className="rounded-md p-1.5 text-slate-500 hover:bg-white hover:text-slate-800 transition"
+                  title="Tuần trước"
                 >
-                  Xóa lọc
+                  <ChevronLeft size={16} />
                 </button>
-              )}
-              <span className="ml-auto text-xs text-slate-400">{filtered.length} kết quả</span>
+                <span className="min-w-[10rem] text-center text-xs font-medium text-slate-700 px-1">
+                  {formatDdMm(weekDayYmds[0])} – {formatDdMm(weekDayYmds[6])}
+                </span>
+                <button
+                  type="button"
+                  onClick={goNextWeek}
+                  className="rounded-md p-1.5 text-slate-500 hover:bg-white hover:text-slate-800 transition"
+                  title="Tuần sau"
+                >
+                  <ChevronRight size={16} />
+                </button>
+              </div>
+              <button
+                type="button"
+                onClick={goThisWeek}
+                className="rounded-lg border border-blue-200 bg-blue-50 px-2.5 py-1 text-xs font-semibold text-blue-700 hover:bg-blue-100 transition"
+              >
+                Tuần này
+              </button>
+              
             </div>
 
-            {/* Table */}
-            <div className="flex-1 min-h-0 overflow-y-auto">
-              {filtered.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-20 gap-3 text-slate-300">
-                  <CalendarClock size={40} strokeWidth={1.2} />
-                  <p className="text-sm font-medium">Chưa có phân ca nào</p>
-                  <p className="text-xs">Dùng form bên phải để gán ca làm việc</p>
-                </div>
-              ) : (
-                <table className="w-full text-sm">
-                  <thead className="sticky top-0 bg-slate-50 border-b border-slate-200 z-10">
+            <div className="bg-slate-100/60">
+              <div className="p-4">
+                <table className="w-full table-fixed border-collapse border border-slate-300 bg-white text-sm shadow-sm">
+                  <thead>
                     <tr>
-                      <th className="text-left px-4 py-3 text-xs font-semibold text-blue-600 uppercase tracking-wider">
-                        Mã ca (ID)
-                        <span className="ml-1 text-[10px] text-slate-400 normal-case font-normal">← báo cho STAFF</span>
+                      <th
+                        className="w-24 border-b border-r border-slate-300 bg-[#5f88ce] px-2 py-1.5 text-left text-[11px] font-semibold uppercase tracking-wide text-white"
+                      >
+                        <div className="flex items-center gap-1.5">
+                          <span>Year</span>
+                          <span className="rounded bg-white/20 px-1.5 py-0.5 font-mono">
+                            {parseYmdUtcNoon(weekDayYmds[0]).getUTCFullYear()}
+                          </span>
+                        </div>
                       </th>
-                      <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Nhân viên</th>
-                      <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Ca</th>
-                      <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Ghi chú</th>
-                      <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Ngày tạo</th>
-                      <th className="text-center px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider w-24">Thao tác</th>
+                      {weekDayYmds.map((ymd, i) => {
+                        const isToday = compareYmd(ymd, todayYmdForGrid) === 0;
+                        return (
+                        <th
+                            key={ymd}
+                            className={`border-b border-slate-300 px-1.5 py-1.5 text-center text-[11px] font-bold uppercase tracking-wider ${
+                              isToday
+                                ? "bg-[#3f71c5] text-white"
+                                : "bg-[#5f88ce] text-white"
+                            }`}
+                        >
+                            {DAY_HEADERS_VI[i]}
+                        </th>
+                        );
+                      })}
+                    </tr>
+                    <tr>
+                      <th className="border-r border-slate-300 bg-[#5f88ce] px-2 py-1.5 text-left text-[11px] font-semibold uppercase tracking-wide text-white">
+                        WEEK
+                        <div className="font-normal">
+                          {formatDdMm(weekDayYmds[0])} - {formatDdMm(weekDayYmds[6])}
+                        </div>
+                      </th>
+                      {weekDayYmds.map((ymd) => {
+                        const isToday = compareYmd(ymd, todayYmdForGrid) === 0;
+                        return (
+                          <th
+                            key={`sub-${ymd}`}
+                            className={`border-b border-slate-300 px-1.5 py-1 text-center text-[11px] font-semibold ${
+                              isToday
+                                ? "bg-[#4a79c7] text-white"
+                                : "bg-[#79a0dc] text-slate-900"
+                            }`}
+                          >
+                            {formatDdMm(ymd)}
+                          </th>
+                        );
+                      })}
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-slate-100">
-                    {filtered.map((a) => (
-                      <tr
-                        key={a.id}
-                        className="bg-white hover:bg-slate-50 transition-colors"
-                      >
-                        {/* Mã ca nổi bật — SHOPOWNER báo cho STAFF */}
-                        <td className="px-4 py-3">
-                          <div className="flex items-center gap-2">
-                            <span className="text-base font-bold text-blue-600 font-mono">#{a.id}</span>
-                            <button
-                              type="button"
-                              onClick={() => handleCopyId(a.id)}
-                              title="Copy mã ca"
-                              className="p-1 rounded hover:bg-blue-50 text-slate-400 hover:text-blue-500 transition"
-                            >
-                              {copiedId === a.id ? <CheckCheck size={13} className="text-emerald-500" /> : <Copy size={13} />}
-                            </button>
-                          </div>
-                        </td>
-
-                        {/* Nhân viên */}
-                        <td className="px-4 py-3">
-                          <div className="flex items-center gap-2">
-                            <div className="w-7 h-7 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-semibold text-xs shrink-0">
-                              {a.username.charAt(0).toUpperCase()}
-                            </div>
-                            <div>
-                              <p className="font-medium text-slate-800 text-sm">{a.username}</p>
-                              {selfUser && a.user_id === selfUser.id && (
-                                <span className="text-[10px] text-blue-500 font-medium">Chủ shop</span>
-                              )}
-                            </div>
-                          </div>
-                        </td>
-
-                        {/* Ca */}
-                        <td className="px-4 py-3">
-                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-indigo-50 text-indigo-700 border border-indigo-100">
-                            <Clock size={10} />
-                            {a.shift_name}
-                          </span>
-                        </td>
-
-                        {/* Ghi chú */}
-                        <td className="px-4 py-3 max-w-[200px]">
-                          {editingId === a.id ? (
-                            <div className="flex items-center gap-1">
-                              <input
-                                type="text"
-                                value={editNotes}
-                                onChange={(e) => setEditNotes(e.target.value)}
-                                className="text-xs px-2 py-1 border border-blue-300 rounded focus:ring-1 focus:ring-blue-400 outline-none flex-1 min-w-0"
-                                placeholder="Ghi chú..."
-                                autoFocus
-                              />
-                              <button
-                                type="button"
-                                onClick={() => handleSaveNotes(a.id)}
-                                disabled={savingNotes}
-                                className="text-emerald-600 hover:text-emerald-700 transition disabled:opacity-50"
-                              >
-                                <Check size={14} />
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => setEditingId(null)}
-                                className="text-slate-400 hover:text-slate-600 transition"
-                              >
-                                <X size={14} />
-                              </button>
-                            </div>
-                          ) : (
-                            <button
-                              type="button"
-                              onClick={() => startEditNotes(a)}
-                              className="group flex items-center gap-1.5 text-xs text-slate-500 hover:text-slate-800 transition w-full text-left"
-                            >
-                              <span className="truncate">{a.notes || <span className="text-slate-300 italic">Không có</span>}</span>
-                              <Pencil size={10} className="shrink-0 opacity-0 group-hover:opacity-100 transition" />
-                            </button>
-                          )}
-                        </td>
-
-                        {/* Ngày tạo */}
-                        <td className="px-4 py-3 text-xs text-slate-400 whitespace-nowrap">
-                          {formatDate(a.created_at)}
-                        </td>
-
-                        {/* Thao tác */}
-                        <td className="px-4 py-3 text-center">
-                          <button
-                            type="button"
-                            onClick={() => handleDelete(a.id)}
-                            disabled={deletingId === a.id}
-                            className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-xs text-rose-500 hover:bg-rose-50 hover:text-rose-700 transition disabled:opacity-50"
+                  <tbody>
+                    {slotTemplates.map((tmpl, slotIdx) => {
+                      return (
+                        <tr
+                          key={slotIdx}
+                          className="border-b border-slate-200 last:border-b-0"
+                        >
+                          <td
+                            className="border-r border-slate-200 bg-white px-2 py-2 align-top text-xs"
                           >
-                            {deletingId === a.id ? (
-                              <div className="w-3 h-3 border border-rose-400 border-t-transparent rounded-full animate-spin" />
-                            ) : (
-                              <Trash2 size={13} />
-                            )}
-                            Xóa
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
+                            <p className="font-semibold text-slate-700">
+                              {getSlotLabel(tmpl, slotIdx)}
+                            </p>
+                          </td>
+                          {weekDayYmds.map((dayYmd) => {
+                            const isTodayCol = compareYmd(dayYmd, todayYmdForGrid) === 0;
+                            const list =
+                              tmpl != null
+                                ? filtered.filter(
+                                    (a) =>
+                                      assignmentDateYmd(a) === dayYmd &&
+                                      a.shift_id === tmpl.id,
+                                  )
+                                : [];
+                            return (
+                              <td
+                                key={`${slotIdx}-${dayYmd}`}
+                                className={`align-top border-l border-slate-100 p-1 ${
+                                  isTodayCol ? "bg-sky-50/60" : "bg-white"
+                                }`}
+                              >
+                                {list.length === 0 ? (
+                                  <button
+                                    type="button"
+                                    disabled={!tmpl}
+                                    onClick={() => {
+                                      setFormDateYmd(dayYmd);
+                                      if (tmpl) setFormShiftId(tmpl.id);
+                                      setAssignError(null);
+                                    }}
+                                    className="flex min-h-[60px] w-full items-center justify-center rounded text-base text-slate-300 transition hover:bg-slate-50 hover:text-slate-500 disabled:cursor-default disabled:hover:bg-transparent"
+                                  >
+                                    —
+                                  </button>
+                                ) : (
+                                  <div className="flex flex-col gap-1">
+                                    {list.map((a) => {
+                                      const st = shiftStatusLabel(dayYmd);
+                                      return (
+                                        <div
+                                          key={a.id}
+                                          className="rounded border border-slate-200 bg-white p-1.5"
+                                        >
+                                          <div className="flex items-center justify-between gap-2">
+                                            <div className="flex min-w-0 items-center gap-2">
+                                              <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-blue-100 text-[9px] font-bold text-blue-700">
+                                                {a.username.charAt(0).toUpperCase()}
+                                              </span>
+                                              <span className="min-w-0 truncate text-xs font-semibold text-slate-700">
+                                                {a.username}
+                                                {selfUser &&
+                                                a.user_id === selfUser.id ? (
+                                                  <span className="ml-1 text-[9px] text-blue-500">
+                                                    (Chủ shop)
+                                                  </span>
+                                                ) : null}
+                                              </span>
+                                            </div>
+                                            <button
+                                              type="button"
+                                              onClick={() => openShiftDetails(a)}
+                                              className="shrink-0 rounded bg-blue-50 px-2 py-0.5 text-[11px] font-semibold text-blue-700 hover:bg-blue-100 transition"
+                                            >
+                                              Chi tiết
+                                            </button>
+                                          </div>
+                                          <div className="mt-1 flex items-center justify-between gap-2">
+                                            <span className="font-mono text-[10px] font-bold text-blue-500">
+                                              #{a.id}
+                                            </span>
+                                            <span
+                                              className={`text-[10px] font-semibold ${st.className}`}
+                                            >
+                                              {st.text}
+                                            </span>
+                                          </div>
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                )}
+                              </td>
+                            );
+                          })}
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
-              )}
+
+                {assignments.length === 0 ? (
+                  <p className="mt-3 text-center text-xs text-slate-400">
+                    Chưa có phân ca nào — dùng form bên phải để gán.
+                  </p>
+                ) : null}
+                {assignmentsOutsideTimetableSlots.length > 0 ? (
+                  <p className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-center text-[11px] text-amber-800">
+                    Có {assignmentsOutsideTimetableSlots.length} phân ca thuộc ca
+                    mẫu ngoài 4 hàng đầu — không hiện trên lưới. Dùng lọc
+                    &quot;Ca&quot; phía trên hoặc gom ca mẫu vào 4 ID nhỏ nhất.
+                  </p>
+                ) : null}
+              </div>
             </div>
           </div>
 
           {/* ══════════════════════════════════════════════════════
               RIGHT — Phân ca mới + Quản lý ca mẫu
           ══════════════════════════════════════════════════════ */}
-          <div className="w-full lg:w-[360px] shrink-0 flex flex-col overflow-y-auto bg-white border-t lg:border-t-0">
+          <div className="w-full lg:w-[360px] shrink-0 flex flex-col bg-white border-t lg:border-t-0">
 
             {/* ── Phân ca mới ── */}
             <div className="p-5 border-b border-slate-100">
@@ -713,6 +916,187 @@ export default function ShiftsPage() {
               )}
             </div>
           </div>
+        </div>
+
+        {/* Filters (đưa xuống dưới phần chia 2 cột) */}
+        <div className="flex-shrink-0 flex flex-wrap items-center gap-3 px-6 py-2.5 bg-slate-50 border-t border-slate-100">
+          <span className="text-xs font-medium text-slate-500">Lọc:</span>
+          <div className="relative">
+            <select
+              value={filterUser}
+              onChange={(e) => setFilterUser(e.target.value === "" ? "" : Number(e.target.value))}
+              className="text-xs pl-2 pr-6 py-1.5 border border-slate-200 rounded-lg bg-white appearance-none focus:ring-1 focus:ring-blue-300 outline-none"
+            >
+              <option value="">Tất cả nhân viên</option>
+              {allUserOptions.map((u) => (
+                <option key={u.id} value={u.id}>{u.label}</option>
+              ))}
+            </select>
+            <ChevronDown size={12} className="absolute right-1.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+          </div>
+          <div className="relative">
+            <select
+              value={filterShift}
+              onChange={(e) => setFilterShift(e.target.value === "" ? "" : Number(e.target.value))}
+              className="text-xs pl-2 pr-6 py-1.5 border border-slate-200 rounded-lg bg-white appearance-none focus:ring-1 focus:ring-blue-300 outline-none"
+            >
+              <option value="">Tất cả ca</option>
+              {templates.map((t) => (
+                <option key={t.id} value={t.id}>{t.shift_name}</option>
+              ))}
+            </select>
+            <ChevronDown size={12} className="absolute right-1.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+          </div>
+          {(filterUser !== "" || filterShift !== "") && (
+            <button
+              type="button"
+              onClick={() => { setFilterUser(""); setFilterShift(""); }}
+              className="text-xs text-slate-400 hover:text-slate-600 transition"
+            >
+              Xóa lọc
+            </button>
+          )}
+          <span className="ml-auto text-xs text-slate-400">{filtered.length} kết quả</span>
+        </div>
+        {detailsOpen && detailsAssignment ? (
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4"
+            role="dialog"
+            aria-modal="true"
+            onMouseDown={(e) => {
+              if (e.target === e.currentTarget) closeShiftDetails();
+            }}
+          >
+            <div
+              className="w-full max-w-md overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xl"
+              onMouseDown={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-start justify-between gap-3 border-b border-slate-100 px-5 py-4">
+                <div className="min-w-0">
+                  <h3 className="truncate text-sm font-bold text-slate-800">
+                    Chi tiết ca: {detailsAssignment.shift_name}
+                  </h3>
+                  <p className="mt-1 text-xs text-slate-500">
+                    {formatDdMm(detailsYmd)} • {detailsAssignment.username} • #{detailsAssignment.id}
+                  </p>
+                  {detailsStatus ? (
+                    <div className="mt-2 inline-flex rounded-full bg-slate-50 px-2 py-0.5 text-[11px] font-semibold border border-slate-100">
+                      <span className={`ml-0.5 ${detailsStatus.className}`}>
+                        {detailsStatus.text}
+                      </span>
+                    </div>
+                  ) : null}
+                </div>
+                <button
+                  type="button"
+                  onClick={closeShiftDetails}
+                  className="rounded-lg p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-700"
+                  title="Đóng"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+
+              <div className="px-5 py-4">
+                <div className="flex flex-col gap-2">
+                  <div>
+                    <label className="block text-xs font-medium text-slate-600 mb-1">
+                      Ghi chú
+                    </label>
+                    <input
+                      type="text"
+                      value={editNotes}
+                      onChange={(e) => setEditNotes(e.target.value)}
+                      className="w-full text-sm px-3 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-300 outline-none"
+                      placeholder="Nhập ghi chú..."
+                      autoFocus
+                    />
+                    <p className="mt-1 text-[11px] text-slate-400">
+                      (Chỉnh sửa ghi chú sẽ cập nhật ngay vào ca này)
+                    </p>
+                  </div>
+
+                  <div className="flex flex-wrap gap-2 pt-1">
+                    <button
+                      type="button"
+                      disabled={savingNotes}
+                      onClick={async () => {
+                        const ok = await handleSaveNotes(detailsAssignment.id);
+                        if (ok) closeShiftDetails();
+                      }}
+                      className="flex items-center justify-center gap-2 rounded-lg bg-blue-500 px-3 py-2 text-xs font-semibold text-white hover:bg-blue-600 disabled:opacity-50"
+                    >
+                      {savingNotes ? (
+                        <div className="h-4 w-4 animate-spin rounded-full border-2 border-white/60 border-t-white" />
+                      ) : (
+                        <Check size={14} />
+                      )}
+                      Lưu ghi chú
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => handleCopyId(detailsAssignment.id)}
+                      className="flex items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                      title="Copy mã ca"
+                    >
+                      {copiedId === detailsAssignment.id ? (
+                        <CheckCheck size={14} className="text-emerald-500" />
+                      ) : (
+                        <Copy size={14} />
+                      )}
+                      {copiedId === detailsAssignment.id ? "Đã copy" : "Copy"}
+                    </button>
+
+                    <button
+                      type="button"
+                      disabled={deletingId === detailsAssignment.id}
+                      onClick={() => {
+                        setConfirmDeleteId(detailsAssignment.id);
+                        setConfirmDeleteOpen(true);
+                      }}
+                      className="flex items-center justify-center gap-2 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-600 hover:bg-rose-100 disabled:opacity-50"
+                      title="Xóa phân ca"
+                    >
+                      {deletingId === detailsAssignment.id ? (
+                        <div className="h-4 w-4 animate-spin rounded-full border-2 border-rose-400 border-t-transparent" />
+                      ) : (
+                        <Trash2 size={14} />
+                      )}
+                      Xóa
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        ) : null}
+        {confirmDeleteOpen && confirmDeleteId != null ? (
+          <ConfirmDeleteModal
+            open={confirmDeleteOpen}
+            title="Xóa phân ca?"
+            description="Phân ca này sẽ bị xóa khỏi lịch."
+            loading={deletingId === confirmDeleteId}
+            onCancel={() => {
+              setConfirmDeleteOpen(false);
+              setConfirmDeleteId(null);
+            }}
+            onConfirm={() => {
+              void (async () => {
+                const result = await handleDelete(confirmDeleteId);
+                if (result.ok) {
+                  showToast("success", result.message);
+                  await loadAll();
+                  closeShiftDetails();
+                } else {
+                  showToast("error", result.message);
+                }
+                setConfirmDeleteOpen(false);
+                setConfirmDeleteId(null);
+              })();
+            }}
+          />
+        ) : null}
         </div>
       )}
     </div>
