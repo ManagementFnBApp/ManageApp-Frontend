@@ -787,7 +787,7 @@ export default function PosPage() {
                 </p>
                 <p className="text-amber-600 text-xs mb-2">
                   Liên hệ SHOPOWNER để lấy{" "}
-                  <strong>Mã ca (Assignment ID)</strong> từ trang Ca làm việc.
+                  <strong>Mã ca (Shift ID)</strong> từ trang Ca làm việc.
                 </p>
                 <div className="flex gap-1.5">
                   <input
