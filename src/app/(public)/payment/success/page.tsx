@@ -11,6 +11,7 @@ function clearSession() {
   localStorage.removeItem("userId");
   localStorage.removeItem("role");
   localStorage.removeItem("shopId");
+  localStorage.removeItem("username");
 }
 
 function PaymentSuccessContent() {
