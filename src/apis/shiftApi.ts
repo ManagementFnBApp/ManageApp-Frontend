@@ -94,6 +94,34 @@ export const updateShiftAssignment = async (
 };
 
 /** DELETE /shifts/users/:id — Xóa phân ca */
-export const deleteShiftAssignment = async (id: number): Promise<void> => {
-  await apiClient.delete(`/shifts/users/${id}`);
+export const deleteShiftAssignment = async (id: number): Promise<string> => {
+  const res = await apiClient.delete(`/shifts/users/${id}`);
+
+  // Backend trả ResponseData: { data, statusCode, message }.
+  // Controller đang catch và trả về body (không set HTTP status), nên axios không throw.
+  const body = res.data as
+    | {
+        data?: { message?: string } | null;
+        statusCode?: number;
+        message?: string;
+      }
+    | undefined;
+
+  const statusCode = body?.statusCode;
+  const bodyMsg = body?.data?.message ?? body?.message;
+  const successMsg = bodyMsg ?? "Xóa phân ca thành công.";
+
+  if (typeof statusCode === "number") {
+    if (statusCode !== 200) {
+      const errMsg =
+        bodyMsg ??
+        "Xóa phân ca thất bại do tài khoản đã thực hiện tạo đơn hàng.";
+      throw new Error(errMsg);
+    }
+  } else if (bodyMsg && !body?.data) {
+    // Trường hợp backend không trả statusCode nhưng báo lỗi qua message.
+    throw new Error(bodyMsg);
+  }
+
+  return successMsg;
 };
