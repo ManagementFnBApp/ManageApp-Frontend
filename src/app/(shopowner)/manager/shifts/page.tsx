@@ -41,7 +41,10 @@ import {
 // ───────────────────────────────────────────────────────────────────
 
 function getErrorMsg(e: unknown): string {
-  const err = e as { message?: string; response?: { data?: { message?: string | string[] } } };
+  const err = e as {
+    message?: string;
+    response?: { data?: { message?: string | string[] } };
+  };
   const backendMsg = err?.response?.data?.message;
   if (Array.isArray(backendMsg)) return backendMsg.join(", ");
   if (typeof backendMsg === "string") return backendMsg;
@@ -167,7 +170,10 @@ export default function ShiftsPage() {
   const [assignments, setAssignments] = useState<ShiftAssignment[]>([]);
   const [templates, setTemplates] = useState<ShiftTemplate[]>([]);
   const [users, setUsers] = useState<AppUser[]>([]);
-  const [selfUser, setSelfUser] = useState<{ id: number; username: string } | null>(null);
+  const [selfUser, setSelfUser] = useState<{
+    id: number;
+    username: string;
+  } | null>(null);
 
   // ── Loading / Error ──
   const [loading, setLoading] = useState(true);
@@ -395,7 +401,9 @@ export default function ShiftsPage() {
   // ───────────────────────────────────────────────────────────────────
 
   const allUserOptions: { id: number; label: string }[] = [
-    ...(selfUser ? [{ id: selfUser.id, label: `${selfUser.username} (Tôi - Chủ shop)` }] : []),
+    ...(selfUser
+      ? [{ id: selfUser.id, label: `${selfUser.username} (Tôi - Chủ shop)` }]
+      : []),
     ...users.map((u) => ({ id: u.user_id, label: u.username })),
   ];
 
@@ -482,7 +490,6 @@ export default function ShiftsPage() {
       ) : (
         <div className="flex-1 flex flex-col gap-0">
           <div className="flex flex-col lg:flex-row gap-0">
-
           {/* ══════════════════════════════════════════════════════
               LEFT — Lịch tuần (timetable)
           ══════════════════════════════════════════════════════ */}
@@ -721,7 +728,6 @@ export default function ShiftsPage() {
               RIGHT — Phân ca mới + Quản lý ca mẫu
           ══════════════════════════════════════════════════════ */}
           <div className="w-full lg:w-[360px] shrink-0 flex flex-col bg-white border-t lg:border-t-0">
-
             {/* ── Phân ca mới ── */}
             <div className="p-5 border-b border-slate-100">
               <h2 className="text-sm font-bold text-slate-800 mb-4 flex items-center gap-2">
@@ -730,7 +736,6 @@ export default function ShiftsPage() {
               </h2>
 
               <div className="flex flex-col gap-3">
-
                 {/* Chọn ca */}
                 <div>
                   <label className="block text-xs font-medium text-slate-600 mb-1">
@@ -740,19 +745,31 @@ export default function ShiftsPage() {
                     <div className="relative flex-1">
                       <select
                         value={formShiftId}
-                        onChange={(e) => setFormShiftId(e.target.value === "" ? "" : Number(e.target.value))}
+                        onChange={(e) =>
+                          setFormShiftId(
+                            e.target.value === "" ? "" : Number(e.target.value),
+                          )
+                        }
                         className="w-full text-sm pl-3 pr-8 py-2 border border-slate-200 rounded-lg bg-white appearance-none focus:ring-2 focus:ring-blue-300 focus:border-blue-300 outline-none"
                       >
                         <option value="">-- Chọn ca --</option>
                         {templates.map((t) => (
-                          <option key={t.id} value={t.id}>{t.shift_name}</option>
+                          <option key={t.id} value={t.id}>
+                            {t.shift_name}
+                          </option>
                         ))}
                       </select>
-                      <ChevronDown size={14} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                      <ChevronDown
+                        size={14}
+                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"
+                      />
                     </div>
                     <button
                       type="button"
-                      onClick={() => { setShowNewTemplate((v) => !v); setTemplateError(null); }}
+                      onClick={() => {
+                        setShowNewTemplate((v) => !v);
+                        setTemplateError(null);
+                      }}
                       title="Tạo ca mới"
                       className="px-2.5 py-2 border border-slate-200 rounded-lg text-slate-500 hover:bg-slate-50 hover:text-blue-600 transition"
                     >
@@ -763,13 +780,17 @@ export default function ShiftsPage() {
                   {/* Inline tạo ca mẫu mới */}
                   {showNewTemplate && (
                     <div className="mt-2 p-3 bg-blue-50 border border-blue-100 rounded-lg">
-                      <p className="text-xs font-medium text-blue-700 mb-2">Tên ca mới</p>
+                      <p className="text-xs font-medium text-blue-700 mb-2">
+                        Tên ca mới
+                      </p>
                       <div className="flex gap-2">
                         <input
                           type="text"
                           value={newTemplateName}
                           onChange={(e) => setNewTemplateName(e.target.value)}
-                          onKeyDown={(e) => e.key === "Enter" && handleCreateTemplate()}
+                          onKeyDown={(e) =>
+                            e.key === "Enter" && handleCreateTemplate()
+                          }
                           placeholder="VD: Ca sáng, Ca chiều..."
                           className="flex-1 text-sm px-3 py-1.5 border border-blue-200 rounded-lg focus:ring-2 focus:ring-blue-300 outline-none"
                           autoFocus
@@ -784,14 +805,20 @@ export default function ShiftsPage() {
                         </button>
                         <button
                           type="button"
-                          onClick={() => { setShowNewTemplate(false); setTemplateError(null); setNewTemplateName(""); }}
+                          onClick={() => {
+                            setShowNewTemplate(false);
+                            setTemplateError(null);
+                            setNewTemplateName("");
+                          }}
                           className="text-slate-400 hover:text-slate-600 transition"
                         >
                           <X size={15} />
                         </button>
                       </div>
                       {templateError && (
-                        <p className="text-xs text-rose-500 mt-1">{templateError}</p>
+                        <p className="text-xs text-rose-500 mt-1">
+                          {templateError}
+                        </p>
                       )}
                     </div>
                   )}
@@ -805,15 +832,24 @@ export default function ShiftsPage() {
                   <div className="relative">
                     <select
                       value={formUserId}
-                      onChange={(e) => setFormUserId(e.target.value === "" ? "" : Number(e.target.value))}
+                      onChange={(e) =>
+                        setFormUserId(
+                          e.target.value === "" ? "" : Number(e.target.value),
+                        )
+                      }
                       className="w-full text-sm pl-3 pr-8 py-2 border border-slate-200 rounded-lg bg-white appearance-none focus:ring-2 focus:ring-blue-300 focus:border-blue-300 outline-none"
                     >
                       <option value="">-- Chọn người dùng --</option>
                       {allUserOptions.map((u) => (
-                        <option key={u.id} value={u.id}>{u.label}</option>
+                        <option key={u.id} value={u.id}>
+                          {u.label}
+                        </option>
                       ))}
                     </select>
-                    <ChevronDown size={14} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                    <ChevronDown
+                      size={14}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"
+                    />
                   </div>
                 </div>
 
@@ -863,7 +899,9 @@ export default function ShiftsPage() {
                 <button
                   type="button"
                   onClick={handleAssign}
-                  disabled={assigning || !formShiftId || !formUserId || !formDateYmd}
+                  disabled={
+                    assigning || !formShiftId || !formUserId || !formDateYmd
+                  }
                   className="w-full py-2.5 bg-blue-500 hover:bg-blue-600 text-white text-sm font-semibold rounded-lg transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                 >
                   {assigning ? (
@@ -896,7 +934,9 @@ export default function ShiftsPage() {
               ) : (
                 <div className="flex flex-col gap-2">
                   {templates.map((t) => {
-                    const count = assignments.filter((a) => a.shift_id === t.id).length;
+                    const count = assignments.filter(
+                      (a) => a.shift_id === t.id,
+                    ).length;
                     return (
                       <div
                         key={t.id}
@@ -904,7 +944,9 @@ export default function ShiftsPage() {
                       >
                         <div className="flex items-center gap-2">
                           <div className="w-2 h-2 rounded-full bg-indigo-400" />
-                          <span className="text-sm font-medium text-slate-700">{t.shift_name}</span>
+                          <span className="text-sm font-medium text-slate-700">
+                            {t.shift_name}
+                          </span>
                         </div>
                         <span className="text-xs text-slate-400 bg-white border border-slate-200 px-2 py-0.5 rounded-full font-mono">
                           {count} người
