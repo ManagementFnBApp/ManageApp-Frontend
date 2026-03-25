@@ -23,9 +23,18 @@ const PAYMENT_METHODS = [
 ];
 
 type Step = "loading" | "form" | "processing" | "success" | "error" | "empty";
+const ORDER_NOTE_MAX_LENGTH = 180;
 
 const formatPrice = (n: number) =>
   new Intl.NumberFormat("vi-VN").format(n) + " VND";
+
+function normalizeOrderNote(note: string): string {
+  return note
+    .replace(/\u0000/g, "")
+    .replace(/[\r\n\t]+/g, " ")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+}
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
@@ -169,12 +178,19 @@ export default function CheckoutOrderPage() {
       if (customerNote.trim())
         noteParts.push(`Ghi chú KH: ${customerNote.trim()}`);
 
+      const orderNote = normalizeOrderNote(noteParts.join(" | "));
+      if (orderNote.length > ORDER_NOTE_MAX_LENGTH) {
+        setErrorMsg(`Ghi chú đơn hàng tối đa ${ORDER_NOTE_MAX_LENGTH} ký tự.`);
+        setStep("error");
+        return;
+      }
+
       // 2️⃣ Tạo đơn hàng (PENDING) — userId BE lấy từ JWT
       const orderResponse = await createOrder({
         shiftUserId: cart.shiftId,
         customerId: finalCustomerId || undefined,
         totalAmount: cart.total,
-        note: noteParts.join(" | "),
+        note: orderNote || undefined,
         order_items: cart.items.map((item) => {
           const isShopProduct =
             item.productType === "SHOP" ||
@@ -223,9 +239,24 @@ export default function CheckoutOrderPage() {
       setOrderRef(String(orderResponse.id));
       setStep("success");
     } catch (err: unknown) {
-      const msg =
+      let msg =
         (err as { message?: string })?.message ||
         "Có lỗi xảy ra. Vui lòng thử lại.";
+      if (
+        typeof msg === "string" &&
+        msg.includes("Insufficient inventory quantity to fulfill the decrease")
+      ) {
+        msg =
+          "Số lượng hàng tồn kho ít hơn số lượng hàng thanh toán. Vui lòng kiểm tra lại kho hàng hoặc giảm số lượng.";
+      } else if (
+        typeof msg === "string" &&
+        msg.includes(
+          "Error processing order: Insufficient inventory quantity to fulfill the decrease",
+        )
+      ) {
+        msg =
+          "Lỗi sản phẩm chưa có số lượng trong inventory. Vui lòng kiểm tra lại kho hàng.";
+      }
       setErrorMsg(msg);
       setStep("error");
     }
@@ -608,9 +639,13 @@ export default function CheckoutOrderPage() {
                       value={customerNote}
                       onChange={(e) => setCustomerNote(e.target.value)}
                       rows={3}
+                      maxLength={120}
                       placeholder="Yêu cầu thêm (không bắt buộc)"
                       className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-800 outline-none transition focus:border-blue-500"
                     />
+                    <p className="mt-1 text-right text-[11px] text-gray-400">
+                      {customerNote.length}/120
+                    </p>
                   </div>
                 </div>
                 {loadingCustomers && (

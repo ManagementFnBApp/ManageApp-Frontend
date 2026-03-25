@@ -163,6 +163,8 @@ const STATUS_BADGE: Record<
 const formatPrice = (n: number) =>
   new Intl.NumberFormat("vi-VN").format(n) + " ₫";
 
+const ORDER_NOTE_MAX_LENGTH = 180;
+
 const formatDate = (iso: string) => {
   const d = new Date(iso);
   return d.toLocaleDateString("vi-VN", {
@@ -322,33 +324,83 @@ export default function OrdersPage() {
 
   const handleUpdate = async () => {
     if (!selectedOrder) return;
-    if (editForm.totalAmount <= 0) {
+    const totalAmount = Number(editForm.totalAmount);
+    // Shift User ID chỉ hiển thị (disabled), dùng giá trị hiện tại của đơn.
+    const shiftUserId = Number(selectedOrder.shiftUserId);
+    const normalizedNote = editForm.note.replace(/\u0000/g, "").trim();
+
+    if (!Number.isFinite(totalAmount) || totalAmount <= 0) {
       setEditError("Tổng tiền phải lớn hơn 0");
       return;
     }
+    if (!Number.isInteger(shiftUserId) || shiftUserId <= 0) {
+      setEditError("Ca làm việc (Shift User ID) không hợp lệ");
+      return;
+    }
+    if (normalizedNote.length > ORDER_NOTE_MAX_LENGTH) {
+      setEditError(`Ghi chú tối đa ${ORDER_NOTE_MAX_LENGTH} ký tự`);
+      return;
+    }
+
+    const normalizedItems = selectedOrder.items
+      .map((item) => {
+        const productId =
+          item.product_id != null && Number(item.product_id) > 0
+            ? Number(item.product_id)
+            : undefined;
+        const shopProductId =
+          item.shop_product_id != null && Number(item.shop_product_id) > 0
+            ? Number(item.shop_product_id)
+            : undefined;
+
+        // Backend yêu cầu mỗi item chỉ tham chiếu 1 loại sản phẩm.
+        if (productId && shopProductId) {
+          return {
+            shop_product_id: shopProductId,
+            quantity: Number(item.quantity),
+            unit_price: Number(item.unit_price),
+          };
+        }
+
+        return {
+          product_id: productId,
+          shop_product_id: shopProductId,
+          quantity: Number(item.quantity),
+          unit_price: Number(item.unit_price),
+        };
+      })
+      .filter(
+        (item) =>
+          (item.product_id != null || item.shop_product_id != null) &&
+          Number.isFinite(item.quantity) &&
+          item.quantity > 0 &&
+          Number.isFinite(item.unit_price) &&
+          item.unit_price >= 0,
+      );
+
+    if (normalizedItems.length === 0) {
+      setEditError("Đơn hàng không có món hợp lệ để cập nhật.");
+      return;
+    }
+
     setActionLoading("update");
     try {
       // Backend OrderDto yêu cầu order_items (bắt buộc) - gửi lại items hiện tại để tránh xóa
       await updateOrder(Number(selectedOrder.orderId), {
-        note: editForm.note || undefined,
-        totalAmount: editForm.totalAmount,
-        shiftUserId:
-          editForm.shiftUserId > 0 ? editForm.shiftUserId : undefined,
-        order_items: selectedOrder.items.map((item) => ({
-          product_id: item.product_id ?? undefined,
-          shop_product_id: item.shop_product_id ?? undefined,
-          quantity: item.quantity,
-          unit_price: item.unit_price,
-        })),
+        note: normalizedNote || undefined,
+        totalAmount,
+        shiftUserId,
+        customerId: selectedOrder.customerId ?? undefined,
+        order_items: normalizedItems,
       });
       setOrders((prev) =>
         prev.map((o) =>
           o.orderId === selectedOrder.orderId
             ? {
                 ...o,
-                note: editForm.note || null,
-                total: editForm.totalAmount,
-                shiftUserId: editForm.shiftUserId,
+                note: normalizedNote || null,
+                total: totalAmount,
+                shiftUserId,
               }
             : o,
         ),
@@ -357,15 +409,34 @@ export default function OrdersPage() {
         o
           ? {
               ...o,
-              note: editForm.note || null,
-              total: editForm.totalAmount,
-              shiftUserId: editForm.shiftUserId,
+              note: normalizedNote || null,
+              total: totalAmount,
+              shiftUserId,
             }
           : o,
       );
       setEditOpen(false);
-    } catch (e: any) {
-      setEditError(e?.message ?? "Cập nhật thất bại");
+    } catch (e: unknown) {
+      const err = e as {
+        message?: string | string[];
+        originalError?: {
+          response?: { data?: { message?: string | string[] } };
+        };
+        response?: { data?: { message?: string | string[] } };
+      };
+      const serverMessage =
+        err?.response?.data?.message ??
+        err?.originalError?.response?.data?.message ??
+        err?.message;
+      setEditError(
+        Array.isArray(serverMessage)
+          ? serverMessage.join("; ")
+          : typeof serverMessage === "string"
+            ? serverMessage
+            : serverMessage != null
+              ? JSON.stringify(serverMessage)
+              : "Cập nhật thất bại",
+      );
     } finally {
       setActionLoading(null);
     }
@@ -831,11 +902,18 @@ export default function OrdersPage() {
                   type="text"
                   value={editForm.note}
                   onChange={(e) =>
-                    setEditForm((f) => ({ ...f, note: e.target.value }))
+                    setEditForm((f) => ({
+                      ...f,
+                      note: e.target.value.slice(0, ORDER_NOTE_MAX_LENGTH),
+                    }))
                   }
                   placeholder="Ghi chú đơn hàng…"
+                  maxLength={ORDER_NOTE_MAX_LENGTH}
                   className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-300 outline-none"
                 />
+                <p className="mt-1 text-[11px] text-slate-400 text-right">
+                  {editForm.note.length}/{ORDER_NOTE_MAX_LENGTH}
+                </p>
               </div>
               <div>
                 <label className="block text-xs font-medium text-slate-500 mb-1">
@@ -845,13 +923,9 @@ export default function OrdersPage() {
                   type="number"
                   min={1}
                   value={editForm.shiftUserId}
-                  onChange={(e) =>
-                    setEditForm((f) => ({
-                      ...f,
-                      shiftUserId: Number(e.target.value),
-                    }))
-                  }
-                  className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-300 outline-none"
+                  disabled
+                  readOnly
+                  className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg bg-slate-100 text-slate-500 cursor-not-allowed outline-none"
                 />
               </div>
               <div>

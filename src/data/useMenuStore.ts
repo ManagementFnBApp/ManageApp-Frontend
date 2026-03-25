@@ -72,31 +72,46 @@ export function useMenuStore() {
     setProducts((prev) => prev.filter((p) => p.productId !== id));
   }, []);
 
-  const toggleActive = useCallback(async (id: number) => {
-    setProducts((prevProducts) => {
-      const current = prevProducts.find((p) => p.productId === id);
-      if (!current) return prevProducts;
+  const toggleActive = useCallback(
+    async (id: number) => {
+      const current = products.find((p) => p.productId === id);
+      if (!current) return;
 
-      const optimisticProducts = prevProducts.map((p) =>
-        p.productId === id ? { ...p, isActive: !p.isActive } : p
+      const nextIsActive = !current.isActive;
+
+      setProducts((prev) =>
+        prev.map((p) =>
+          p.productId === id ? { ...p, isActive: nextIsActive } : p,
+        ),
       );
 
-      updateShopProduct(id, { isActive: !current.isActive })
-        .then((updated) => {
-          setProducts((prev) =>
-            prev.map((p) => (p.productId === id ? updated : p))
-          );
-        })
-        .catch((err) => {
-          console.error('Toggle active failed:', err);
-          setProducts((prev) =>
-            prev.map((p) => (p.productId === id ? current : p))
-          );
+      try {
+        const updated = await updateShopProduct(id, {
+          categoryId: current.categoryId,
+          productName: current.productName,
+          barcode: current.barcode ?? undefined,
+          description: current.description ?? undefined,
+          measureUnit: current.measureUnit ?? undefined,
+          listPrice: current.listPrice,
+          importPrice: current.importPrice,
+          isActive: nextIsActive,
         });
 
-      return optimisticProducts;
-    });
-  }, []);
+        setProducts((prev) =>
+          prev.map((p) => (p.productId === id ? updated : p)),
+        );
+      } catch (err) {
+        console.error("Toggle active failed:", err);
+        setProducts((prev) =>
+          prev.map((p) =>
+            p.productId === id ? { ...p, isActive: current.isActive } : p,
+          ),
+        );
+        throw err;
+      }
+    },
+    [products],
+  );
 
   const refresh = useCallback(() => {
     void fetchProducts();
