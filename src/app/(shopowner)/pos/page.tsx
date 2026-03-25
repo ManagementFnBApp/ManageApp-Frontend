@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { ArrowLeft, Trash2, X } from "lucide-react";
-import { saveDraft, getDraft, clearDraft } from "@/data/useOrderStore";
+import { clearDraft } from "@/data/useOrderStore";
 import { getOrders } from "@/apis/orderApi";
 import {
   getMyShiftAssignmentsAsOwner,
@@ -14,6 +14,7 @@ import {
   getPosShopProducts,
   getPosSystemProducts,
 } from "@/apis/shopProductApi";
+import { getShopCategories } from "@/apis/shopCategoryApi";
 import { getInventories, getInventoryItems } from "@/apis/inventory";
 import { savePosCart } from "@/lib/posCart";
 import type { PosShopProduct } from "@/apis/shopProductApi";
@@ -65,10 +66,6 @@ export default function PosPage() {
   const [shiftLoadError, setShiftLoadError] = useState<string | null>(null);
   // Khi STAFF không tự lấy được shiftUserId → cho phép nhập thủ công
   const [manualShiftId, setManualShiftId] = useState("");
-  // Track whether draft load has completed - using state (not ref) so the auto-clear effect
-  // only runs AFTER the re-render caused by setDraftLoadDone(true), ensuring cart state
-  // has already been updated with draft items before the empty-check fires.
-  const [draftLoadDone, setDraftLoadDone] = useState(false);
   const [inventoryItemQuantityByKey, setInventoryItemQuantityByKey] = useState<
     Map<string, number>
   >(new Map());
@@ -82,39 +79,37 @@ export default function PosPage() {
   useEffect(() => {
     (async () => {
       try {
-        const [shopProducts, systemProducts] = await Promise.all([
-          getPosShopProducts(true),
-          getPosSystemProducts(true),
-        ]);
+        const [shopProducts, systemProducts, selectedShopCategories] =
+          await Promise.all([
+            getPosShopProducts(true),
+            getPosSystemProducts(true),
+            getShopCategories(),
+          ]);
 
-        // Combine both lists
-        const allProducts = [...shopProducts, ...systemProducts];
-        setPosProducts(allProducts);
+        const selectedCategoryIds = new Set(
+          selectedShopCategories
+            .map((cat) => Number(cat.id))
+            .filter((id) => id > 0),
+        );
 
-        // Create barcode -> product mapping
-        // Keep list only; barcode map is no longer needed in state.
-
-        // Extract unique categories from all products
-        const uniqueCategories = Array.from(
-          new Map(
-            allProducts
-              .filter((p) => p.categoryId)
-              .map((p) => {
-                const categoryName = p.categoryName;
-                return [
-                  String(p.categoryId),
-                  typeof categoryName === "string" &&
-                  categoryName.trim().length > 0
-                    ? categoryName.trim()
-                    : `Danh mục ${p.categoryId}`,
-                ];
-              }),
-          ).entries(),
-        )
-          .map(([id, label]) => ({ id, label }))
+        const selectedCategories = selectedShopCategories
+          .filter((cat) => Number(cat.id) > 0)
+          .map((cat) => ({
+            id: String(cat.id),
+            label:
+              typeof cat.name === "string" && cat.name.trim().length > 0
+                ? cat.name.trim()
+                : `Danh mục ${cat.id}`,
+          }))
           .sort((a, b) => a.label.localeCompare(b.label, "vi"));
 
-        setCategories([{ id: "all", label: "Tất Cả" }, ...uniqueCategories]);
+        // Chỉ hiển thị sản phẩm thuộc các danh mục shop đã chọn ở trang Menu.
+        const allProducts = [...shopProducts, ...systemProducts].filter((p) =>
+          selectedCategoryIds.has(Number(p.categoryId)),
+        );
+        setPosProducts(allProducts);
+
+        setCategories([{ id: "all", label: "Tất Cả" }, ...selectedCategories]);
       } catch (err) {
         console.error("Không thể tải sản phẩm POS", err);
       }
@@ -270,46 +265,6 @@ export default function PosPage() {
     };
   }, []);
 
-  // Load saved draft for this table when component mounts
-  useEffect(() => {
-    if (tableId) {
-      const draft = getDraft(tableId);
-      if (draft && draft.items && draft.items.length > 0) {
-        const cartItems = draft.items.map((item) => {
-          // Convert OrderItem to CartItem
-          // OrderItem has: productId, shopProductId?, name, price, quantity
-          const productId = item.productId || 0;
-          const shopProductId = item.shopProductId || item.productId || 0;
-          const barcode = `${item.shopProductId ? "SHOP" : "SYSTEM"}:${shopProductId}`;
-
-          return {
-            barcode,
-            name: item.name,
-            price: item.price,
-            quantity: item.quantity,
-            productType: item.shopProductId ? "SHOP" : "SYSTEM",
-            productId,
-            shopProductId,
-          } as CartItem;
-        });
-        setCart(cartItems);
-      }
-    }
-    // Setting this state causes a re-render. The auto-clear effect below will only
-    // fire AFTER that re-render, so cart will already have the draft items by then.
-    setDraftLoadDone(true);
-  }, [tableId]);
-
-  // Auto-clear draft when cart becomes empty AFTER initial draft load.
-  // Using draftLoadDone (state, not ref) ensures this only runs after the re-render
-  // triggered by setDraftLoadDone(true), by which time setCart has already applied.
-  useEffect(() => {
-    if (!draftLoadDone) return;
-    if (cart.length === 0 && tableId) {
-      clearDraft(tableId);
-    }
-  }, [cart, draftLoadDone, tableId]);
-
   const filteredProducts = posProducts.filter((p) => {
     const matchCategory =
       activeCategory === "all" || String(p.categoryId) === activeCategory;
@@ -386,39 +341,14 @@ export default function PosPage() {
 
   const clearCart = () => {
     setCart([]);
-    // clearDraft is handled by the cart useEffect above
+    clearDraft(tableId);
+    setCheckoutError(null);
   };
 
   const total = cart.reduce((sum, i) => sum + i.price * i.quantity, 0);
 
   const formatPrice = (n: number) =>
     new Intl.NumberFormat("vi-VN").format(n) + " VND";
-
-  const handleSaveOrder = () => {
-    try {
-      if (cart.length === 0) {
-        // Empty cart → clear draft (discard order for this table)
-        clearDraft(tableId);
-        setCheckoutError(null);
-        alert("Đã xóa đơn hàng. Bàn đã được giải phóng.");
-        return;
-      }
-
-      saveDraft(tableId, {
-        items: cart,
-        total,
-        cashier: username,
-      });
-
-      setCheckoutError(null);
-      alert("Đơn hàng đã được lưu! Tiếp tục chỉnh sửa hoặc thanh toán.");
-    } catch (error) {
-      const errorMessage =
-        error instanceof Error ? error.message : "Lỗi khi lưu đơn";
-      setCheckoutError(errorMessage);
-      console.error("Save order error:", error);
-    }
-  };
 
   const handleConfirmManualShift = () => {
     const id = Number(manualShiftId.trim());
@@ -772,14 +702,6 @@ export default function PosPage() {
                   <span className="text-xs font-medium text-gray-500">
                     {cart.length} món
                   </span>
-                  <button
-                    type="button"
-                    onClick={clearCart}
-                    className="flex items-center gap-1 text-xs text-red-500 hover:text-red-700 hover:bg-red-50 px-2 py-1 rounded-lg transition"
-                  >
-                    <Trash2 size={12} />
-                    Xóa đơn
-                  </button>
                 </div>
                 <ul className="space-y-2">
                   {cart.map((item) => {
@@ -897,19 +819,11 @@ export default function PosPage() {
             <div className="flex gap-2">
               <button
                 type="button"
-                onClick={handleSaveOrder}
-                disabled={isCheckoutLoading}
-                className={`flex-1 py-3 rounded-lg font-semibold transition ${
-                  cart.length === 0
-                    ? "bg-red-400 hover:bg-red-500 text-white"
-                    : "bg-amber-500 hover:bg-amber-600 text-white"
-                } disabled:opacity-50 disabled:cursor-not-allowed`}
+                onClick={clearCart}
+                disabled={cart.length === 0 || isCheckoutLoading}
+                className="flex-1 py-3 rounded-lg bg-red-500 text-white font-semibold hover:bg-red-600 disabled:opacity-50 disabled:cursor-not-allowed transition"
               >
-                {isCheckoutLoading
-                  ? "Đang xử lý..."
-                  : cart.length === 0
-                    ? "Xóa đơn"
-                    : "Lưu đơn"}
+                Xóa đơn
               </button>
               <button
                 type="button"

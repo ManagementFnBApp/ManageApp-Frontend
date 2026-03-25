@@ -1,6 +1,8 @@
 import { apiClient } from "../configs/axios";
 import type { Product } from "./productApi";
 
+export type { Product } from "./productApi";
+
 // Payload riêng cho shop-products (backend dùng FileInterceptor('image'))
 export type CreateShopProductPayload = {
   categoryId: number;
