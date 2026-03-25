@@ -495,7 +495,7 @@ export default function AuthPage() {
                           type="button"
                           onClick={() => setShowRegisterPassword((v) => !v)}
                           className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
-                          tabIndex={-1}
+                          aria-label={showRegisterPassword ? "Ẩn mật khẩu" : "Hiện mật khẩu"}
                         >
                           {showRegisterPassword ? (
                             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
