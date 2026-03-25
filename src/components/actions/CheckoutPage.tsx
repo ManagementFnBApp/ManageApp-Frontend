@@ -6,11 +6,13 @@ import {
   createSubscriptionTenant,
   createSubscriptionPayment,
   confirmPayment,
+  createPayosPayment,
 } from "@/apis/subscription";
 import { updateLocalRole, ROLE_CODE_SHOP_OWNER } from "@/apis/auth";
 import Link from "next/link";
 
 const PAYMENT_METHODS = [
+  { id: "PAYOS", label: "PayOS (QR Banking)", icon: "🏧" },
   { id: "BANK_TRANSFER", label: "Chuyển khoản ngân hàng", icon: "🏦" },
   { id: "MOMO", label: "Ví MoMo", icon: "📱" },
   { id: "VNPAY", label: "VNPay", icon: "💳" },
@@ -28,7 +30,7 @@ function CheckoutContent() {
 
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [username, setUsername] = useState("");
-  const [selectedMethod, setSelectedMethod] = useState("BANK_TRANSFER");
+  const [selectedMethod, setSelectedMethod] = useState("PAYOS");
   const [step, setStep] = useState<"form" | "processing" | "success" | "error">(
     "form",
   );
@@ -85,17 +87,27 @@ function CheckoutContent() {
     setStep("processing");
     setErrorMsg("");
     try {
-      // Bước 1: Tạo shop + shop subscription (POST /subscriptions/shops) — đã nhập tên cửa hàng
+      // Bước 1: Tạo shop + shop subscription (POST /subscriptions/shops)
       const shopSub = await createSubscriptionTenant(subscriptionId, name);
 
-      // Bước 2: Tạo payment pending (POST /subscriptions/payments)
+      if (selectedMethod === "PAYOS") {
+        // Luồng PayOS: tạo link thanh toán rồi redirect sang PayOS
+        const payosResult = await createPayosPayment(shopSub.sub_shop_id);
+        if (!payosResult?.checkoutUrl) {
+          throw new Error("Không nhận được link thanh toán từ PayOS.");
+        }
+        // Redirect toàn trang sang cổng thanh toán PayOS
+        window.location.href = payosResult.checkoutUrl;
+        return;
+      }
+
+      // Luồng thủ công: tạo payment pending → confirm ngay
       const payment = await createSubscriptionPayment(
         shopSub.sub_shop_id,
         selectedMethod,
         price,
       );
 
-      // Bước 3: Confirm thanh toán (PUT /subscriptions/payments/:id/status) → kích hoạt shop + role SHOPOWNER
       await confirmPayment(payment.sub_payment_id);
 
       updateLocalRole(ROLE_CODE_SHOP_OWNER);
@@ -171,15 +183,21 @@ function CheckoutContent() {
               </span>
             </div>
           </div>
-          <p className="text-amber-600 text-sm mb-4">
-            Vui lòng đăng nhập lại để nhận quyền Shop Owner và vào trang quản lý.
-          </p>
-          <Link
-            href={`/auth?mode=login&returnUrl=${encodeURIComponent('/manager')}`}
+          <button
+            onClick={() => {
+              // Xóa token cũ trước để auth guard không redirect ra ngoài
+              localStorage.removeItem("accessToken");
+              localStorage.removeItem("userId");
+              localStorage.removeItem("username");
+              localStorage.removeItem("role");
+              localStorage.removeItem("shopId");
+              // Sau đó mới navigate → login để lấy token mới có role SHOPOWNER
+              router.push("/auth?mode=login&returnUrl=/manager");
+            }}
             className="block w-full py-4 bg-blue-600 text-white rounded-xl font-semibold text-lg hover:bg-blue-700 transition-all hover:-translate-y-0.5 hover:shadow-lg text-center"
           >
-            Đăng nhập lại → Vào quản lý
-          </Link>
+            Đăng nhập lại → Vào trang Quản Lý Cửa Hàng
+          </button>
         </div>
       </div>
     );
@@ -406,6 +424,13 @@ function CheckoutContent() {
                 <h4 className="font-semibold text-yellow-800 mb-2 flex items-center gap-2">
                   <span>💡</span> Hướng dẫn thanh toán
                 </h4>
+                {selectedMethod === "PAYOS" && (
+                  <div className="text-sm text-yellow-700 space-y-1">
+                    <p>Bạn sẽ được chuyển đến trang thanh toán <strong>PayOS</strong> sau khi nhấn xác nhận.</p>
+                    <p>Quét mã QR bằng ứng dụng ngân hàng bất kỳ để thanh toán nhanh chóng.</p>
+                    <p className="text-green-700 font-medium">✓ Shop được kích hoạt ngay sau khi thanh toán thành công.</p>
+                  </div>
+                )}
                 {selectedMethod === "BANK_TRANSFER" && (
                   <div className="text-sm text-yellow-700 space-y-1">
                     <p>
@@ -463,7 +488,9 @@ function CheckoutContent() {
                 onClick={handleSubmit}
                 className="w-full py-4 bg-blue-600 text-white rounded-xl font-bold text-lg hover:bg-blue-700 transition-all hover:-translate-y-0.5 hover:shadow-xl active:translate-y-0"
               >
-                Xác nhận thanh toán — {price.toLocaleString("vi-VN")}đ
+                {selectedMethod === "PAYOS"
+                  ? `Thanh toán qua PayOS — ${price.toLocaleString("vi-VN")}đ`
+                  : `Xác nhận thanh toán — ${price.toLocaleString("vi-VN")}đ`}
               </button>
             </div>
           </div>

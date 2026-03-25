@@ -131,5 +131,38 @@ export const confirmPayment = async (paymentId: number): Promise<SubscriptionPay
   return raw as unknown as SubscriptionPayment;
 };
 
+/**
+ * Tạo thanh toán PayOS cho subscription (cần login)
+ * Backend: POST /subscriptions/payments/payos, body { sub_shop_id }
+ * Response: { checkoutUrl, qrCode }
+ */
+export interface PayosPaymentResult {
+  paymentId: number;
+  amount: number;
+  checkoutUrl: string;
+  qrCode?: string;
+  orderCode: number;
+}
+
+export const createPayosPayment = async (
+  subShopId: number,
+): Promise<PayosPaymentResult> => {
+  const response = await apiClient.post('/subscriptions/payments/payos', {
+    sub_shop_id: subShopId,
+  });
+  const raw = unwrap<Record<string, unknown>>(response.data);
+  return raw as unknown as PayosPaymentResult;
+};
+
+/**
+ * Tạo PayOS để gia hạn subscription (cần login, phải là SHOPOWNER)
+ * Backend: POST /subscriptions/renew/payos
+ */
+export const renewPayosSubscription = async (): Promise<PayosPaymentResult> => {
+  const response = await apiClient.post('/subscriptions/renew/payos');
+  const raw = unwrap<Record<string, unknown>>(response.data);
+  return raw as unknown as PayosPaymentResult;
+};
+
 // ===== ALIASES =====
 export const createSubscriptionTenant = registerShopSubscription;

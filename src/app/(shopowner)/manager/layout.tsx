@@ -25,6 +25,7 @@ import {
   Users,
   Clock,
   UserCheck,
+  CreditCard,
 } from "lucide-react";
 import { handleLogout, getStoredRoleNormalized } from "@/apis/auth";
 import {
@@ -42,12 +43,13 @@ const MAIN_ITEMS_STAFF = [
   { href: "/manager/inventory", label: "Kho hàng", icon: PackageOpen },
 ];
 
-// Shopowner thấy thêm: Quản lý Menu, Quản lý nhân viên, Quản lý ca, Quản lý khách hàng
+// Shopowner thấy thêm: Quản lý Menu, Quản lý nhân viên, Quản lý ca, Quản lý khách hàng, Gói dịch vụ
 const MAIN_ITEMS_SHOPOWNER_EXTRA = [
   { href: "/manager/menu", label: "Quản lý Menu", icon: UtensilsCrossed },
   { href: "/manager/staff", label: "Quản lý nhân viên", icon: Users },
   { href: "/manager/shifts", label: "Quản lý ca", icon: Clock },
   { href: "/manager/customers", label: "Quản lý khách hàng", icon: UserCheck },
+  { href: "/manager/subscription", label: "Gói dịch vụ", icon: CreditCard },
 ];
 
 const REPORT_ITEMS = [
