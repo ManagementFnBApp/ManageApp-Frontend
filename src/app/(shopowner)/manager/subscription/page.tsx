@@ -3,8 +3,6 @@
 import { useState, useEffect } from "react";
 import {
   renewPayosSubscription,
-  getMyShopSubscription,
-  type ShopSubscription,
 } from "@/apis/subscription";
 import { BASE_URL } from "@/global-configs";
 import {
@@ -13,11 +11,6 @@ import {
   CheckCircle2,
   AlertCircle,
   Info,
-  CalendarDays,
-  CalendarCheck2,
-  RotateCcw,
-  BadgeCheck,
-  BadgeX,
   Loader2,
   Clock,
   ExternalLink,
@@ -44,43 +37,16 @@ function extractPendingPaymentId(errorMsg: string): number | null {
   return match ? parseInt(match[1], 10) : null;
 }
 
-function formatDate(raw: string | null | undefined): string {
-  if (!raw) return "—";
-  try {
-    return new Intl.DateTimeFormat("vi-VN", {
-      day: "2-digit",
-      month: "2-digit",
-      year: "numeric",
-      timeZone: "Asia/Ho_Chi_Minh",
-    }).format(new Date(raw));
-  } catch {
-    return raw;
-  }
-}
-
-function daysUntil(raw: string | null | undefined): number | null {
-  if (!raw) return null;
-  try {
-    const diff = new Date(raw).getTime() - Date.now();
-    return Math.ceil(diff / (1000 * 60 * 60 * 24));
-  } catch {
-    return null;
-  }
-}
-
 export default function SubscriptionPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
   const [pendingPaymentId, setPendingPaymentId] = useState<number | null>(null);
-
-  const [subInfo, setSubInfo] = useState<ShopSubscription | null>(null);
-  const [subLoading, setSubLoading] = useState(true);
+  const [bootLoading, setBootLoading] = useState(true);
 
   useEffect(() => {
-    setSubLoading(true);
-    getMyShopSubscription()
-      .then(setSubInfo)
-      .finally(() => setSubLoading(false));
+    // Không gọi API "thông tin gói" vì backend hiện không có route tương ứng.
+    // Trang chỉ giữ chức năng gia hạn qua PayOS.
+    setBootLoading(false);
   }, []);
 
   const handleRenew = async () => {
@@ -110,10 +76,6 @@ export default function SubscriptionPage() {
     }
   };
 
-  const daysLeft = daysUntil(subInfo?.end_date);
-  const isExpired = subInfo?.is_expired ?? false;
-  const isExpiringSoon = daysLeft !== null && daysLeft >= 0 && daysLeft <= 7;
-
   return (
     <div className="p-6 max-w-2xl flex flex-col gap-4">
       <div>
@@ -124,88 +86,14 @@ export default function SubscriptionPage() {
       </div>
 
       {/* ── Thông tin gói hiện tại ── */}
-      <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
-        {/* <div className="flex items-center gap-3 mb-5">
-          <div className="w-10 h-10 bg-indigo-100 rounded-xl flex items-center justify-center shrink-0">
-            <CalendarDays size={20} className="text-indigo-600" />
-          </div>
-          <div>
-            <h3 className="font-semibold text-slate-800">Thông tin gói hiện tại</h3>
-            <p className="text-sm text-slate-500">Ngày kích hoạt và hạn sử dụng</p>
-          </div>
-        </div> */}
-
-        {subLoading ? (
+      {bootLoading && (
+        <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
           <div className="flex items-center gap-2 text-slate-400 text-sm py-3">
             <Loader2 size={16} className="animate-spin" />
             Đang tải thông tin...
           </div>
-        ) : subInfo ? (
-          <>
-            {/* Status badge */}
-            <div className="flex flex-wrap gap-2 mb-4">
-              {isExpired ? (
-                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-red-50 border border-red-200 text-xs font-semibold text-red-700">
-                  <BadgeX size={13} />
-                  Đã hết hạn
-                </span>
-              ) : isExpiringSoon ? (
-                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-50 border border-amber-200 text-xs font-semibold text-amber-700">
-                  <AlertCircle size={13} />
-                  Sắp hết hạn ({daysLeft} ngày)
-                </span>
-              ) : (
-                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-50 border border-emerald-200 text-xs font-semibold text-emerald-700">
-                  <BadgeCheck size={13} />
-                  Đang hoạt động
-                  {daysLeft !== null && ` · còn ${daysLeft} ngày`}
-                </span>
-              )}
-
-              {subInfo.number_of_renewals > 0 && (
-                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-blue-50 border border-blue-100 text-xs font-medium text-blue-700">
-                  <RotateCcw size={12} />
-                  Đã gia hạn {subInfo.number_of_renewals} lần
-                </span>
-              )}
-            </div>
-
-            {/* Date info grid */}
-            <div className="grid grid-cols-2 gap-3">
-              <div className="flex flex-col gap-1 p-3 rounded-xl bg-slate-50 border border-slate-100">
-                <div className="flex items-center gap-1.5 text-xs font-medium text-slate-500">
-                  <CalendarCheck2 size={13} className="text-blue-400" />
-                  Ngày bắt đầu
-                </div>
-                <p className="text-sm font-semibold text-slate-800">
-                  {formatDate(subInfo.start_date)}
-                </p>
-              </div>
-
-              <div className={`flex flex-col gap-1 p-3 rounded-xl border ${
-                isExpired
-                  ? "bg-red-50 border-red-100"
-                  : isExpiringSoon
-                    ? "bg-amber-50 border-amber-100"
-                    : "bg-slate-50 border-slate-100"
-              }`}>
-                <div className="flex items-center gap-1.5 text-xs font-medium text-slate-500">
-                  <CalendarDays size={13} className={isExpired ? "text-red-400" : isExpiringSoon ? "text-amber-400" : "text-emerald-400"} />
-                  Ngày kết thúc
-                </div>
-                <p className={`text-sm font-semibold ${isExpired ? "text-red-700" : isExpiringSoon ? "text-amber-700" : "text-slate-800"}`}>
-                  {formatDate(subInfo.end_date)}
-                </p>
-              </div>
-            </div>
-
-          </>
-        ) : (
-          <p className="text-sm text-slate-400 py-2">
-            Không thể tải thông tin gói — vui lòng kiểm tra kết nối hoặc liên hệ hỗ trợ.
-          </p>
-        )}
-      </div>
+        </div>
+      )}
 
       {/* ── Gia hạn ── */}
       <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">

@@ -3,7 +3,6 @@
 import { useEffect, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { ROLE_CODE_ADMIN, ROLE_CODE_SHOP_OWNER, getStoredRoleNormalized } from '@/apis/auth';
-import { getMyShopSubscriptionStrict } from '@/apis/subscription';
 
 export default function ShopOwnerGuardLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
@@ -31,23 +30,7 @@ export default function ShopOwnerGuardLayout({ children }: { children: React.Rea
         return;
       }
 
-      // Kiểm tra hạn subscription — chỉ áp dụng cho SHOPOWNER.
-      // STAFF không cần check vì họ không có quyền gia hạn.
-      if (role === ROLE_CODE_SHOP_OWNER) {
-        try {
-          const sub = await getMyShopSubscriptionStrict();
-          const isExpired = Boolean(sub?.is_expired);
-          const isSubscriptionPage = pathname?.startsWith('/manager/subscription');
-
-          if (isExpired && !isSubscriptionPage) {
-            router.replace('/manager/subscription');
-            return;
-          }
-        } catch {
-          // Lỗi mạng / API tạm thời → fail-open: không chặn người dùng.
-          // Tránh redirect nhầm khi subscription vẫn còn hạn nhưng mạng bị gián đoạn.
-        }
-      }
+      // Backend hiện chưa có API subscription "shops/me", nên không kiểm tra hạn ở frontend.
 
       if (!cancelled) setAuthorized(true);
     };

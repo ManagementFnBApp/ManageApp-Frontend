@@ -108,13 +108,19 @@ export const deleteShiftAssignment = async (id: number): Promise<string> => {
     | undefined;
 
   const statusCode = body?.statusCode;
-  const successMsg =
-    body?.data?.message ?? body?.message ?? "Xóa phân ca thành công.";
+  const bodyMsg = body?.data?.message ?? body?.message;
+  const successMsg = bodyMsg ?? "Xóa phân ca thành công.";
 
-  if (typeof statusCode === "number" && statusCode !== 200) {
-    const errMsg =
-       "Xóa phân ca thất bại do tài khoản đã thực hiện tạo đơn hàng.";
-    throw new Error(errMsg);
+  if (typeof statusCode === "number") {
+    if (statusCode !== 200) {
+      const errMsg =
+        bodyMsg ??
+        "Xóa phân ca thất bại do tài khoản đã thực hiện tạo đơn hàng.";
+      throw new Error(errMsg);
+    }
+  } else if (bodyMsg && !body?.data) {
+    // Trường hợp backend không trả statusCode nhưng báo lỗi qua message.
+    throw new Error(bodyMsg);
   }
 
   return successMsg;

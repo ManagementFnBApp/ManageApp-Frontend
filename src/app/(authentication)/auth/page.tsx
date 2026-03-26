@@ -4,6 +4,7 @@ import Image from "next/image";
 import { useState, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { login, register, ROLE_CODE_ADMIN, ROLE_CODE_SHOP_OWNER } from "@/apis/auth";
+import { BASE_URL } from "@/global-configs";
 
 const ROLE_CODE_STAFF = "STAFF";
 
@@ -20,6 +21,20 @@ export default function AuthPage() {
   const [isLogin, setIsLogin] = useState(mode !== "register");
   const [isAnimating, setIsAnimating] = useState(false);
   const router = useRouter();
+  const returnUrl = searchParams?.get("returnUrl");
+
+  const handleGoogleLogin = () => {
+    // Let backend start Google OAuth; backend should redirect back to FE callback.
+    const safeReturnUrl =
+      returnUrl &&
+      typeof returnUrl === "string" &&
+      returnUrl.startsWith("/") &&
+      !returnUrl.startsWith("//")
+        ? returnUrl
+        : "";
+    const qs = safeReturnUrl ? `?returnUrl=${encodeURIComponent(safeReturnUrl)}` : "";
+    window.location.href = `${BASE_URL}/auth/google${qs}`;
+  };
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -85,7 +100,6 @@ export default function AuthPage() {
       setSuccessMessage("Bạn đã đăng nhập thành công!");
 
       const role = (response.role ?? "").toString().toUpperCase();
-      const returnUrl = searchParams?.get("returnUrl");
       let destination = "/";
       if (response.role === "ADMIN") {
         destination = "/admin";
@@ -477,11 +491,10 @@ export default function AuthPage() {
                       <div className="relative animate-[slideUp_0.7s_ease-out_0.2s_both]">
                         <input
                           id="register-password"
-                          type="text"
+                          type={showRegisterPassword ? "text" : "password"}
                           required
                           minLength={6}
                           autoComplete="new-password"
-                          style={showRegisterPassword ? {} : { WebkitTextSecurity: "disc" } as React.CSSProperties}
                           className="w-full px-4 py-3 pr-10 bg-gray-50 border-0 rounded-xl outline-none transition-all focus:bg-white focus:ring-2 focus:ring-purple-500"
                           placeholder="Password"
                           value={registerData.password}
@@ -496,7 +509,7 @@ export default function AuthPage() {
                           type="button"
                           onClick={() => setShowRegisterPassword((v) => !v)}
                           className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
-                          tabIndex={-1}
+                          aria-label={showRegisterPassword ? "Ẩn mật khẩu" : "Hiện mật khẩu"}
                         >
                           {showRegisterPassword ? (
                             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -532,7 +545,7 @@ export default function AuthPage() {
                           type="button"
                           onClick={() => setShowRegisterConfirmPassword((v) => !v)}
                           className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
-                          tabIndex={-1}
+                          aria-label="Toggle confirm password visibility"
                         >
                           {showRegisterConfirmPassword ? (
                             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -573,6 +586,8 @@ export default function AuthPage() {
                   <button
                     className="w-12 h-12 rounded-full border-2 border-gray-200 flex items-center justify-center hover:border-blue-500 hover:bg-blue-50 transition-all hover:scale-110"
                     title="Google"
+                    type="button"
+                    onClick={handleGoogleLogin}
                   >
                     <svg className="w-5 h-5" viewBox="0 0 24 24">
                       <path

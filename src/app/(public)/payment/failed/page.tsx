@@ -6,10 +6,6 @@ import Link from "next/link";
 
 const PAYOS_BASE_ORDER_CODE = 700000000;
 
-function buildPayosCheckoutUrl(orderCode: string): string {
-  return `https://pay.payos.vn/web/${orderCode}`;
-}
-
 function isRenewPayment(orderCode: string): boolean {
   const code = Number(orderCode);
   if (!code) return false;
@@ -88,18 +84,6 @@ function PaymentFailedContent() {
         </div>
 
         <div className="flex flex-col gap-3">
-          {/* Không hiện "Thử lại" khi đơn hàng đã hết hạn trên PayOS */}
-          {orderCode && !isOrderNotFound && (
-            <a
-              href={buildPayosCheckoutUrl(orderCode)}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="w-full py-4 bg-blue-600 text-white rounded-xl font-bold text-lg hover:bg-blue-700 transition-all hover:-translate-y-0.5 hover:shadow-lg text-center block"
-            >
-              Thử lại thanh toán này
-            </a>
-          )}
-
           {isRenew ? (
             <Link
               href="/manager/subscription"

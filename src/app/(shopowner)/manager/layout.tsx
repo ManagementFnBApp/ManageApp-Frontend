@@ -243,28 +243,33 @@ export default function ManagerLayout({
               </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-48">
-              <DropdownMenuItem disabled className="gap-2 opacity-60">
-                <User size={14} />
-                <span className="text-xs">{managerName}</span>
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
               <DropdownMenuItem
                 className="gap-2 cursor-pointer"
-                onClick={() =>
-                  router.push(role === "SHOPOWNER" ? "/" : "/manager")
-                }
+                onClick={() => router.push("/manager/profile")}
               >
-                <Home size={14} />
-                {role === "SHOPOWNER" ? "Trang chủ" : "Về trang chính"}
+                <User size={15} />
+                <span className="text-xs">Profile</span>
               </DropdownMenuItem>
               <DropdownMenuSeparator />
+              {!isStaff && (
+                <>
+                  <DropdownMenuItem
+                    className="gap-2 cursor-pointer"
+                    onClick={() => router.push("/")}
+                  >
+                    <Home size={14} />
+                    <span className="text-xs">Trang chủ</span>
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                </>
+              )}
               <DropdownMenuItem
                 variant="destructive"
                 className="gap-2 cursor-pointer"
                 onClick={handleLogout}
               >
                 <LogOut size={14} />
-                Đăng xuất
+                <span className="text-xs">Đăng xuất</span>
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
