@@ -1,3 +1,9 @@
+// Tạo profile mới cho user hiện tại (body có thể rỗng)
+export async function createProfile(profile: Partial<Profile> = {}) {
+    const res = await apiClient.post('/profiles', profile);
+    const data = res.data?.data;
+    return Profile.parse(data);
+}
 import { apiClient } from '@/configs/axios';
 import * as z from 'zod';
 

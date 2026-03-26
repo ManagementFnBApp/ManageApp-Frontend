@@ -36,7 +36,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 
-// Staff chỉ thấy: Tạo đơn hàng, Đơn hàng, Phiếu nhập hàng, Phiếu hủy hàng
+
 const MAIN_ITEMS_STAFF = [
   { href: "/manager", label: "Tạo đơn hàng", icon: ShoppingCart },
   { href: "/manager/orders", label: "Đơn hàng", icon: ClipboardList },
@@ -61,10 +61,7 @@ const REPORT_ITEMS = [
   },
 ];
 
-const OTHER_ITEMS = [
-  { id: "import", label: "Phiếu nhập hàng", icon: PackageOpen },
-  { id: "cancel", label: "Phiếu hủy hàng", icon: XCircle },
-];
+
 
 function getRoleDisplayLabel(role: string): string {
   const r = (role || "").toUpperCase();
@@ -223,23 +220,6 @@ export default function ManagerLayout({
                   </ul>
                 </>
               )}
-              <p className="px-4 py-1.5 mt-2 text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
-                Khác
-              </p>
-              <ul className="space-y-0.5 px-2">
-                {OTHER_ITEMS.map(({ id, label, icon: Icon }) => (
-                  <li key={id}>
-                    <button
-                      type="button"
-                      onClick={() => handleReportOrOther(id)}
-                      className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-800 transition w-full text-left"
-                    >
-                      <Icon size={20} className="shrink-0 text-slate-500" />
-                      <span>{label}</span>
-                    </button>
-                  </li>
-                ))}
-              </ul>
             </>
           )}
         </nav>
@@ -275,31 +255,31 @@ export default function ManagerLayout({
             <DropdownMenuContent align="end" className="w-48">
               <DropdownMenuItem
                 className="gap-2 cursor-pointer"
-                onClick={() =>
-                  router.push(role === "SHOPOWNER" ? "/manager/profile" : "/")
-                }
+                onClick={() => router.push("/manager/profile")}
               >
                 <User size={15} />
                 <span className="text-xs">Profile</span>
               </DropdownMenuItem>
               <DropdownMenuSeparator />
-              <DropdownMenuItem
-                className="gap-2 cursor-pointer"
-                onClick={() =>
-                  router.push(role === "SHOPOWNER" ? "/" : "/manager")
-                }
-              >
-                <Home size={14} />
-                {role === "SHOPOWNER" ? "Trang chủ" : "Về trang chính"}
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
+              {!isStaff && (
+                <>
+                  <DropdownMenuItem
+                    className="gap-2 cursor-pointer"
+                    onClick={() => router.push("/")}
+                  >
+                    <Home size={14} />
+                    <span className="text-xs">Trang chủ</span>
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                </>
+              )}
               <DropdownMenuItem
                 variant="destructive"
                 className="gap-2 cursor-pointer"
                 onClick={handleLogout}
               >
                 <LogOut size={14} />
-                Đăng xuất
+                <span className="text-xs">Đăng xuất</span>
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
