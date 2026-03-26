@@ -33,3 +33,12 @@ export const addShopCategories = async (
   const data = unwrap<unknown>(res.data);
   return data === true || (typeof data === "object" && data !== null);
 };
+
+/** DELETE /shop-categories/:id - Xóa danh mục khỏi cửa hàng (chỉ SHOPOWNER) */
+export const deleteShopCategory = async (
+  categoryId: number
+): Promise<boolean> => {
+  const res = await apiClient.delete(`/shop-categories/${categoryId}`);
+  const data = unwrap<unknown>(res.data);
+  return data === true || (typeof data === "object" && data !== null);
+};

@@ -268,3 +268,26 @@ export const createSubscription = async (dto: CreateSubscriptionDto): Promise<Su
 export const deleteSubscription = async (id: number): Promise<void> => {
   await apiClient.delete(`/subscriptions/${id}`);
 };
+
+// ===== SUBSCRIPTION REVENUE REPORT =====
+
+export interface SubscriptionReportByDate {
+  date: string;
+  numberOfPayments: number;
+  totalAmount: number;
+}
+
+export interface SubscriptionReportDto {
+  numberOfPayments: number;
+  totalAmount: number;
+  reportByDate: SubscriptionReportByDate[];
+}
+
+export const getSubscriptionReport = async (
+  year: number,
+  month: number
+): Promise<SubscriptionReportDto> => {
+  const res = await apiClient.post('/subscriptions/report', { year, month });
+  const data = unwrap<SubscriptionReportDto>(res.data);
+  return data ?? { numberOfPayments: 0, totalAmount: 0, reportByDate: [] };
+};

@@ -4,7 +4,8 @@ export type AdminTabId =
   | "admins"
   | "subscriptions"
   | "categories"
-  | "products";
+  | "products"
+  | "revenue";
 
 export interface AdminTabConfig {
   id: AdminTabId;
@@ -20,4 +21,5 @@ export const ADMIN_TABS: AdminTabConfig[] = [
   { id: "subscriptions", label: "Quản lý Subscription", icon: "📦", color: "green" },
   { id: "categories", label: "Quản lý danh mục", icon: "📂", color: "teal" },
   { id: "products", label: "Quản lý sản phẩm", icon: "🛒", color: "amber" },
+  { id: "revenue", label: "Báo cáo doanh thu", icon: "📊", color: "rose" },
 ];

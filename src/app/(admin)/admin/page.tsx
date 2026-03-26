@@ -19,6 +19,7 @@ import {
   SubscriptionsTab,
   CategoriesTab,
   ProductsTab,
+  RevenueTab,
 } from "@/features/admin/tabs";
 
 export default function AdminDashboard() {
@@ -126,6 +127,7 @@ export default function AdminDashboard() {
           {activeTab === "subscriptions" && <SubscriptionsTab />}
           {activeTab === "categories" && <CategoriesTab />}
           {activeTab === "products" && <ProductsTab />}
+          {activeTab === "revenue" && <RevenueTab />}
         </div>
       </div>
     </>

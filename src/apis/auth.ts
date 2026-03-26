@@ -49,39 +49,6 @@ interface BackendLoginResponse {
  * Role lấy từ JWT (backend đặt payload.role = role_code).
  */
 export const login = async (data: LoginDto): Promise<LoginResponse> => {
-  const isEmail = data.username.includes('@');
-
-  // Admin login: dùng fetch thuần để tránh axios interceptor gọi handleLogout khi 401
-  if (isEmail) {
-    try {
-      const res = await fetch(`${BASE_URL}/admins/login`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: data.username, password: data.password }),
-      });
-      if (res.ok) {
-        const json = await res.json();
-        const adminData = json.data ?? json;
-        if (adminData?.token) {
-          localStorage.setItem('accessToken', adminData.token);
-          localStorage.setItem('userId', String(adminData.adminId));
-          localStorage.setItem('username', data.username);
-          localStorage.setItem('role', 'ADMIN');
-        }
-        return {
-          user_id: adminData.adminId,
-          username: data.username,
-          token: adminData.token,
-          expiredTime: adminData.expiredTime,
-          role: 'ADMIN',
-        };
-      }
-      // Admin login thất bại → tiếp tục staff login
-    } catch {
-      // Network error → tiếp tục staff login
-    }
-  }
-
   // User login: dùng fetch thuần để tránh axios interceptor redirect về '/' khi BE trả 401
   const res = await fetch(`${BASE_URL}/auth/login`, {
     method: 'POST',
