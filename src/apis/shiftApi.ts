@@ -110,17 +110,27 @@ export const deleteShiftAssignment = async (id: number): Promise<string> => {
   const statusCode = body?.statusCode;
   const bodyMsg = body?.data?.message ?? body?.message;
   const successMsg = bodyMsg ?? "Xóa phân ca thành công.";
+  const technicalMsg = String(bodyMsg ?? "").toLowerCase();
+  const isLinkedOrderError =
+    technicalMsg.includes("p2003") ||
+    technicalMsg.includes("foreign key") ||
+    technicalMsg.includes("constraint failed") ||
+    technicalMsg.includes("constraint violated");
 
   if (typeof statusCode === "number") {
     if (statusCode !== 200) {
-      const errMsg =
-        bodyMsg ??
-        "Xóa phân ca thất bại do tài khoản đã thực hiện tạo đơn hàng.";
+      const errMsg = isLinkedOrderError
+        ? "Shift này hiện tại đã có order rồi và không thực hiện xóa được."
+        : bodyMsg ?? "Xóa phân ca thất bại.";
       throw new Error(errMsg);
     }
   } else if (bodyMsg && !body?.data) {
     // Trường hợp backend không trả statusCode nhưng báo lỗi qua message.
-    throw new Error(bodyMsg);
+    throw new Error(
+      isLinkedOrderError
+        ? "Shift này hiện tại đã có order rồi và không thực hiện xóa được."
+        : bodyMsg,
+    );
   }
 
   return successMsg;

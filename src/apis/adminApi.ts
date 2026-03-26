@@ -110,6 +110,15 @@ export interface CreateSubscriptionDto {
   features?: unknown;
 }
 
+export interface UpdateSubscriptionDto {
+  packageCode?: string;
+  description?: string;
+  price?: number;
+  billingCycle?: string;
+  features?: unknown;
+  isActive?: boolean;
+}
+
 // ===== HELPERS =====
 
 function unwrap<T>(raw: unknown): T {
@@ -161,15 +170,16 @@ export const getUsersForStaffPage = async (): Promise<{
   }
 };
 
-/** Tạo user - POST /users. Backend nhận snake_case. */
+/**
+ * Tạo user cơ bản - POST /users.
+ * Lưu ý: backend createUser KHÔNG nhận role_code/role_id trong payload.
+ * Muốn gán ADMIN cần gọi thêm assignAdminRole().
+ */
 export const createUser = async (dto: CreateUserDto): Promise<AppUser> => {
   const res = await apiClient.post('/users', {
     email: dto.email,
     username: dto.username,
     password: dto.password,
-    role_code: dto.role_code,
-    shop_id: dto.shop_id,
-    owner_manager_id: dto.owner_manager_id,
   });
   return unwrap<AppUser>(res.data);
 };
@@ -261,6 +271,24 @@ export const createSubscription = async (dto: CreateSubscriptionDto): Promise<Su
     billing_cycle: dto.billingCycle,
     features: dto.features,
   });
+  const raw = unwrap<Record<string, unknown>>(res.data);
+  return normalizeSubscriptionPlan(raw ?? {});
+};
+
+/** Backend UpdateSubscriptionDto - PUT /subscriptions/:id. AdminOnly. */
+export const updateSubscription = async (
+  id: number,
+  dto: UpdateSubscriptionDto,
+): Promise<SubscriptionPlan> => {
+  const body: Record<string, unknown> = {};
+  if (dto.packageCode !== undefined) body.package_code = dto.packageCode;
+  if (dto.description !== undefined) body.description = dto.description;
+  if (dto.price !== undefined) body.price = dto.price;
+  if (dto.billingCycle !== undefined) body.billing_cycle = dto.billingCycle;
+  if (dto.features !== undefined) body.features = dto.features;
+  if (dto.isActive !== undefined) body.is_active = dto.isActive;
+
+  const res = await apiClient.put(`/subscriptions/${id}`, body);
   const raw = unwrap<Record<string, unknown>>(res.data);
   return normalizeSubscriptionPlan(raw ?? {});
 };

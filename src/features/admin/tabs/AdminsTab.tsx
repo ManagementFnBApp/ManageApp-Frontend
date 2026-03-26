@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import {
   getUsers,
   createUser,
+  assignAdminRole,
   updateUser,
   type AdminUser,
   type AppUser,
@@ -103,8 +104,22 @@ export function AdminsTab() {
         email: form.email.trim(),
         username: form.username.trim(),
         password: form.password,
-        role_code: "ADMIN",
       });
+
+      // Backend hiện tại yêu cầu gán ADMIN qua API riêng: PUT /users/:id/role
+      const allUsers = await getUsers();
+      const adminRoleId = allUsers.find(
+        (u) => isAdminRole(u.role) && u.role_id != null,
+      )?.role_id;
+
+      if (!adminRoleId) {
+        throw new Error(
+          "Không tìm thấy role ADMIN để gán. Vui lòng kiểm tra dữ liệu role trên backend.",
+        );
+      }
+
+      await assignAdminRole(newUser.user_id, adminRoleId);
+
       if (form.fullName.trim() || form.phone?.trim()) {
         try {
           await updateUser(newUser.user_id, {

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { getUsers, type AppUser } from "@/apis/adminApi";
+import { getUsers, updateUser, type AppUser } from "@/apis/adminApi";
 import {
   Badge,
   LoadingRow,
@@ -15,6 +15,16 @@ export function UsersTab() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [search, setSearch] = useState("");
+  const [editTarget, setEditTarget] = useState<AppUser | null>(null);
+  const [editForm, setEditForm] = useState({
+    email: "",
+    username: "",
+    full_name: "",
+    phone: "",
+    is_active: true,
+  });
+  const [editSubmitting, setEditSubmitting] = useState(false);
+  const [editError, setEditError] = useState("");
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -42,6 +52,52 @@ export function UsersTab() {
   const formatDate = (d: string | undefined) =>
     d ? new Date(d).toLocaleDateString("vi-VN") : "—";
 
+  const openEdit = (u: AppUser) => {
+    setEditTarget(u);
+    setEditForm({
+      email: u.email ?? "",
+      username: u.username ?? "",
+      full_name: u.profile?.full_name ?? "",
+      phone: u.profile?.phone ?? "",
+      is_active: u.is_active,
+    });
+    setEditError("");
+  };
+
+  const closeEdit = () => {
+    setEditTarget(null);
+    setEditError("");
+  };
+
+  const handleUpdate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editTarget) return;
+    setEditSubmitting(true);
+    setEditError("");
+    try {
+      const updated = await updateUser(editTarget.user_id, {
+        email: editForm.email.trim(),
+        username: editForm.username.trim(),
+        full_name: editForm.full_name.trim() || undefined,
+        phone: editForm.phone.trim() || undefined,
+        is_active: editForm.is_active,
+      });
+      setUsers((prev) =>
+        prev.map((u) => (u.user_id === editTarget.user_id ? updated : u)),
+      );
+      closeEdit();
+    } catch (e: unknown) {
+      const msg =
+        (e as { response?: { data?: { message?: string | string[] } } }).response
+          ?.data?.message ?? (e as { message?: string }).message;
+      setEditError(
+        Array.isArray(msg) ? msg.join(", ") : String(msg || "Cập nhật thất bại"),
+      );
+    } finally {
+      setEditSubmitting(false);
+    }
+  };
+
   return (
     <div>
       <div className="flex items-center justify-between mb-5">
@@ -67,15 +123,16 @@ export function UsersTab() {
               <th className="px-4 py-3 text-left">Role</th>
               <th className="px-4 py-3 text-left">Trạng thái</th>
               <th className="px-4 py-3 text-left">Ngày tạo</th>
+              <th className="px-4 py-3 text-center">Thao tác</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
             {loading ? (
-              <LoadingRow cols={6} />
+              <LoadingRow cols={7} />
             ) : error ? (
-              <ErrorRow cols={6} message={error} onRetry={load} />
+              <ErrorRow cols={7} message={error} onRetry={load} />
             ) : filtered.length === 0 ? (
-              <EmptyRow cols={6} message="Không có user nào" />
+              <EmptyRow cols={7} message="Không có user nào" />
             ) : (
               filtered.map((u) => (
                 <tr key={u.user_id} className="hover:bg-gray-50 transition">
@@ -105,12 +162,112 @@ export function UsersTab() {
                   <td className="px-4 py-3 text-gray-500">
                     {formatDate(u.created_at)}
                   </td>
+                  <td className="px-4 py-3">
+                    <div className="flex items-center justify-center">
+                      <button
+                        type="button"
+                        onClick={() => openEdit(u)}
+                        className="px-3 py-1.5 rounded-lg text-xs bg-blue-50 text-blue-700 hover:bg-blue-100 transition"
+                      >
+                        Sửa
+                      </button>
+                    </div>
+                  </td>
                 </tr>
               ))
             )}
           </tbody>
         </table>
       </div>
+
+      {editTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg mx-4">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+              <h3 className="text-lg font-bold text-gray-800">
+                Cập nhật user #{editTarget.user_id}
+              </h3>
+              <button
+                type="button"
+                onClick={closeEdit}
+                className="text-gray-400 hover:text-gray-700 transition p-1"
+              >
+                ✕
+              </button>
+            </div>
+            <form onSubmit={handleUpdate} className="p-6 space-y-4">
+              {editError && <p className="text-red-500 text-sm">{editError}</p>}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <input
+                  type="email"
+                  required
+                  value={editForm.email}
+                  onChange={(e) =>
+                    setEditForm((f) => ({ ...f, email: e.target.value }))
+                  }
+                  placeholder="Email"
+                  className="px-3 py-2 border border-gray-200 rounded-xl text-sm"
+                />
+                <input
+                  type="text"
+                  required
+                  minLength={3}
+                  value={editForm.username}
+                  onChange={(e) =>
+                    setEditForm((f) => ({ ...f, username: e.target.value }))
+                  }
+                  placeholder="Username"
+                  className="px-3 py-2 border border-gray-200 rounded-xl text-sm"
+                />
+                <input
+                  type="text"
+                  value={editForm.full_name}
+                  onChange={(e) =>
+                    setEditForm((f) => ({ ...f, full_name: e.target.value }))
+                  }
+                  placeholder="Họ tên"
+                  className="px-3 py-2 border border-gray-200 rounded-xl text-sm"
+                />
+                <input
+                  type="text"
+                  value={editForm.phone}
+                  onChange={(e) =>
+                    setEditForm((f) => ({ ...f, phone: e.target.value }))
+                  }
+                  placeholder="Số điện thoại"
+                  className="px-3 py-2 border border-gray-200 rounded-xl text-sm"
+                />
+              </div>
+              <label className="inline-flex items-center gap-2 text-sm text-gray-700">
+                <input
+                  type="checkbox"
+                  checked={editForm.is_active}
+                  onChange={(e) =>
+                    setEditForm((f) => ({ ...f, is_active: e.target.checked }))
+                  }
+                />
+                Hoạt động
+              </label>
+              <div className="flex gap-2">
+                <button
+                  type="submit"
+                  disabled={editSubmitting}
+                  className="px-4 py-2 rounded-xl bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 disabled:opacity-50"
+                >
+                  {editSubmitting ? "Đang lưu..." : "Lưu thay đổi"}
+                </button>
+                <button
+                  type="button"
+                  onClick={closeEdit}
+                  className="px-4 py-2 rounded-xl border border-gray-300 text-sm hover:bg-gray-50"
+                >
+                  Hủy
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
