@@ -25,12 +25,29 @@ export default function ProfileManagement() {
           phone: data.phone || "",
         });
       } catch (error: any) {
-        setError(error.message);
+        // Nếu lỗi là không tìm thấy profile, tự động tạo profile mới
+        if (error.message && error.message.includes("not found")) {
+          try {
+            // Gọi API tạo profile rỗng đúng chuẩn FE
+            const data = await import("@/apis/profile").then((m) =>
+              m.createProfile({}),
+            );
+            setProfile(data);
+            setForm({
+              full_name: data.full_name || "",
+              avatar: data.avatar || "",
+              phone: data.phone || "",
+            });
+          } catch (e: any) {
+            setError(e.message || "Tạo profile thất bại");
+          }
+        } else {
+          setError(error.message);
+        }
       } finally {
         setIsLoading(false);
       }
     };
-
     fetchProfile();
   }, []);
 
@@ -69,14 +86,14 @@ export default function ProfileManagement() {
     );
 
   if (isLoading && !profile) {
-    return <div className="p-8">Loading profile...</div>;
+    return <div className="p-8">Đang tải thông tin...</div>;
   }
 
   return (
     <div className="flex-1">
       <div className="bg-white rounded-2xl shadow-md p-8 relative">
         {/* Status */}
-        <h2 className="text-2xl font-bold mb-6">Profile Information</h2>
+        <h2 className="text-2xl font-bold mb-6">Thông tin cá nhân</h2>
         <form onSubmit={handleSubmit}>
           {profile && (
             <>
@@ -94,7 +111,7 @@ export default function ProfileManagement() {
           )}
           <div className="flex flex-col gap-6">
             <div>
-              <label className="block text-gray-600 mb-1">Full Name</label>
+              <label className="block text-gray-600 mb-1">Họ và tên</label>
               <input
                 name="full_name"
                 required
@@ -105,12 +122,12 @@ export default function ProfileManagement() {
             </div>
 
             <div>
-              <label className="block text-gray-600 mb-1">Phone Number</label>
+              <label className="block text-gray-600 mb-1">Số điện thoại</label>
               <input
                 name="phone"
                 required
-                pattern="^(03|05|07|08|09)\\d{8}$"
-                title="Please enter a valid Vietnamese phone number (e.g., 0912345678)"
+                pattern="^(0[3|5|7|8|9])[0-9]{8}$"
+                title="Số điện thoại phải có 10 số và bắt đầu bằng 03, 05, 07, 08, 09"
                 className="w-full bg-gray-100 rounded-lg px-4 py-2 mb-4"
                 value={form.phone}
                 onChange={handleChange}
@@ -118,10 +135,10 @@ export default function ProfileManagement() {
             </div>
 
             <div>
-              <label className="block text-gray-600 mb-1">Avatar</label>
+              <label className="block text-gray-600 mb-1">Ảnh đại diện</label>
               <input
                 name="avatar"
-                title="Please enter a valid URL for the avatar"
+                title="Vui lòng nhập URL hợp lệ cho ảnh đại diện!"
                 className="w-full bg-gray-100 rounded-lg px-4 py-2 mb-4"
                 value={form.avatar}
                 onChange={handleChange}
@@ -134,7 +151,7 @@ export default function ProfileManagement() {
                 disabled={isLoading}
                 className="bg-red-500 hover:bg-red-600 disabled:bg-gray-400 disabled:cursor-not-allowed text-white font-semibold px-8 py-3 rounded-lg transition"
               >
-                {isLoading ? "Updating..." : "Save Changes"}
+                {isLoading ? "Đang cập nhật..." : "Lưu thay đổi"}
               </button>
             </div>
           </div>
