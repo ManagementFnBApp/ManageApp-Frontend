@@ -48,6 +48,7 @@ const MANAGE_ITEMS = [
 const FINANCE_ITEMS = [
   { href: "/manager/report", label: "Báo cáo tháng", icon: BarChart2 },
   { href: "/manager/subscription", label: "Gói dịch vụ", icon: CreditCard },
+  { href: "/manager/payment-settings", label: "Cài đặt thanh toán", icon: CreditCard },
 ];
 
 function getRoleDisplayLabel(role: string): string {

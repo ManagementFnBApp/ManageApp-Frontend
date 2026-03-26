@@ -4,7 +4,9 @@ import { useState, useEffect, useCallback } from "react";
 import {
   getSubscriptions,
   createSubscription,
+  updateSubscription,
   type SubscriptionPlan,
+  type UpdateSubscriptionDto,
 } from "@/apis/adminApi";
 import {
   Badge,
@@ -26,6 +28,22 @@ export function SubscriptionsTab() {
     price: "",
     billingCycle: "MONTHLY",
   });
+  const [editTarget, setEditTarget] = useState<SubscriptionPlan | null>(null);
+  const [editForm, setEditForm] = useState<{
+    packageCode: string;
+    description: string;
+    price: string;
+    billingCycle: string;
+    isActive: boolean;
+  }>({
+    packageCode: "",
+    description: "",
+    price: "",
+    billingCycle: "MONTHLY",
+    isActive: true,
+  });
+  const [editSubmitting, setEditSubmitting] = useState(false);
+  const [editError, setEditError] = useState("");
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -73,6 +91,55 @@ export function SubscriptionsTab() {
     MONTHLY: "Hàng tháng",
     YEARLY: "Hàng năm",
     ONCE: "Một lần",
+  };
+
+  const openEdit = (p: SubscriptionPlan) => {
+    setEditTarget(p);
+    setEditForm({
+      packageCode: p.package_code ?? "",
+      description: p.description ?? "",
+      price: String(p.price ?? 0),
+      billingCycle: p.billing_cycle ?? "MONTHLY",
+      isActive: p.is_active ?? true,
+    });
+    setEditError("");
+  };
+
+  const closeEdit = () => {
+    setEditTarget(null);
+    setEditError("");
+  };
+
+  const handleUpdate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editTarget) return;
+    setEditSubmitting(true);
+    setEditError("");
+    try {
+      const payload: UpdateSubscriptionDto = {
+        packageCode: editForm.packageCode.toUpperCase(),
+        description: editForm.description || undefined,
+        price: Number(editForm.price),
+        billingCycle: editForm.billingCycle,
+        isActive: editForm.isActive,
+      };
+      const updated = await updateSubscription(editTarget.subscription_id, payload);
+      setPlans((prev) =>
+        prev.map((p) =>
+          p.subscription_id === editTarget.subscription_id ? updated : p,
+        ),
+      );
+      closeEdit();
+    } catch (e: unknown) {
+      const msg =
+        (e as { response?: { data?: { message?: string | string[] } } }).response
+          ?.data?.message ?? (e as { message?: string }).message;
+      setEditError(
+        Array.isArray(msg) ? msg.join(", ") : String(msg || "Cập nhật thất bại"),
+      );
+    } finally {
+      setEditSubmitting(false);
+    }
   };
 
   return (
@@ -172,16 +239,18 @@ export function SubscriptionsTab() {
               <th className="px-4 py-3 text-left">Mô tả</th>
               <th className="px-4 py-3 text-left">Giá</th>
               <th className="px-4 py-3 text-left">Chu kỳ</th>
+              <th className="px-4 py-3 text-left">Trạng thái</th>
+              <th className="px-4 py-3 text-center">Thao tác</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
             {loading ? (
-              <LoadingRow cols={5} />
+              <LoadingRow cols={7} />
             ) : error ? (
-              <ErrorRow cols={5} message={error} onRetry={load} />
+              <ErrorRow cols={7} message={error} onRetry={load} />
             ) : plans.length === 0 ? (
               <EmptyRow
-                cols={5}
+                cols={7}
                 message="Chưa có gói nào. Hãy tạo gói đầu tiên!"
               />
             ) : (
@@ -210,12 +279,120 @@ export function SubscriptionsTab() {
                       color="blue"
                     />
                   </td>
+                  <td className="px-4 py-3">
+                    <Badge
+                      text={p.is_active === false ? "Tạm ngưng" : "Hoạt động"}
+                      color={p.is_active === false ? "gray" : "green"}
+                    />
+                  </td>
+                  <td className="px-4 py-3">
+                    <div className="flex items-center justify-center">
+                      <button
+                        type="button"
+                        onClick={() => openEdit(p)}
+                        className="px-3 py-1.5 rounded-lg text-xs bg-green-50 text-green-700 hover:bg-green-100 transition"
+                      >
+                        Sửa
+                      </button>
+                    </div>
+                  </td>
                 </tr>
               ))
             )}
           </tbody>
         </table>
       </div>
+
+      {editTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg mx-4">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+              <h3 className="text-lg font-bold text-gray-800">
+                Cập nhật gói #{editTarget.subscription_id}
+              </h3>
+              <button
+                type="button"
+                onClick={closeEdit}
+                className="text-gray-400 hover:text-gray-700 transition p-1"
+              >
+                ✕
+              </button>
+            </div>
+            <form onSubmit={handleUpdate} className="p-6 space-y-4">
+              {editError && <p className="text-red-500 text-sm">{editError}</p>}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <input
+                  type="text"
+                  required
+                  value={editForm.packageCode}
+                  onChange={(e) =>
+                    setEditForm((f) => ({ ...f, packageCode: e.target.value }))
+                  }
+                  placeholder="Mã gói"
+                  className="px-3 py-2 border border-gray-200 rounded-xl text-sm uppercase"
+                />
+                <input
+                  type="number"
+                  required
+                  min={0}
+                  value={editForm.price}
+                  onChange={(e) =>
+                    setEditForm((f) => ({ ...f, price: e.target.value }))
+                  }
+                  placeholder="Giá"
+                  className="px-3 py-2 border border-gray-200 rounded-xl text-sm"
+                />
+                <input
+                  type="text"
+                  value={editForm.description}
+                  onChange={(e) =>
+                    setEditForm((f) => ({ ...f, description: e.target.value }))
+                  }
+                  placeholder="Mô tả"
+                  className="px-3 py-2 border border-gray-200 rounded-xl text-sm sm:col-span-2"
+                />
+                <select
+                  value={editForm.billingCycle}
+                  onChange={(e) =>
+                    setEditForm((f) => ({ ...f, billingCycle: e.target.value }))
+                  }
+                  className="px-3 py-2 border border-gray-200 rounded-xl text-sm bg-white"
+                >
+                  <option value="MONTHLY">Hàng tháng</option>
+                  <option value="YEARLY">Hàng năm</option>
+                  <option value="ONCE">Một lần</option>
+                </select>
+              </div>
+              <label className="inline-flex items-center gap-2 text-sm text-gray-700">
+                <input
+                  type="checkbox"
+                  checked={editForm.isActive}
+                  onChange={(e) =>
+                    setEditForm((f) => ({ ...f, isActive: e.target.checked }))
+                  }
+                />
+                Hoạt động
+              </label>
+              <div className="flex gap-2">
+                <button
+                  type="submit"
+                  disabled={editSubmitting}
+                  className="px-4 py-2 rounded-xl bg-green-600 text-white text-sm font-medium hover:bg-green-700 disabled:opacity-50"
+                >
+                  {editSubmitting ? "Đang lưu..." : "Lưu thay đổi"}
+                </button>
+                <button
+                  type="button"
+                  onClick={closeEdit}
+                  className="px-4 py-2 rounded-xl border border-gray-300 text-sm hover:bg-gray-50"
+                >
+                  Hủy
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

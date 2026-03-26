@@ -18,6 +18,7 @@ export interface CreateOrderPayload {
   shiftUserId: number;
   note?: string;
   totalAmount: number;
+  paymentMethod?: PaymentMethod;
   order_items: OrderItemPayload[];
 }
 
@@ -27,9 +28,12 @@ export interface UpdateOrderPayload {
   shiftUserId?: number;
   note?: string;
   totalAmount?: number;
+  paymentMethod?: PaymentMethod;
   /** Bắt buộc gửi kèm: backend sẽ xóa items cũ và tạo lại */
   order_items?: OrderItemPayload[];
 }
+
+export type PaymentMethod = 'PAYOS' | 'CASH';
 
 export interface OrderItemResponse {
   id: number;
@@ -54,6 +58,17 @@ export interface OrderResponse {
   completedAt?: string | null;
   cancelledAt?: string | null;
   order_items?: OrderItemResponse[];
+}
+
+export interface OrderPayResponse {
+  orderId: number;
+  paymentId: number;
+  items: Array<{
+    product_name: string;
+    quantity: number;
+  }>;
+  checkoutUrl: string | null;
+  qrCode: string | null;
 }
 
 export interface OrderReportByDate {
@@ -106,15 +121,59 @@ function isOrderReportResponse(value: unknown): value is OrderReportResponse {
 
 export const createOrder = async (
   payload: CreateOrderPayload,
-): Promise<OrderResponse> => {
+): Promise<OrderResponse | OrderPayResponse> => {
   const res = await apiClient.post('/orders', {
     customerId: payload.customerId,
     shiftUserId: payload.shiftUserId,
     note: payload.note,
     totalAmount: payload.totalAmount,
+    paymentMethod: payload.paymentMethod,
     order_items: payload.order_items,
   });
-  return unwrap<OrderResponse>(res.data);
+  return unwrap<OrderResponse | OrderPayResponse>(res.data);
+};
+
+export const createOrderWithPayment = async (
+  payload: CreateOrderPayload,
+): Promise<OrderPayResponse> => {
+  const requestBody = {
+    customerId: payload.customerId,
+    shiftUserId: payload.shiftUserId,
+    note: payload.note,
+    totalAmount: payload.totalAmount,
+    order_items: payload.order_items,
+  };
+
+  // Tương thích nhiều backend deploy version khác nhau.
+  const candidateEndpoints = ['/orders/pay', '/orders/payos', '/orders/payments/payos'];
+  let lastError: unknown = null;
+
+  for (const endpoint of candidateEndpoints) {
+    try {
+      const res = await apiClient.post(endpoint, requestBody);
+      return unwrap<OrderPayResponse>(res.data);
+    } catch (error: unknown) {
+      const status = (error as { status?: number })?.status;
+      const message = String(
+        (error as { message?: string })?.message ?? '',
+      ).toLowerCase();
+      const isRouteNotFound =
+        status === 404 ||
+        message.includes('cannot post') ||
+        message.includes('not found');
+
+      if (!isRouteNotFound) {
+        throw error;
+      }
+
+      lastError = error;
+    }
+  }
+
+  if (lastError) {
+    throw lastError;
+  }
+  throw new Error('Không tìm thấy endpoint PayOS order phù hợp trên backend.');
 };
 
 export const updateOrder = async (

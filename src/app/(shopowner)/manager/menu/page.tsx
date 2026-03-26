@@ -268,6 +268,10 @@ export default function MenuManagePage() {
       setFormError("Giá bán phải lớn hơn 0.");
       return;
     }
+    if (Number(form.importPrice) >= Number(form.listPrice)) {
+      setFormError("Giá nhập phải nhỏ hơn giá bán.");
+      return;
+    }
     if (modalMode === "add") {
       const validCategoryId = Number(form.categoryId);
       if (
@@ -843,7 +847,11 @@ export default function MenuManagePage() {
                     onChange={(e) =>
                       setForm({ ...form, importPrice: Number(e.target.value) })
                     }
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-lime-400 focus:border-lime-400 outline-none"
+                    className={`w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-lime-400 focus:border-lime-400 outline-none ${
+                      Number(form.importPrice) > 0 && Number(form.importPrice) >= Number(form.listPrice)
+                        ? "border-red-400 bg-red-50"
+                        : "border-gray-300"
+                    }`}
                   />
                 </div>
                 <div>
@@ -857,10 +865,19 @@ export default function MenuManagePage() {
                     onChange={(e) =>
                       setForm({ ...form, listPrice: Number(e.target.value) })
                     }
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-lime-400 focus:border-lime-400 outline-none"
+                    className={`w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-lime-400 focus:border-lime-400 outline-none ${
+                      Number(form.importPrice) > 0 && Number(form.importPrice) >= Number(form.listPrice)
+                        ? "border-red-400 bg-red-50"
+                        : "border-gray-300"
+                    }`}
                   />
                 </div>
               </div>
+              {Number(form.importPrice) > 0 && Number(form.importPrice) >= Number(form.listPrice) && (
+                <p className="text-xs text-red-500 -mt-2">
+                  Giá nhập phải nhỏ hơn giá bán.
+                </p>
+              )}
 
               <div>
                 <label className="block text-xs font-semibold text-gray-600 mb-1">

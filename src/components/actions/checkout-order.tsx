@@ -5,22 +5,27 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { loadPosCart, clearPosCart } from "@/lib/posCart";
 import type { PosCartPayload } from "@/lib/posCart";
-import { createOrder } from "@/apis/orderApi";
+import { createOrder, type PaymentMethod } from "@/apis/orderApi";
 import { clearDraft, saveOrder } from "@/data/useOrderStore";
 import {
   getCustomers,
   createCustomer,
   type Customer,
 } from "@/apis/customerApi";
+// TODO: Bật lại khi PayOS hoạt động ổn định
+// import { getPaymentAccount } from "@/apis/paymentAccountApi";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const PAYMENT_METHODS = [
+  // TODO: Bật lại khi PayOS hoạt động ổn định
+  // { id: "PAYOS", label: "PayOS (QR Banking)", icon: "🏧" },
   { id: "CASH", label: "Tiền mặt", icon: "💵" },
-  { id: "BANK_TRANSFER", label: "Chuyển khoản ngân hàng", icon: "🏦" },
-  { id: "MOMO", label: "Ví MoMo", icon: "📱" },
-  { id: "VNPAY", label: "VNPay", icon: "💳" },
-];
+] as const satisfies ReadonlyArray<{
+  id: PaymentMethod;
+  label: string;
+  icon: string;
+}>;
 
 type Step = "loading" | "form" | "processing" | "success" | "error" | "empty";
 const ORDER_NOTE_MAX_LENGTH = 180;
@@ -44,7 +49,7 @@ export default function CheckoutOrderPage() {
   const [step, setStep] = useState<Step>("loading");
   const [cart, setCart] = useState<PosCartPayload | null>(null);
   const [username, setUsername] = useState("");
-  const [selectedMethod, setSelectedMethod] = useState("CASH");
+  const [selectedMethod, setSelectedMethod] = useState<PaymentMethod>("CASH");
   const [errorMsg, setErrorMsg] = useState("");
   const [orderRef, setOrderRef] = useState("");
   const [customerName, setCustomerName] = useState("");
@@ -57,6 +62,10 @@ export default function CheckoutOrderPage() {
   const [nameSuggestions, setNameSuggestions] = useState<Customer[]>([]);
   const [showNameSuggestions, setShowNameSuggestions] = useState(false);
   const [loadingCustomers, setLoadingCustomers] = useState(false);
+
+  // TODO: Bật lại khi PayOS hoạt động ổn định
+  // const [hasPayosAccount, setHasPayosAccount] = useState<boolean | null>(null);
+  const hasPayosAccount = false;
 
   // ── Bootstrap ──────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -75,8 +84,10 @@ export default function CheckoutOrderPage() {
     setStep("form");
   }, [router]);
 
-  // Load customer list on mount
+  // Load customer list + kiểm tra PayOS account khi vào form
   useEffect(() => {
+    if (step !== "form") return;
+
     const loadCustomers = async () => {
       try {
         setLoadingCustomers(true);
@@ -89,9 +100,18 @@ export default function CheckoutOrderPage() {
       }
     };
 
-    if (step === "form") {
-      loadCustomers();
-    }
+    // TODO: Bật lại khi PayOS hoạt động ổn định
+    // const checkPayosAccount = async () => {
+    //   try {
+    //     const account = await getPaymentAccount();
+    //     setHasPayosAccount(!!account);
+    //   } catch {
+    //     setHasPayosAccount(false);
+    //   }
+    // };
+
+    loadCustomers();
+    // checkPayosAccount();
   }, [step]);
 
   // ── Customer suggestion and auto-fill by name only ─────────────────────────
@@ -185,11 +205,11 @@ export default function CheckoutOrderPage() {
         return;
       }
 
-      // 2️⃣ Tạo đơn hàng (PENDING) — userId BE lấy từ JWT
-      const orderResponse = await createOrder({
+      const payload = {
         shiftUserId: cart.shiftId,
         customerId: finalCustomerId || undefined,
         totalAmount: cart.total,
+        paymentMethod: selectedMethod,
         note: orderNote || undefined,
         order_items: cart.items.map((item) => {
           const isShopProduct =
@@ -213,7 +233,38 @@ export default function CheckoutOrderPage() {
             unit_price: item.price,
           };
         }),
-      });
+      };
+
+      // 2️⃣ Tạo đơn hàng theo flow thanh toán đã chọn (backend đọc paymentMethod)
+      // TODO: Bật lại khi PayOS hoạt động ổn định
+      // if (selectedMethod === "PAYOS") {
+      //   const payosResponse = await createOrder(payload);
+      //   const checkoutUrl =
+      //     typeof payosResponse === "object" &&
+      //     payosResponse != null &&
+      //     "checkoutUrl" in payosResponse
+      //       ? payosResponse.checkoutUrl
+      //       : null;
+      //   if (!checkoutUrl) {
+      //     throw new Error("Không nhận được link thanh toán từ PayOS.");
+      //   }
+      //   if (cart.tableId) {
+      //     clearDraft(cart.tableId);
+      //   }
+      //   clearPosCart();
+      //   window.location.href = checkoutUrl;
+      //   return;
+      // }
+
+      // 3️⃣ Luồng tiền mặt: tạo đơn PENDING và xử lý thủ công tại trang Orders
+      const orderResponse = await createOrder(payload);
+      if (
+        typeof orderResponse !== "object" ||
+        orderResponse == null ||
+        !("id" in orderResponse)
+      ) {
+        throw new Error("Backend không trả về mã đơn hàng hợp lệ cho CASH.");
+      }
 
       saveOrder({
         orderId: `ORD-${orderResponse.id}`,
@@ -242,6 +293,15 @@ export default function CheckoutOrderPage() {
       let msg =
         (err as { message?: string })?.message ||
         "Có lỗi xảy ra. Vui lòng thử lại.";
+      if (
+        typeof msg === "string" &&
+        (msg.toLowerCase().includes("cannot post /orders/pay") ||
+          msg.toLowerCase().includes("cannot post /orders/payos") ||
+          msg.toLowerCase().includes("cannot post /orders/payments/payos"))
+      ) {
+        msg =
+          "Backend deploy hiện chưa mở API PayOS cho order. Cần bật endpoint order-PayOS trên server để tạo QR riêng của shop.";
+      }
       if (
         typeof msg === "string" &&
         msg.includes("Insufficient inventory quantity to fulfill the decrease")
@@ -666,30 +726,34 @@ export default function CheckoutOrderPage() {
                     Nhận tiền mặt từ khách và trao lại hóa đơn / biên lai.
                   </p>
                 )}
-                {selectedMethod === "BANK_TRANSFER" && (
-                  <div className="text-sm text-yellow-700 space-y-1">
-                    <p>
-                      <strong>Ngân hàng:</strong> Vietcombank
+                {/* TODO: Bật lại khi PayOS hoạt động ổn định */}
+                {/* {selectedMethod === "PAYOS" && hasPayosAccount === false && (
+                  <div className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg p-3 flex flex-col gap-2">
+                    <p className="font-semibold">
+                      ⚠️ Chưa cài đặt tài khoản PayOS
                     </p>
                     <p>
-                      <strong>Số tài khoản:</strong> 1234 5678 9012
-                    </p>
-                    <p>
-                      <strong>Chủ TK:</strong> LUMIOVIET CO., LTD
+                      Shop chưa kết nối PayOS. Vui lòng vào{" "}
+                      <Link
+                        href="/manager/payment-settings"
+                        className="underline font-semibold text-red-800 hover:text-red-900"
+                      >
+                        Cài đặt thanh toán
+                      </Link>{" "}
+                      để thêm Client ID, API Key và Checksum Key từ tài khoản
+                      PayOS của shop trước.
                     </p>
                   </div>
-                )}
-                {selectedMethod === "MOMO" && (
+                )} */}
+                {/* {selectedMethod === "PAYOS" && hasPayosAccount === true && (
                   <p className="text-sm text-yellow-700">
-                    Hướng dẫn khách quét mã QR MoMo tại quầy.
+                    Bạn sẽ được chuyển sang cổng PayOS để khách quét QR thanh
+                    toán. Đơn sẽ được backend cập nhật trạng thái qua webhook.
                   </p>
-                )}
-                {selectedMethod === "VNPAY" && (
-                  <p className="text-sm text-yellow-700">
-                    Hướng dẫn khách quét mã VNPay tại quầy hoặc thanh toán qua
-                    app.
-                  </p>
-                )}
+                )} */}
+                {/* {selectedMethod === "PAYOS" && hasPayosAccount === null && (
+                  <p className="text-sm text-yellow-500">Đang kiểm tra tài khoản PayOS...</p>
+                )} */}
               </div>
 
               {/* Item count summary */}
@@ -702,7 +766,8 @@ export default function CheckoutOrderPage() {
               <button
                 type="button"
                 onClick={handleConfirm}
-                className="w-full py-4 bg-blue-600 text-white rounded-xl font-bold text-lg hover:bg-blue-700 transition-all hover:-translate-y-0.5 hover:shadow-xl active:translate-y-0"
+                disabled={false /* TODO: selectedMethod === "PAYOS" && hasPayosAccount === false */}
+                className="w-full py-4 bg-blue-600 text-white rounded-xl font-bold text-lg hover:bg-blue-700 transition-all hover:-translate-y-0.5 hover:shadow-xl active:translate-y-0 disabled:opacity-50 disabled:cursor-not-allowed disabled:translate-y-0 disabled:shadow-none"
               >
                 Xác nhận thanh toán — {formatPrice(cart?.total ?? 0)}
               </button>
