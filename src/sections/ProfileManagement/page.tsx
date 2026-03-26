@@ -1,6 +1,5 @@
 import { getProfile, Profile, updateProfile } from "@/apis/profile";
 import ErrorModal from "@/components/ErrorModal/page";
-import { apiClient } from "@/configs/axios";
 import React, { useState, useEffect } from "react";
 
 export default function ProfileManagement() {
