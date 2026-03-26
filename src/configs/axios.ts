@@ -106,13 +106,22 @@ export class ApiClientService {
     const isOrdersListRequest = error.config?.url?.includes('/orders/list') && (error.config?.method === 'post' || error.config?.method === 'POST');
     // GET /shop-products → SHOPOWNER + STAFF đều có quyền; tự xử lý lỗi tại component
     const isShopProductsRequest = error.config?.url?.includes('/shop-products');
+    // GET /shifts → shifts page tự xử lý lỗi, không redirect /403
+    const isShiftsRequest = error.config?.url?.includes('/shifts');
+    // GET /customers → customers page tự xử lý lỗi
+    const isCustomersRequest = error.config?.url?.includes('/customers');
+    // GET/POST /users/managed → component tự xử lý
+    const isManagedUsersRequest = error.config?.url?.includes('/users/managed');
+    // /merchandises → merchandise page tự xử lý
+    const isMerchandisesRequest = error.config?.url?.includes('/merchandises');
 
     // Không auto logout trên /users/managed vì có validation ở backend
     if (status === 401 && !isLoginRequest && !isManagedUserRequest) {
       this.errorHandler?.onUnauthorized?.();
-    } else if (status === 403 && !isLoginRequest && !isGetUsersRequest && !isGetShiftUsersRequest && !isOrdersListRequest && !isShopProductsRequest) {
+    } else if (status === 403 && !isLoginRequest && !isGetUsersRequest && !isGetShiftUsersRequest && !isOrdersListRequest && !isShopProductsRequest && !isShiftsRequest && !isCustomersRequest && !isManagedUsersRequest && !isMerchandisesRequest) {
       // 403 từ login → không redirect. GET /users → để adminApi xử lý. GET /shifts/users → POS fallback.
       // POST /orders/list → orders page xử lý. /shop-products → component tự xử lý.
+      // /shifts, /customers, /users/managed, /merchandises → page tự xử lý.
       this.errorHandler?.onForbidden?.();
     }
 

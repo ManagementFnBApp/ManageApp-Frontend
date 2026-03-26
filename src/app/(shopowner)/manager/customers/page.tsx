@@ -11,7 +11,9 @@ import {
   type Customer,
 } from "@/apis/customerApi";
 import { getStoredRoleNormalized } from "@/apis/auth";
-import { UserPlus, Pencil, Trash2, Gift } from "lucide-react";
+import { getAll as getAllMerchandise } from "@/apis/merchandise";
+import { createRedemption } from "@/apis/merchandise-redemption";
+import { UserPlus, Pencil, Trash2, Gift, ArrowLeftRight, X, Package } from "lucide-react";
 
 const formatDate = (d: string) =>
   d ? new Date(d).toLocaleDateString("vi-VN") : "—";
@@ -45,6 +47,16 @@ export default function ManagerCustomersPage() {
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState("");
 
+  // ── Merchandise Redemption state ──
+  const [redeemCustomer, setRedeemCustomer] = useState<Customer | null>(null);
+  const [merchandiseList, setMerchandiseList] = useState<{ id: string; merchandise_name: string; point_required: number; total_quantity: number; is_active: boolean }[]>([]);
+  const [merchandiseLoading, setMerchandiseLoading] = useState(false);
+  const [redeemMerchandiseId, setRedeemMerchandiseId] = useState<string>("");
+  const [redeemQty, setRedeemQty] = useState(1);
+  const [redeemSubmitting, setRedeemSubmitting] = useState(false);
+  const [redeemError, setRedeemError] = useState("");
+  const [redeemSuccess, setRedeemSuccess] = useState("");
+
   const isStaff = role === "STAFF";
   const isShopOwner = role === "SHOPOWNER";
 
@@ -70,6 +82,73 @@ export default function ManagerCustomersPage() {
     typeof window !== "undefined"
       ? Number(localStorage.getItem("shopId") || 0)
       : 0;
+
+  // ── Open Redeem Modal ──
+  const openRedeem = async (c: Customer) => {
+    setRedeemCustomer(c);
+    setRedeemMerchandiseId("");
+    setRedeemQty(1);
+    setRedeemError("");
+    setRedeemSuccess("");
+    setMerchandiseLoading(true);
+    try {
+      const items = await getAllMerchandise();
+      const active = (Array.isArray(items) ? items : []).filter(
+        (m: { is_active: boolean; total_quantity: number }) => m.is_active && m.total_quantity > 0,
+      );
+      setMerchandiseList(active);
+    } catch {
+      setMerchandiseList([]);
+    } finally {
+      setMerchandiseLoading(false);
+    }
+  };
+
+  const closeRedeem = () => {
+    setRedeemCustomer(null);
+    setRedeemError("");
+    setRedeemSuccess("");
+  };
+
+  const handleRedeem = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!redeemCustomer || !redeemMerchandiseId) {
+      setRedeemError("Vui lòng chọn quà đổi điểm.");
+      return;
+    }
+    if (redeemQty < 1) {
+      setRedeemError("Số lượng phải >= 1.");
+      return;
+    }
+    const chosen = merchandiseList.find((m) => String(m.id) === redeemMerchandiseId);
+    if (chosen && chosen.point_required * redeemQty > redeemCustomer.loyalty_point) {
+      setRedeemError(
+        `Khách hàng chỉ có ${redeemCustomer.loyalty_point} điểm, cần ${chosen.point_required * redeemQty} điểm.`,
+      );
+      return;
+    }
+    setRedeemSubmitting(true);
+    setRedeemError("");
+    setRedeemSuccess("");
+    try {
+      await createRedemption({
+        customer_id: redeemCustomer.id,
+        merchandise_id: Number(redeemMerchandiseId),
+        quantity: redeemQty,
+      });
+      setRedeemSuccess("Đổi quà thành công!");
+      // Refresh customer list to update loyalty points
+      await load();
+      // Update the local redeemCustomer reference
+      setTimeout(() => closeRedeem(), 1200);
+    } catch (err: any) {
+      setRedeemError(
+        err?.message ?? err?.response?.data?.message ?? "Đổi quà thất bại.",
+      );
+    } finally {
+      setRedeemSubmitting(false);
+    }
+  };
 
   const openAdd = () => {
     setForm({ phone: "", full_name: "", loyalty_point: 0 });
@@ -312,6 +391,16 @@ export default function ManagerCustomersPage() {
                           >
                             <Pencil size={14} />
                             Cập nhật
+                          </button>
+                        )}
+                        {(isStaff || isShopOwner) && (
+                          <button
+                            type="button"
+                            onClick={() => openRedeem(c)}
+                            className="p-1.5 rounded-lg text-emerald-600 hover:bg-emerald-50 transition"
+                            title="Đổi quà"
+                          >
+                            <ArrowLeftRight size={16} />
                           </button>
                         )}
                         {isStaff && (
@@ -589,6 +678,139 @@ export default function ManagerCustomersPage() {
                 {deleteLoading ? "Đang xóa..." : "Xóa khách"}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Đổi quà */}
+      {redeemCustomer && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+          <div className="relative w-full max-w-md mx-4 bg-white rounded-2xl shadow-xl border border-gray-200">
+            {/* Header */}
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-lg bg-emerald-100 flex items-center justify-center">
+                  <Package size={16} className="text-emerald-600" />
+                </div>
+                <h3 className="text-base font-bold text-gray-900">
+                  Đổi quà cho khách hàng
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={closeRedeem}
+                className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-gray-600 transition"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Body */}
+            <form onSubmit={handleRedeem} className="px-6 py-5 space-y-4">
+              {/* Customer Info */}
+              <div className="px-3 py-2.5 bg-slate-50 rounded-xl border border-slate-200">
+                <p className="text-xs text-slate-500">Khách hàng</p>
+                <p className="text-sm font-semibold text-slate-800">
+                  {redeemCustomer.full_name || redeemCustomer.phone}
+                </p>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Điểm hiện có: <span className="font-bold text-blue-600">{redeemCustomer.loyalty_point}</span>
+                </p>
+              </div>
+
+              {redeemError && (
+                <div className="px-3 py-2 rounded-lg bg-red-50 border border-red-200 text-red-600 text-sm">
+                  {redeemError}
+                </div>
+              )}
+              {redeemSuccess && (
+                <div className="px-3 py-2 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-600 text-sm font-medium">
+                  {redeemSuccess}
+                </div>
+              )}
+
+              {/* Select Merchandise */}
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 mb-1">
+                  Chọn quà đổi điểm <span className="text-red-400">*</span>
+                </label>
+                {merchandiseLoading ? (
+                  <div className="flex items-center gap-2 py-3 text-slate-400 text-sm">
+                    <div className="w-4 h-4 border-2 border-slate-300 border-t-blue-400 rounded-full animate-spin" />
+                    Đang tải danh sách quà...
+                  </div>
+                ) : merchandiseList.length === 0 ? (
+                  <p className="text-sm text-slate-400 py-2">Không có quà khả dụng.</p>
+                ) : (
+                  <select
+                    value={redeemMerchandiseId}
+                    onChange={(e) => setRedeemMerchandiseId(e.target.value)}
+                    className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-200 focus:border-emerald-400 transition bg-white"
+                  >
+                    <option value="">-- Chọn quà --</option>
+                    {merchandiseList.map((m) => (
+                      <option key={m.id} value={m.id}>
+                        {m.merchandise_name} — {m.point_required} điểm (còn {m.total_quantity})
+                      </option>
+                    ))}
+                  </select>
+                )}
+              </div>
+
+              {/* Quantity */}
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 mb-1">
+                  Số lượng
+                </label>
+                <input
+                  type="number"
+                  min={1}
+                  value={redeemQty}
+                  onChange={(e) => setRedeemQty(Number(e.target.value) || 1)}
+                  className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-200 focus:border-emerald-400 transition"
+                />
+              </div>
+
+              {/* Cost Preview */}
+              {redeemMerchandiseId && (() => {
+                const chosen = merchandiseList.find((m) => String(m.id) === redeemMerchandiseId);
+                if (!chosen) return null;
+                const totalCost = chosen.point_required * redeemQty;
+                const remaining = redeemCustomer.loyalty_point - totalCost;
+                return (
+                  <div className="px-3 py-2.5 bg-blue-50 rounded-xl border border-blue-200 text-sm">
+                    <div className="flex justify-between">
+                      <span className="text-slate-600">Tổng điểm cần:</span>
+                      <span className="font-bold text-blue-700">{totalCost.toLocaleString()}</span>
+                    </div>
+                    <div className="flex justify-between mt-1">
+                      <span className="text-slate-600">Điểm còn lại:</span>
+                      <span className={`font-bold ${remaining >= 0 ? "text-emerald-600" : "text-red-500"}`}>
+                        {remaining.toLocaleString()}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {/* Actions */}
+              <div className="flex items-center justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={closeRedeem}
+                  className="px-5 py-2.5 border border-gray-200 text-gray-600 rounded-xl text-sm font-semibold hover:bg-gray-50 transition"
+                >
+                  Hủy
+                </button>
+                <button
+                  type="submit"
+                  disabled={redeemSubmitting || !redeemMerchandiseId || merchandiseLoading}
+                  className="px-5 py-2.5 bg-emerald-600 text-white rounded-xl text-sm font-semibold hover:bg-emerald-700 transition disabled:opacity-50"
+                >
+                  {redeemSubmitting ? "Đang xử lý..." : "Đổi quà"}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
