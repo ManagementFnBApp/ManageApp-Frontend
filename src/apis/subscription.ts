@@ -164,5 +164,33 @@ export const renewPayosSubscription = async (): Promise<PayosPaymentResult> => {
   return raw as unknown as PayosPaymentResult;
 };
 
+/**
+ * Lấy thông tin subscription hiện tại của shopowner đang đăng nhập.
+ * Backend: GET /subscriptions/shops/me — Cần token SHOPOWNER.
+ * Trả về null nếu không có dữ liệu hoặc endpoint chưa hỗ trợ.
+ */
+export const getMyShopSubscription = async (): Promise<ShopSubscription | null> => {
+  try {
+    const response = await apiClient.get('/subscriptions/shops/me');
+    const raw = unwrap<Record<string, unknown>>(response.data);
+    if (!raw || typeof raw !== 'object') return null;
+    return raw as unknown as ShopSubscription;
+  } catch {
+    return null;
+  }
+};
+
+/**
+ * Strict version for route guards.
+ * - Throws on network/HTTP errors so caller can decide redirect behavior.
+ * - Returns null only when API returns empty payload.
+ */
+export const getMyShopSubscriptionStrict = async (): Promise<ShopSubscription | null> => {
+  const response = await apiClient.get('/subscriptions/shops/me');
+  const raw = unwrap<Record<string, unknown> | null>(response.data);
+  if (!raw || typeof raw !== 'object') return null;
+  return raw as unknown as ShopSubscription;
+};
+
 // ===== ALIASES =====
 export const createSubscriptionTenant = registerShopSubscription;

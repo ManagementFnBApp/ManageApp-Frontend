@@ -13,9 +13,6 @@ import Link from "next/link";
 
 const PAYMENT_METHODS = [
   { id: "PAYOS", label: "PayOS (QR Banking)", icon: "🏧" },
-  { id: "BANK_TRANSFER", label: "Chuyển khoản ngân hàng", icon: "🏦" },
-  { id: "MOMO", label: "Ví MoMo", icon: "📱" },
-  { id: "VNPAY", label: "VNPay", icon: "💳" },
   { id: "CASH", label: "Tiền mặt", icon: "💵" },
 ];
 
@@ -431,35 +428,6 @@ function CheckoutContent() {
                     <p className="text-green-700 font-medium">✓ Shop được kích hoạt ngay sau khi thanh toán thành công.</p>
                   </div>
                 )}
-                {selectedMethod === "BANK_TRANSFER" && (
-                  <div className="text-sm text-yellow-700 space-y-1">
-                    <p>
-                      <strong>Ngân hàng:</strong> Vietcombank
-                    </p>
-                    <p>
-                      <strong>Số tài khoản:</strong> 1234 5678 9012
-                    </p>
-                    <p>
-                      <strong>Chủ tài khoản:</strong> LUMIOVIET CO., LTD
-                    </p>
-                    <p>
-                      <strong>Nội dung CK:</strong> LUMIOVIET{" "}
-                      {username.toUpperCase()}
-                    </p>
-                  </div>
-                )}
-                {selectedMethod === "MOMO" && (
-                  <p className="text-sm text-yellow-700">
-                    Quét mã QR MoMo hoặc chuyển đến số:{" "}
-                    <strong>0901 234 567</strong>
-                  </p>
-                )}
-                {selectedMethod === "VNPAY" && (
-                  <p className="text-sm text-yellow-700">
-                    Bạn sẽ được chuyển đến cổng thanh toán VNPay sau khi nhấn
-                    xác nhận.
-                  </p>
-                )}
                 {selectedMethod === "CASH" && (
                   <p className="text-sm text-yellow-700">
                     Vui lòng đến văn phòng LumioViet để thanh toán tiền mặt. Địa
@@ -490,7 +458,7 @@ function CheckoutContent() {
               >
                 {selectedMethod === "PAYOS"
                   ? `Thanh toán qua PayOS — ${price.toLocaleString("vi-VN")}đ`
-                  : `Xác nhận thanh toán — ${price.toLocaleString("vi-VN")}đ`}
+                  : `Xác nhận thanh toán tiền mặt — ${price.toLocaleString("vi-VN")}đ`}
               </button>
             </div>
           </div>

@@ -4,13 +4,13 @@ import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import type { Product, CreateProductPayload } from "@/apis/productApi";
 import { getCategories } from "@/apis/categoryApi";
-import { getShopCategories, addShopCategories } from "@/apis/shopCategoryApi";
+import { getShopCategories, addShopCategories, deleteShopCategory } from "@/apis/shopCategoryApi";
 import { useMenuStore } from "@/data/useMenuStore";
 import { getStoredRoleNormalized } from "@/apis/auth";
 
 type Category = { id: number; name: string };
 type ModalMode = "add" | "edit" | null;
-type ToastType = "create" | "edit" | "soft-delete" | "hard-delete";
+type ToastType = "create" | "edit" | "soft-delete" | "delete-category";
 
 const formatPrice = (n: number) =>
   new Intl.NumberFormat("vi-VN").format(n) + " ₫";
@@ -32,7 +32,6 @@ export default function MenuManagePage() {
     refresh,
     addProduct,
     editProduct,
-    removeProduct,
     toggleActive,
   } = useMenuStore();
 
@@ -110,6 +109,28 @@ export default function MenuManagePage() {
     [fetchShopCategories],
   );
 
+  // ── Xóa danh mục khỏi cửa hàng ──
+  const [deleteCategoryTarget, setDeleteCategoryTarget] = useState<Category | null>(null);
+  const [deleteCategorySubmitting, setDeleteCategorySubmitting] = useState(false);
+
+  const confirmDeleteCategory = useCallback(async () => {
+    if (!deleteCategoryTarget) return;
+    setDeleteCategorySubmitting(true);
+    try {
+      await deleteShopCategory(deleteCategoryTarget.id);
+      await fetchShopCategories();
+      setDeleteCategoryTarget(null);
+      showToast("delete-category");
+    } catch (err) {
+      setPickCategoryError(
+        (err as { message?: string })?.message ?? "Xóa danh mục thất bại",
+      );
+      setDeleteCategoryTarget(null);
+    } finally {
+      setDeleteCategorySubmitting(false);
+    }
+  }, [deleteCategoryTarget, fetchShopCategories]);
+
   const EMPTY_FORM: CreateProductPayload = {
     categoryId: shopCategories[0]?.id ?? 0,
     productName: "",
@@ -136,9 +157,6 @@ export default function MenuManagePage() {
 
   const [toggleConfirmTarget, setToggleConfirmTarget] =
     useState<Product | null>(null);
-  const [hardDeleteTarget, setHardDeleteTarget] = useState<Product | null>(
-    null,
-  );
 
   const [toast, setToast] = useState<{ type: ToastType } | null>(null);
 
@@ -288,9 +306,8 @@ export default function MenuManagePage() {
         showToast("create");
         refresh();
       } else if (editTarget) {
-        // Tránh gửi categoryId/isActive trong update để tránh backend truyền thẳng vào Prisma bị lỗi.
-        // Status vẫn dùng nút toggle ở table.
         await editProduct(editTarget.productId, {
+          categoryId: Number(form.categoryId),
           productName: form.productName.trim(),
           ...(imageFile ? { image: imageFile } : {}),
           barcode: String(form.barcode ?? "").trim(),
@@ -325,21 +342,6 @@ export default function MenuManagePage() {
     }
   };
 
-  // ── Hard delete (xóa hẳn) ──
-  const confirmHardDelete = async () => {
-    if (!hardDeleteTarget) return;
-    try {
-      await removeProduct(hardDeleteTarget.productId);
-      setHardDeleteTarget(null);
-      setFormError(null);
-      showToast("hard-delete");
-      refresh();
-    } catch (err: unknown) {
-      setFormError(getApiErrorMessage(err));
-      setHardDeleteTarget(null);
-    }
-  };
-
   const getCategoryName = (id: number) =>
     shopCategories.find((c) => c.id === id)?.name ?? `Cat #${id}`;
 
@@ -366,9 +368,9 @@ export default function MenuManagePage() {
           <p className="flex-1 text-sm font-medium text-white">
             {toast.type === "create"
               ? "Bạn đã thêm sản phẩm mới thành công!"
-              : toast.type === "hard-delete"
-                ? "Bạn đã xóa thành công!"
-                : "Bạn đã chỉnh sửa thành công!"}
+                : toast.type === "delete-category"
+                  ? "Đã xóa danh mục khỏi cửa hàng!"
+                  : "Bạn đã chỉnh sửa thành công!"}
           </p>
           <button
             type="button"
@@ -490,9 +492,19 @@ export default function MenuManagePage() {
               {shopCategories.map((c) => (
                 <span
                   key={c.id}
-                  className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-lime-100 text-lime-800"
+                  className="inline-flex items-center gap-1 pl-3 pr-1.5 py-1 rounded-full text-xs font-medium bg-lime-100 text-lime-800"
                 >
                   {c.name}
+                  <button
+                    type="button"
+                    title={`Xóa danh mục "${c.name}"`}
+                    onClick={() => setDeleteCategoryTarget(c)}
+                    className="ml-0.5 w-4 h-4 flex items-center justify-center rounded-full hover:bg-lime-300 text-lime-600 hover:text-lime-900 transition"
+                  >
+                    <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
                 </span>
               ))}
             </div>
@@ -692,26 +704,6 @@ export default function MenuManagePage() {
                             />
                           </svg>
                         </button>
-                        <button
-                          type="button"
-                          onClick={() => setHardDeleteTarget(p)}
-                          title="Xóa vĩnh viễn"
-                          className="p-1.5 rounded-lg text-red-400 hover:bg-red-50 transition"
-                        >
-                          <svg
-                            className="w-4 h-4"
-                            fill="none"
-                            stroke="currentColor"
-                            viewBox="0 0 24 24"
-                          >
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              strokeWidth={2}
-                              d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-                            />
-                          </svg>
-                        </button>
                       </div>
                     </td>
                   </tr>
@@ -781,7 +773,6 @@ export default function MenuManagePage() {
                     onChange={(e) =>
                       setForm({ ...form, categoryId: Number(e.target.value) })
                     }
-                    disabled={modalMode === "edit"}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-lime-400 focus:border-lime-400 outline-none bg-white"
                   >
                     {shopCategories.map((c) => (
@@ -987,56 +978,62 @@ export default function MenuManagePage() {
         </div>
       )}
 
-      {/* ══ HARD DELETE CONFIRM ══ */}
-      {hardDeleteTarget && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm mx-4 p-6">
-            <div className="flex items-center gap-3 mb-4">
-              <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center">
-                <svg
-                  className="w-5 h-5 text-red-500"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-                  />
-                </svg>
+      {/* ══ DELETE CATEGORY CONFIRM ══ */}
+      {deleteCategoryTarget && (() => {
+        const productCount = products.filter(
+          (p) => p.categoryId === deleteCategoryTarget.id
+        ).length;
+        const hasProducts = productCount > 0;
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm mx-4 p-6">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center">
+                  <svg className="w-5 h-5 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                      d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                  </svg>
+                </div>
+                <div>
+                  <h3 className="font-bold text-gray-800">Xóa danh mục khỏi cửa hàng?</h3>
+                  <p className="text-sm text-gray-500">Hành động này có thể hoàn tác bằng cách thêm lại.</p>
+                </div>
               </div>
-              <div>
-                <h3 className="font-bold text-gray-800">Xóa vĩnh viễn?</h3>
-                <p className="text-sm text-red-500">
-                  Hành động này không thể hoàn tác!
+
+              <div className={`rounded-lg px-3 py-2.5 mb-5 text-sm ${hasProducts ? "bg-amber-50 border border-amber-200" : "bg-red-50"}`}>
+                <p className={hasProducts ? "text-amber-800" : "text-gray-700"}>
+                  Danh mục: <span className="font-semibold">{deleteCategoryTarget.name}</span>
                 </p>
+                {hasProducts && (
+                  <p className="mt-1.5 text-amber-700">
+                    <span className="font-semibold">Lưu ý:</span> Danh mục đang có{" "}
+                    <span className="font-semibold">{productCount} sản phẩm</span>. Các sản phẩm này vẫn được giữ lại,
+                    bạn có thể chuyển sang danh mục khác sau.
+                  </p>
+                )}
               </div>
-            </div>
-            <p className="text-sm text-gray-700 bg-red-50 rounded-lg px-3 py-2 mb-5">
-              <span className="font-semibold">
-                {hardDeleteTarget.productName}
-              </span>{" "}
-              — Ảnh: {hardDeleteTarget.image || "—"}
-            </p>
-            <div className="flex gap-3">
-              <button
-                onClick={() => setHardDeleteTarget(null)}
-                className="flex-1 py-2.5 rounded-xl border border-gray-300 text-sm font-medium hover:bg-gray-50 transition"
-              >
-                Hủy
-              </button>
-              <button
-                onClick={confirmHardDelete}
-                className="flex-1 py-2.5 rounded-xl bg-red-500 hover:bg-red-600 text-white font-semibold text-sm transition"
-              >
-                Xóa vĩnh viễn
-              </button>
+
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => setDeleteCategoryTarget(null)}
+                  className="flex-1 py-2.5 rounded-xl border border-gray-300 text-sm font-medium hover:bg-gray-50 transition"
+                >
+                  Hủy
+                </button>
+                <button
+                  type="button"
+                  disabled={deleteCategorySubmitting}
+                  onClick={confirmDeleteCategory}
+                  className="flex-1 py-2.5 rounded-xl bg-red-500 hover:bg-red-600 text-white font-semibold text-sm transition disabled:opacity-60"
+                >
+                  {deleteCategorySubmitting ? "Đang xóa..." : "Xóa danh mục"}
+                </button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* ══ Modal: Chọn thêm danh mục cho cửa hàng (từ danh sách Admin) ══ */}
       {showPickCategoryModal && (
@@ -1098,9 +1095,11 @@ export default function MenuManagePage() {
                           {c.name}
                         </span>
                         {alreadyAdded ? (
-                          <span className="text-xs font-medium text-lime-600 bg-lime-100 px-2.5 py-1 rounded-full">
-                            Đã thêm
-                          </span>
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs font-medium text-lime-600 bg-lime-100 px-2.5 py-1 rounded-full">
+                              Đã thêm
+                            </span>
+                          </div>
                         ) : (
                           <button
                             type="button"
