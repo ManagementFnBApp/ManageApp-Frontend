@@ -391,11 +391,11 @@ export default function AuthPage() {
                       </button>
                     </form>
 
-                    <div className="mt-8 text-center animate-[fadeIn_0.8s_ease-out_0.5s_both]">
+                    {/* <div className="mt-8 text-center animate-[fadeIn_0.8s_ease-out_0.5s_both]">
                       <p className="text-sm text-gray-600">
                         or login with social platforms
                       </p>
-                    </div>
+                    </div> */}
                   </div>
                 ) : (
                   /* Register Form */
@@ -573,16 +573,16 @@ export default function AuthPage() {
                       </button>
                     </form>
 
-                    <div className="mt-8 text-center animate-[fadeIn_0.8s_ease-out_0.4s_both]">
+                    {/* <div className="mt-8 text-center animate-[fadeIn_0.8s_ease-out_0.4s_both]">
                       <p className="text-sm text-gray-600">
                         or sign up with social platforms
                       </p>
-                    </div>
+                    </div> */}
                   </div>
                 )}
 
                 {/* Social Login Icons - Common for both */}
-                <div className="mt-6 flex justify-center gap-4 animate-[fadeIn_1s_ease-out_0.6s_both]">
+                {/* <div className="mt-6 flex justify-center gap-4 animate-[fadeIn_1s_ease-out_0.6s_both]">
                   <button
                     className="w-12 h-12 rounded-full border-2 border-gray-200 flex items-center justify-center hover:border-blue-500 hover:bg-blue-50 transition-all hover:scale-110"
                     title="Google"
@@ -608,7 +608,7 @@ export default function AuthPage() {
                       />
                     </svg>
                   </button>
-                </div>
+                </div> */}
               </div>
             </div>
           </div>

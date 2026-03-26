@@ -19,6 +19,7 @@ import {
   Clock,
   UserCheck,
   CreditCard,
+  Gift,
 } from "lucide-react";
 import { handleLogout, getStoredRoleNormalized } from "@/apis/auth";
 import {
@@ -34,6 +35,7 @@ const SALE_ITEMS = [
   { href: "/manager", label: "Tạo đơn hàng", icon: ShoppingCart },
   { href: "/manager/orders", label: "Đơn hàng", icon: ClipboardList },
   { href: "/manager/inventory", label: "Kho hàng", icon: PackageOpen },
+  { href: "/manager/customers", label: "Khách hàng", icon: UserCheck },
 ];
 
 // Quản lý — chỉ shopowner
@@ -42,6 +44,7 @@ const MANAGE_ITEMS = [
   { href: "/manager/staff", label: "Nhân viên", icon: Users },
   { href: "/manager/shifts", label: "Ca làm việc", icon: Clock },
   { href: "/manager/customers", label: "Khách hàng", icon: UserCheck },
+  { href: "/manager/merchandise", label: "Quà đổi điểm", icon: Gift },
 ];
 
 // Báo cáo & Tài chính — chỉ shopowner
