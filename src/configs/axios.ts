@@ -1,6 +1,28 @@
 import axios, { AxiosInstance, AxiosError } from 'axios';
 import { BASE_URL } from '../global-configs';
 
+/** Decode JWT payload client-side (no verification) to check expiry */
+function decodeJwtPayload(part: string): any {
+  // JWT uses base64url; normalize to base64 before decoding
+  const base64 = part.replace(/-/g, '+').replace(/_/g, '/');
+  const padded = base64 + '='.repeat((4 - (base64.length % 4)) % 4);
+  const json = atob(padded);
+  return JSON.parse(json);
+}
+
+function isJwtExpired(token: string): boolean {
+  try {
+    const parts = token.split('.');
+    if (parts.length !== 3) return true;
+    const payload = decodeJwtPayload(parts[1]);
+    if (!payload.exp) return false;
+    // exp is seconds since epoch; add 5s buffer
+    return Date.now() / 1000 > payload.exp - 5;
+  } catch {
+    return true;
+  }
+}
+
 export interface ErrorHandler {
   onUnauthorized?: () => void;
   onForbidden?: () => void;
@@ -39,6 +61,34 @@ export class ApiClientService {
   }
 
   private setupInterceptors(): void {
+    // Request interceptor - Add token to headers (or logout if expired)
+    this.instance.interceptors.request.use((config) => {
+      if (typeof window !== 'undefined') {
+        const token = localStorage.getItem('accessToken');
+        if (token) {
+          if (isJwtExpired(token)) {
+            // Backend auth.guard throws TokenExpiredError → 500 (not 401).
+            // Intercept here before the request so we can logout cleanly.
+            this.errorHandler?.onUnauthorized?.();
+            const axiosError = new AxiosError(
+              'Token hết hạn. Vui lòng đăng nhập lại.',
+              '401'
+            );
+            const customError: CustomError = {
+              status: 401,
+              message: 'Token hết hạn. Vui lòng đăng nhập lại.',
+              originalError: axiosError,
+            };
+            this.errorHandler?.onError?.(customError);
+            return Promise.reject(customError);
+          }
+          config.headers.Authorization = `Bearer ${token}`;
+        }
+      }
+      return config;
+    });
+
+    // Response interceptor - Handle errors
     this.instance.interceptors.response.use(
       (response) => response,
       (error: AxiosError) => this.handleError(error)
@@ -47,10 +97,31 @@ export class ApiClientService {
 
   private handleError(error: AxiosError): Promise<never> {
     const status = error.response?.status;
+    const isLoginRequest = error.config?.url?.includes('/auth/login') && error.config?.method === 'post';
+    const isManagedUserRequest = error.config?.url?.includes('/users/managed') && error.config?.method === 'post';
+    const isGetUsersRequest = error.config?.url?.includes('/users') && (error.config?.method === 'get' || error.config?.method === 'GET');
+    // STAFF không có quyền GET /shifts/users → POS page tự xử lý fallback, không redirect /403
+    const isGetShiftUsersRequest = error.config?.url?.includes('/shifts/users') && (error.config?.method === 'get' || error.config?.method === 'GET');
+    // STAFF gọi POST /orders/list → để orders page tự xử lý lỗi, không redirect /403
+    const isOrdersListRequest = error.config?.url?.includes('/orders/list') && (error.config?.method === 'post' || error.config?.method === 'POST');
+    // GET /shop-products → SHOPOWNER + STAFF đều có quyền; tự xử lý lỗi tại component
+    const isShopProductsRequest = error.config?.url?.includes('/shop-products');
+    // GET /shifts → shifts page tự xử lý lỗi, không redirect /403
+    const isShiftsRequest = error.config?.url?.includes('/shifts');
+    // GET /customers → customers page tự xử lý lỗi
+    const isCustomersRequest = error.config?.url?.includes('/customers');
+    // GET/POST /users/managed → component tự xử lý
+    const isManagedUsersRequest = error.config?.url?.includes('/users/managed');
+    // /merchandises → merchandise page tự xử lý
+    const isMerchandisesRequest = error.config?.url?.includes('/merchandises');
 
-    if (status === 401) {
+    // Không auto logout trên /users/managed vì có validation ở backend
+    if (status === 401 && !isLoginRequest && !isManagedUserRequest) {
       this.errorHandler?.onUnauthorized?.();
-    } else if (status === 403) {
+    } else if (status === 403 && !isLoginRequest && !isGetUsersRequest && !isGetShiftUsersRequest && !isOrdersListRequest && !isShopProductsRequest && !isShiftsRequest && !isCustomersRequest && !isManagedUsersRequest && !isMerchandisesRequest) {
+      // 403 từ login → không redirect. GET /users → để adminApi xử lý. GET /shifts/users → POS fallback.
+      // POST /orders/list → orders page xử lý. /shop-products → component tự xử lý.
+      // /shifts, /customers, /users/managed, /merchandises → page tự xử lý.
       this.errorHandler?.onForbidden?.();
     }
 
@@ -89,6 +160,6 @@ export const createDefaultApiClient = (): AxiosInstance => {
 export const apiClient = createDefaultApiClient();
 
 export const endpoint: any = {
-  category: `${BASE_URL}/category`,
-  product: `${BASE_URL}/product`
+  product: '/products',
+  products: '/products'
 };

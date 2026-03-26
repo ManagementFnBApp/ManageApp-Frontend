@@ -4,10 +4,10 @@ export const testApi = () => {
     return apiClient.get('').then(response => response.data)
 }
 
-export const getAllCategories = () => {
-    return apiClient.get(endpoint.category).then(response => response.data)
+export const getAllProducts = () => {
+    return apiClient.get(endpoint.products).then(response => response.data)
 }
 
-export const getAllProducts = () => {
-    return apiClient.get(endpoint.product).then(response => response.data)
+export const getProductById = (id: number) => {
+    return apiClient.get(`${endpoint.products}/${id}`).then(response => response.data)
 }
