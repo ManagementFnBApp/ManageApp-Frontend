@@ -49,7 +49,7 @@ export default function ProfileManagement() {
         ...form,
       };
 
-      const updatedProfile = await updateProfile(String(profile?.profile_id!), profileData);
+      await updateProfile(String(profile?.profile_id!), profileData);
 
       const response = await getProfile();
       setProfile(response);
