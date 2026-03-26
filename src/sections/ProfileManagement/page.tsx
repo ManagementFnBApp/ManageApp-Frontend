@@ -109,7 +109,7 @@ export default function ProfileManagement() {
               <input
                 name="phone"
                 required
-                pattern="^(03|05|07|08|09)\d{8}$"
+                pattern="^(03|05|07|08|09)\\d{8}$"
                 title="Please enter a valid Vietnamese phone number (e.g., 0912345678)"
                 className="w-full bg-gray-100 rounded-lg px-4 py-2 mb-4"
                 value={form.phone}
