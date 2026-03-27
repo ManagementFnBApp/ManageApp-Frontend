@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, Suspense } from "react";
+import { useEffect, useState, useRef, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
   createSubscriptionTenant,
@@ -34,6 +34,7 @@ function CheckoutContent() {
   const [errorMsg, setErrorMsg] = useState("");
   const [shopName, setShopName] = useState("");
   const [shopNameTouched, setShopNameTouched] = useState(false);
+  const submitInFlight = useRef(false);
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -74,6 +75,39 @@ function CheckoutContent() {
   const billingLabel =
     billing === "YEARLY" ? "/năm" : billing === "MONTHLY" ? "/tháng" : "";
 
+  /** Lấy message từ axios/fetch error hoặc Error thông thường. */
+  const extractApiMessage = (err: unknown): string => {
+    const ax = err as {
+      response?: { data?: { message?: string; error?: string } };
+      message?: string;
+    };
+    return (
+      ax?.response?.data?.message ||
+      ax?.response?.data?.error ||
+      ax?.message ||
+      ""
+    );
+  };
+
+  /**
+   * Khi backend (deployed cũ) ném "Bạn đã có shop subscription đang active.
+   * Sub Shop ID của bạn: X", chúng ta resume bằng cách dùng lại sub_shop_id đó
+   * thay vì dừng lại.
+   */
+  const resolveSubShopId = async (name: string): Promise<number> => {
+    try {
+      const shopSub = await createSubscriptionTenant(subscriptionId, name);
+      return shopSub.sub_shop_id;
+    } catch (err: unknown) {
+      const msg = extractApiMessage(err);
+      const match = msg.match(/Sub Shop ID[^:]*:\s*(\d+)/i);
+      if (match) {
+        return parseInt(match[1], 10);
+      }
+      throw err;
+    }
+  };
+
   const handleSubmit = async () => {
     const name = shopName.trim();
     if (!name) {
@@ -81,26 +115,27 @@ function CheckoutContent() {
       setErrorMsg("Vui lòng nhập tên cửa hàng.");
       return;
     }
+    if (submitInFlight.current) return;
+    submitInFlight.current = true;
     setStep("processing");
     setErrorMsg("");
     try {
-      // Bước 1: Tạo shop + shop subscription (POST /subscriptions/shops)
-      const shopSub = await createSubscriptionTenant(subscriptionId, name);
+      // Bước 1: Lấy sub_shop_id — tạo mới hoặc resume shop chưa thanh toán
+      const subShopId = await resolveSubShopId(name);
 
       if (selectedMethod === "PAYOS") {
-        // Luồng PayOS: tạo link thanh toán rồi redirect sang PayOS
-        const payosResult = await createPayosPayment(shopSub.sub_shop_id);
+        // Bước 2: Tạo link thanh toán PayOS rồi redirect
+        const payosResult = await createPayosPayment(subShopId);
         if (!payosResult?.checkoutUrl) {
           throw new Error("Không nhận được link thanh toán từ PayOS.");
         }
-        // Redirect toàn trang sang cổng thanh toán PayOS
         window.location.href = payosResult.checkoutUrl;
         return;
       }
 
       // Luồng thủ công: tạo payment pending → confirm ngay
       const payment = await createSubscriptionPayment(
-        shopSub.sub_shop_id,
+        subShopId,
         selectedMethod,
         price,
       );
@@ -111,22 +146,25 @@ function CheckoutContent() {
       setShopName(
         payment.shop?.shop_name ||
           name ||
-          shopSub.subscription?.package_code ||
           `${username}'s Shop`,
       );
       setStep("success");
-    } catch (err: any) {
-      console.error("Checkout error:", err);
+    } catch (err: unknown) {
+      const rawMsg = extractApiMessage(err);
 
-      const apiMessage =
-        err?.response?.data?.message ||
-        err?.response?.data?.error ||
-        err?.message;
+      // Lỗi 231: PayOS đã có đơn cùng orderCode (thường do môi trường dev dùng
+      // chung credentials hoặc DB reset). Gợi ý thử lại để PayOS tạo orderCode mới.
+      const is231 =
+        rawMsg.includes("231") || rawMsg.includes("đã tồn tại");
 
       setErrorMsg(
-        apiMessage || "Có lỗi xảy ra khi xử lý thanh toán. Vui lòng thử lại.",
+        is231
+          ? `PayOS báo đơn thanh toán đã tồn tại (mã 231). Vui lòng nhấn "Thử lại" — hệ thống sẽ tạo mã thanh toán mới.`
+          : rawMsg || "Có lỗi xảy ra khi xử lý thanh toán. Vui lòng thử lại.",
       );
       setStep("error");
+    } finally {
+      submitInFlight.current = false;
     }
   };
 
@@ -226,7 +264,10 @@ function CheckoutContent() {
           <p className="text-red-500 mb-6 text-sm">{errorMsg}</p>
           <div className="flex gap-3">
             <button
-              onClick={() => setStep("form")}
+              onClick={() => {
+                setErrorMsg("");
+                setStep("form");
+              }}
               className="flex-1 py-3 border-2 border-gray-300 text-gray-700 rounded-xl font-semibold hover:bg-gray-50 transition"
             >
               Thử lại
@@ -453,6 +494,7 @@ function CheckoutContent() {
 
               {/* Submit Button */}
               <button
+                type="button"
                 onClick={handleSubmit}
                 className="w-full py-4 bg-blue-600 text-white rounded-xl font-bold text-lg hover:bg-blue-700 transition-all hover:-translate-y-0.5 hover:shadow-xl active:translate-y-0"
               >
