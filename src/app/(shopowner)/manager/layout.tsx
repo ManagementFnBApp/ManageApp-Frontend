@@ -43,7 +43,7 @@ const MANAGE_ITEMS = [
   { href: "/manager/menu", label: "Menu", icon: UtensilsCrossed },
   { href: "/manager/staff", label: "Nhân viên", icon: Users },
   { href: "/manager/shifts", label: "Ca làm việc", icon: Clock },
-  { href: "/manager/customers", label: "Khách hàng", icon: UserCheck },
+  // { href: "/manager/customers", label: "Khách hàng", icon: UserCheck },
   { href: "/manager/merchandise", label: "Quà đổi điểm", icon: Gift },
 ];
 
